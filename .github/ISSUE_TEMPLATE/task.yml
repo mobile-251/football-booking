@@ -1,0 +1,23 @@
+name: "📝 Task"
+description: Nhiệm vụ cần thực hiện
+title: "[Task] "
+labels: [task]
+body:
+  - type: input
+    id: goal
+    attributes:
+      label: Mục tiêu
+      description: Task này nhằm đạt được điều gì?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Công việc cần làm
+      description: Liệt kê các bước hoặc checklist
+      placeholder: |
+        - [ ] bước 1
+        - [ ] bước 2
+    validations:
+      required: true
