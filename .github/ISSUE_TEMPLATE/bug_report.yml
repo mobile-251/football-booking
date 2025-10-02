@@ -1,0 +1,38 @@
+name: "🐞 Bug Report"
+description: Báo cáo lỗi phần mềm
+title: "[BUG] "
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Mô tả lỗi
+      description: Hãy mô tả lỗi gặp phải
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Cách tái hiện
+      description: Các bước để tái hiện lỗi
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Kết quả mong đợi
+      description: Bạn mong đợi điều gì xảy ra?
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Môi trường
+      description: OS, phiên bản, cấu hình liên quan

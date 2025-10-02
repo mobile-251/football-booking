@@ -1,0 +1,22 @@
+name: "✨ Feature Request"
+description: Đề xuất tính năng mới
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Tóm tắt
+      description: Mô tả ngắn gọn về tính năng
+      placeholder: "Ví dụ: Thêm chức năng export CSV"
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Chi tiết
+      description: Trình bày chi tiết yêu cầu
+      placeholder: Tại sao cần tính năng này? Nó giải quyết vấn đề gì?
+    validations:
+      required: true
