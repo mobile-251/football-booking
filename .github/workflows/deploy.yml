@@ -1,0 +1,43 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'backend/ballmate-rest/**'
+
+jobs:
+  deploy:
+    name: Vercel Deployment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        working-directory: backend/ballmate-rest
+        run: pnpm install
+
+      - name: Build project (optional)
+        working-directory: backend/ballmate-rest
+        run: pnpm run build
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: backend/ballmate-rest
+          vercel-args: '--prod'
+
