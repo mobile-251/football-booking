@@ -1,12 +1,13 @@
 name: Deploy to Vercel
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - dev
     paths:
       - 'backend/ballmate-rest/**'
-  workflow_dispatch:
+  
 
 jobs:
   deploy:
