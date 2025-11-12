@@ -6,6 +6,7 @@ on:
       - dev
     paths:
       - 'backend/ballmate-rest/**'
+  workflow_dispatch:
 
 jobs:
   deploy:
