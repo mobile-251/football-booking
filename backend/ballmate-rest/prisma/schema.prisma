@@ -5,19 +5,235 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
+
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+enum UserRole {
+  ADMIN
+  FIELD_OWNER
+  PLAYER
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            Int           @id @default(autoincrement())
+  email         String        @unique
+  password      String
+  fullName      String
+  phoneNumber   String?
+  role          UserRole      @default(PLAYER)
+  avatarUrl     String?
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  player    Player?
+  owner     FieldOwner?
+  admin     Admin?
+  @@map("users")
+}
+model Player {
+  id        Int      @id @default(autoincrement())
+  userId    Int     @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  bookings      Booking[]
+  reviews       Review[]
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("players")
+}
+
+model FieldOwner {
+  id        Int      @id @default(autoincrement())
+  userId    Int     @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  venues        Venue[]
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("field_owners")
+}
+
+model Admin {
+  id        Int      @id @default(autoincrement())
+  userId    Int     @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("admins")
+}
+// ============================================
+// VENUE & FIELD
+// ============================================
+
+model Venue {
+  id            Int           @id @default(autoincrement())
+  name          String
+  description   String?
+  address       String
+  city          String
+  district      String?
+  latitude      Float?
+  longitude     Float?
+  openTime      String        // "06:00"
+  closeTime     String        // "23:00"
+  facilities    String[]      // ["Parking", "Shower", "Cafe"]
+  images        String[]      // URLs to images
+  ownerId       Int
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  owner         FieldOwner          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  fields        Field[]
+  
+  @@map("venues")
+}
+
+enum FieldType {
+  FIELD_5VS5
+  FIELD_7VS7
+  FIELD_11VS11
+}
+
+model Field {
+  id            Int           @id @default(autoincrement())
+  name          String
+  venueId       Int
+  fieldType     FieldType
+  pricePerHour  Float
+  description   String?
+  images        String[]
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  venue         Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  reviews       Review[]
+  
+  @@map("fields")
+}
+
+// ============================================
+// BOOKING
+// ============================================
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Booking {
+  id            Int             @id @default(autoincrement())
+  fieldId       Int
+  playerId      Int
+  startTime     DateTime
+  endTime       DateTime
+  totalPrice    Float
+  status        BookingStatus   @default(PENDING)
+  note          String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Relations
+  field         Field           @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  player        Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  payment       Payment?
+  
+  @@map("bookings")
+  @@index([fieldId, startTime, endTime]) // Index để kiểm tra trùng lịch nhanh
+}
+
+// ============================================
+// PAYMENT
+// ============================================
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  MOMO
+  VNPAY
+}
+
+model Payment {
+  id              Int             @id @default(autoincrement())
+  bookingId       Int             @unique
+  amount          Float
+  method          PaymentMethod   @default(CASH)
+  status          PaymentStatus   @default(PENDING)
+  transactionId   String?
+  paidAt          DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  booking         Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  
+  @@map("payments")
+}
+
+// ============================================
+// REVIEW
+// ============================================
+
+model Review {
+  id            Int           @id @default(autoincrement())
+  fieldId       Int
+  playerId      Int
+  rating        Int           // 1-5
+  comment       String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  field         Field         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  player        Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  
+  @@map("reviews")
+  @@unique([fieldId, playerId]) // 1 player chỉ review 1 field 1 lần
+}
+
+// ============================================
+// REVENUE REPORT
+// ============================================
+
+model RevenueReport {
+  id            Int           @id @default(autoincrement())
+  venueId       Int?
+  fieldId       Int?
+  totalRevenue  Float
+  totalBookings Int
+  reportDate    DateTime
+  createdAt     DateTime      @default(now())
+
+  @@map("revenue_reports")
+  @@index([venueId, reportDate])
+  @@index([fieldId, reportDate])
 }
