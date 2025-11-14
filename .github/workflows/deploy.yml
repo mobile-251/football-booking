@@ -33,6 +33,8 @@ jobs:
       - name: Generate Prisma Client
         working-directory: backend/ballmate-rest
         run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Build project
         working-directory: backend/ballmate-rest
