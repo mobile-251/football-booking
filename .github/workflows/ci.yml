@@ -1,4 +1,4 @@
-name: Deploy to Vercel
+name: CI
 
 on:
   workflow_dispatch:
@@ -7,7 +7,11 @@ on:
       - dev
     paths:
       - 'backend/ballmate-rest/**'
-  
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - 'backend/ballmate-rest/**'
 
 jobs:
   deploy:
@@ -31,16 +35,18 @@ jobs:
         working-directory: backend/ballmate-rest
         run: pnpm install
 
-      - name: Build project (optional)
+      - name: Generate Prisma Client
+        working-directory: backend/ballmate-rest
+        run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build project
         working-directory: backend/ballmate-rest
         run: pnpm run build
-
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: backend/ballmate-rest
-          vercel-args: '--prod'
-
+      
+      - name: Run tests
+        working-directory: backend/ballmate-rest
+        run: pnpm run test
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
