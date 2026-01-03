@@ -32,7 +32,7 @@ export class BookingService {
       where: { id: fieldId },
     });
 
-    await this.prisma.user.findUniqueOrThrow({
+    await this.prisma.player.findUniqueOrThrow({
       where: { id: playerId },
     });
 
