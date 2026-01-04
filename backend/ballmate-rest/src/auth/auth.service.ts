@@ -74,6 +74,15 @@ export class AuthService {
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    let playerInfo: { id: number; userId: number } | null = null;
+    if (user.role === 'PLAYER') {
+      const player = await this.prisma.player.findUnique({
+        where: { userId: user.id },
+        select: { id: true, userId: true },
+      });
+      playerInfo = player;
+    }
+
     return {
       ...tokens,
       user: {
@@ -81,6 +90,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        player: playerInfo,
       },
     };
   }
