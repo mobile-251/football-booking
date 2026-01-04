@@ -172,3 +172,51 @@
     display: flex;
     align-items: center;
 }
+
+
+.sidebar-footer {
+    margin-top: auto;
+    /* đẩy xuống đáy */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidebar-footer-item {
+    display: flex;
+    align-items: center;
+
+    width: 246px;
+    height: 44px;
+
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 12px;
+
+    border-radius: 8px;
+    cursor: pointer;
+
+    transition: background 0.2s ease;
+    color: #1F6650;
+}
+
+.sidebar-footer-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-footer-item.logout {
+    color: #EA5E5E;
+}
+
+.sidebar-footer-item.logout .menu-label {
+    color: #EA5E5E;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 20px;
+}
+
+.sidebar-footer-item.logout img {
+    filter: brightness(0) saturate(100%) invert(47%) sepia(87%) saturate(748%) hue-rotate(331deg);
+}
