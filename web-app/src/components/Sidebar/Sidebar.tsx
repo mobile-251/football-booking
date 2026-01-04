@@ -7,7 +7,8 @@ import DTIcon from '../../assets/DT.svg'
 import BTIcon from '../../assets/BT.svg'
 import TBIcon from '../../assets/TB.svg'
 import BCIcon from '../../assets/BC.svg'
-
+import DarkIcon from '../../assets/Dark.svg'
+import LogOutIcon from '../../assets/LogOut.svg'
 
 interface SidebarProps {
   activeMenuItem: string
@@ -28,6 +29,7 @@ function Sidebar({ activeMenuItem, onMenuItemClick }: SidebarProps) {
 
   return (
     <div className="sidebar">
+      
       <div className="sidebar-header">
         <div className="sidebar-title">
           <div className="dashboard-icon active">
@@ -57,6 +59,22 @@ function Sidebar({ activeMenuItem, onMenuItemClick }: SidebarProps) {
           </div>
         ))}
       </nav>
+
+      <div className="sidebar-footer">
+        <div className="sidebar-footer-item">
+          <span className="menu-icon">
+            <img src={DarkIcon} alt="Dark mode" />
+          </span>
+          <span className="menu-label">Chế độ tối</span>
+        </div>
+
+        <div className="sidebar-footer-item logout">
+          <span className="menu-icon">
+            <img src={LogOutIcon} alt="Logout" />
+          </span>
+          <span className="menu-label">Đăng xuất</span>
+        </div>
+      </div>
     </div>
   )
 }
