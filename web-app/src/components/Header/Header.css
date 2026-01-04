@@ -1,0 +1,135 @@
+.header {
+    position: fixed;
+    top: 0;
+    left: 280px;
+    right: 0;
+    z-index: 100;
+    background: linear-gradient(135deg, #EAFBEA 0%, #F0FDF0 100%);
+}
+
+
+.header-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    min-height: 64px;
+}
+
+.header-main--right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+/* 
+.header-left {
+    display: flex;
+    align-items: center;
+} */
+
+/* .menu-toggle {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    color: #333;
+    transition: background 0.2s;
+}
+
+.menu-toggle:hover {
+    background: rgba(0, 0, 0, 0.05);
+} */
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.notification-icon-container {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notification-icon-container:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.notification-icon {
+    font-size: 20px;
+    color: #22c55e;
+}
+
+.notification-badge {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+
+    background: #ff4444;
+    color: white;
+
+    border-radius: 999px;
+    padding: 0 5px;
+
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+
+    min-width: 16px;
+    height: 16px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1F6650 0%, #0F5132 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.avatar-icon {
+    font-size: 20px;
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.user-name {
+    color: #1F6650;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 20px;
+}
+
+.user-role {
+    color: #6F9A8D;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 16px;
+}
