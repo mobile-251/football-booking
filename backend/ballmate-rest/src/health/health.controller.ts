@@ -17,15 +17,16 @@ export class HealthController {
     private http: HttpHealthIndicator,
     private prisma: PrismaService,
     @InjectMetric('health_check_calls_total') public counter: Counter<string>,
-  ) { }
+  ) {}
 
   @Get()
   @HealthCheck()
   @ApiOperation({ summary: 'Check system health' })
   check() {
     this.counter.inc();
+    const port = process.env.PORT || 3001;
     return this.health.check([
-      () => this.http.pingCheck('api', 'http://localhost:3000'),
+      () => this.http.pingCheck('api', `http://localhost:${port}/metrics`),
       async () => {
         await this.prisma.$queryRaw`SELECT 1`;
         return { db: { status: 'up' } };
