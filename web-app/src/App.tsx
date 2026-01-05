@@ -6,12 +6,20 @@ import DevelopmentModal from './components/DevelopmentModal/DevelopmentModal'
 import FieldRegister from './components/FieldRegister/FieldRegister'
 
 function App() {
-  const [activeMenuItem, setActiveMenuItem] = useState('Tổng quan')
+  // Khởi tạo state từ localStorage nếu có, nếu không mặc định là 'Tổng quan'
+  const [activeMenuItem, setActiveMenuItem] = useState(() => {
+    return localStorage.getItem('activeMenuItem') || 'Tổng quan'
+  })
   const [showModal, setShowModal] = useState(false)
   const [modalFeature, setModalFeature] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+
+  // Lưu activeMenuItem vào localStorage mỗi khi thay đổi
+  useEffect(() => {
+    localStorage.setItem('activeMenuItem', activeMenuItem)
+  }, [activeMenuItem])
 
   // Detect mobile screen
   useEffect(() => {
@@ -42,6 +50,7 @@ function App() {
       setSidebarOpen(false)
     }
   }
+
 
   const toggleSidebar = () => {
     if (isMobile) {
