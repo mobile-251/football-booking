@@ -106,7 +106,6 @@ function FieldRegister() {
     if (currentStep === 1) {
       if (!validateStep1()) return
 
-      // Khởi tạo pricing dựa trên lựa chọn ở Bước 1
       const newPricing = { ...formData.pricing }
       let updated = false
 
