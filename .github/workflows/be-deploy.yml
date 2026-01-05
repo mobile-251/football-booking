@@ -37,23 +37,40 @@ jobs:
           pnpm prisma generate
           pnpm build
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+      - name: Deploy Backend to EC2
+        env:
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+          APP_PATH: ${{ secrets.EC2_PATH }}/backend/ballmate-rest
 
-      - name: Deploy dist to EC2
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          PORT: ${{ secrets.PORT }}
         run: |
+          echo "$PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'ENDSSH'
+            mkdir -p $APP_PATH
+            cat > $APP_PATH/.env << 'EOF'
+          DATABASE_URL=${DATABASE_URL}
+          JWT_SECRET=${JWT_SECRET}
+          PORT=${PORT}
+          EOF
+          ENDSSH
+
           rsync -avz --delete \
+            -e "ssh -o StrictHostKeyChecking=no -i private_key.pem" \
             backend/ballmate-rest/dist \
             backend/ballmate-rest/package.json \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_PATH }}/backend/ballmate-rest/
+            ${USER}@${HOST}:$APP_PATH/
 
-      - name: Restart PM2 on EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            cd ${{ secrets.EC2_PATH }}/backend/ballmate-rest
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'ENDSSH'
+            cd $APP_PATH
             npm install --omit=dev
             pm2 restart ballmate-rest || pm2 start dist/main.js --name ballmate-rest
             pm2 save
-          EOF
+          ENDSSH
+
+          rm -f private_key.pem
