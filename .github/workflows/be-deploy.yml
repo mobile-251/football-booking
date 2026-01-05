@@ -1,4 +1,4 @@
-name: Deploy Ballmate REST API
+name: Deploy Ballmate REST API (Build on EC2)
 
 on:
   workflow_dispatch:
@@ -10,48 +10,51 @@ on:
       - backend/ballmate-rest/**
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          run_install: false
-
-      - name: Build backend
+      - name: Create SSH key
         run: |
-          cd backend/ballmate-rest
-          pnpm install --frozen-lockfile
-          pnpm prisma generate
-          pnpm build
+          echo "${{ secrets.EC2_SSH_KEY }}" > ec2_key.pem
+          chmod 600 ec2_key.pem
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
-
-      - name: Deploy dist to EC2
+      - name: Sync source to EC2
         run: |
           rsync -avz --delete \
-            backend/ballmate-rest/dist \
-            backend/ballmate-rest/package.json \
+            --exclude node_modules \
+            --exclude dist \
+            -e "ssh -i ec2_key.pem -o StrictHostKeyChecking=no" \
+            backend/ballmate-rest/ \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_PATH }}/backend/ballmate-rest/
 
-      - name: Restart PM2 on EC2
+      - name: Build & restart on EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -i ec2_key.pem -o StrictHostKeyChecking=no \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+
             cd ${{ secrets.EC2_PATH }}/backend/ballmate-rest
-            npm install --omit=dev
-            pm2 restart ballmate-rest || pm2 start dist/main.js --name ballmate-rest
+
+            echo "== Install dependencies =="
+            pnpm install --frozen-lockfile
+
+            echo "== Prisma generate =="
+            pnpm prisma generate
+
+            echo "== Build project =="
+            pnpm build
+
+            echo "== Restart PM2 =="
+            pm2 delete ballmate-rest || true
+            pm2 start dist/src/main.js --name ballmate-rest
             pm2 save
+
+            echo "Deploy success"
           EOF
+
+      - name: Cleanup key
+        run: rm -f ec2_key.pem
