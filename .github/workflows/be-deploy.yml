@@ -30,6 +30,7 @@ jobs:
         run: |
           cd backend/ballmate-rest
           pnpm install --frozen-lockfile
+          pnpm prisma generate
           pnpm build
 
       - name: Setup SSH
