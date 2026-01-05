@@ -7,6 +7,7 @@ import StepProgress from './StepProgress'
 import FormActions from './FormActions'
 import ContactStep from './ContactStep'
 import PreviewModal from './PreviewModal'
+import AxiosClient from '../../api/AxiosClient'
 import toast, { Toaster } from 'react-hot-toast'
 import type { FieldFormData, PricingData } from './types'
 
@@ -101,7 +102,7 @@ function FieldRegister() {
     return true
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep === 1) {
       if (!validateStep1()) return
 
@@ -137,7 +138,18 @@ function FieldRegister() {
     if (currentStep === 2 && !validateStep2()) return
 
     if (currentStep === 4) {
-      toast.success('Đăng ký sân thành công!')
+      console.log('Registering venue with data:', formData);
+
+      try {
+        // Gọi API /venue method POST sử dụng async/await
+        const response = await AxiosClient.post('/venue', formData);
+        console.log('API Response:', response);
+        toast.success('Đăng ký sân thành công!');
+      } catch (error) {
+        console.error('API Error:', error);
+        toast.error('Có lỗi xảy ra khi đăng ký!');
+      }
+
       return
     }
 
