@@ -1,9 +1,11 @@
 name: Deploy Ballmate REST API
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
+      - dev
     paths:
       - backend/ballmate-rest/**
 
@@ -30,6 +32,7 @@ jobs:
         run: |
           cd backend/ballmate-rest
           pnpm install --frozen-lockfile
+          pnpm prisma generate
           pnpm build
 
       - name: Setup SSH
