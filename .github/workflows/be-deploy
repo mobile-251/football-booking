@@ -1,0 +1,54 @@
+name: Deploy Ballmate REST API
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - backend/ballmate-rest/**
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Build backend
+        run: |
+          cd backend/ballmate-rest
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Deploy dist to EC2
+        run: |
+          rsync -avz --delete \
+            backend/ballmate-rest/dist \
+            backend/ballmate-rest/package.json \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_PATH }}/backend/ballmate-rest/
+
+      - name: Restart PM2 on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd ${{ secrets.EC2_PATH }}/backend/ballmate-rest
+            npm install --omit=dev
+            pm2 restart ballmate-rest || pm2 start dist/main.js --name ballmate-rest
+            pm2 save
+          EOF
