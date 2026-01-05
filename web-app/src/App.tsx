@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import Sidebar from './components/Sidebar/Sidebar'
 import Header from './components/Header/Header'
 import DevelopmentModal from './components/DevelopmentModal/DevelopmentModal'
 import FieldRegister from './components/FieldRegister/FieldRegister'
+import LoginPage from './components/Login/LoginPage'
 
-function App() {
+const Dashboard = () => {
   // Khởi tạo state từ localStorage nếu có, nếu không mặc định là 'Tổng quan'
   const [activeMenuItem, setActiveMenuItem] = useState(() => {
     return localStorage.getItem('activeMenuItem') || 'Tổng quan'
@@ -51,7 +53,6 @@ function App() {
     }
   }
 
-
   const toggleSidebar = () => {
     if (isMobile) {
       setSidebarOpen(!sidebarOpen)
@@ -61,7 +62,7 @@ function App() {
   }
 
   return (
-    <div className={`app - container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} `}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Sidebar
         activeMenuItem={activeMenuItem}
         onMenuItemClick={handleMenuItemClick}
@@ -95,6 +96,16 @@ function App() {
         />
       )}
     </div>
+  )
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/app/*" element={<Dashboard />} />
+      <Route path="/" element={<Navigate to="/login" replace />} />
+    </Routes>
   )
 }
 
