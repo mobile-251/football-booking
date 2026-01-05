@@ -1,4 +1,4 @@
-name: Deploy Ballmate REST API
+name: Deploy Ballmate REST API (Build on EC2)
 
 on:
   workflow_dispatch:
@@ -10,70 +10,51 @@ on:
       - backend/ballmate-rest/**
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          run_install: false
-
-      - name: Build backend
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Create SSH key
         run: |
-          cd backend/ballmate-rest
-          pnpm install --frozen-lockfile
-          pnpm prisma generate
-          pnpm build
+          echo "${{ secrets.EC2_SSH_KEY }}" > ec2_key.pem
+          chmod 600 ec2_key.pem
 
-      - name: Deploy Backend to EC2
-        env:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
-          APP_PATH: ${{ secrets.EC2_PATH }}/backend/ballmate-rest
-
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          PORT: ${{ secrets.PORT }}
+      - name: Sync source to EC2
         run: |
-          echo "$PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-
-          # Tạo thư mục + .env
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << ENDSSH
-            mkdir -p "$APP_PATH"
-            cat > "$APP_PATH/.env" << 'EOF'
-          DATABASE_URL=${DATABASE_URL}
-          JWT_SECRET=${JWT_SECRET}
-          PORT=${PORT}
-          EOF
-          ENDSSH
-
-          # Copy dist + package.json
           rsync -avz --delete \
-            -e "ssh -o StrictHostKeyChecking=no -i private_key.pem" \
-            backend/ballmate-rest/dist \
-            backend/ballmate-rest/package.json \
-            ${USER}@${HOST}:"$APP_PATH/"
+            --exclude node_modules \
+            --exclude dist \
+            -e "ssh -i ec2_key.pem -o StrictHostKeyChecking=no" \
+            backend/ballmate-rest/ \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_PATH }}/backend/ballmate-rest/
 
-          # Install prod deps + restart PM2
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << ENDSSH
-            cd "$APP_PATH"
-            npm install --omit=dev
-            pm2 restart ballmate-rest || pm2 start dist/main.js --name ballmate-rest
+      - name: Build & restart on EC2
+        run: |
+          ssh -i ec2_key.pem -o StrictHostKeyChecking=no \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+
+            cd ${{ secrets.EC2_PATH }}/backend/ballmate-rest
+
+            echo "== Install dependencies =="
+            pnpm install --frozen-lockfile
+
+            echo "== Prisma generate =="
+            pnpm prisma generate
+
+            echo "== Build project =="
+            pnpm build
+
+            echo "== Restart PM2 =="
+            pm2 delete ballmate-rest || true
+            pm2 start dist/src/main.js --name ballmate-rest
             pm2 save
-          ENDSSH
 
-          rm -f private_key.pem
+            echo "Deploy success"
+          EOF
+
+      - name: Cleanup key
+        run: rm -f ec2_key.pem
