@@ -2,13 +2,17 @@ import { useState } from 'react'
 import './FieldRegister.css'
 import BasicInfoStep from './BasicInfoStep'
 import LocationStep from './LocationStep'
+import PricingImagesStep from './PricingImagesStep'
 import StepProgress from './StepProgress'
 import FormActions from './FormActions'
+import ContactStep from './ContactStep'
+import PreviewModal from './PreviewModal'
 import toast, { Toaster } from 'react-hot-toast'
-import type { FieldFormData } from './types'
+import type { FieldFormData, PricingData } from './types'
 
 function FieldRegister() {
   const [currentStep, setCurrentStep] = useState(1)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [formData, setFormData] = useState({
     fieldName: '',
     fieldTypes: {
@@ -18,17 +22,57 @@ function FieldRegister() {
     },
     description: '',
     address: '',
-    latitude: 10.762622, // Default to HCM city center
+    latitude: 10.762622,
     longitude: 106.660172,
     phone: '',
+    email: '',
+    pricing: {} as PricingData,
+    images: [] as File[],
   })
+
+  // Mẫu giá gợi ý cho các loại sân
+  const pricingSuggestions = {
+    field5: {
+      weekdays: [
+        { startTime: '05:00', endTime: '16:00', price: 200000 },
+        { startTime: '16:00', endTime: '22:00', price: 350000 },
+        { startTime: '22:00', endTime: '05:00', price: 150000 },
+      ],
+      weekends: [
+        { startTime: '05:00', endTime: '22:00', price: 400000 },
+        { startTime: '22:00', endTime: '05:00', price: 200000 },
+      ]
+    },
+    field7: {
+      weekdays: [
+        { startTime: '05:00', endTime: '16:00', price: 300000 },
+        { startTime: '16:00', endTime: '22:00', price: 500000 },
+        { startTime: '22:00', endTime: '05:00', price: 250000 },
+      ],
+      weekends: [
+        { startTime: '05:00', endTime: '22:00', price: 600000 },
+        { startTime: '22:00', endTime: '05:00', price: 300000 },
+      ]
+    },
+    field11: {
+      weekdays: [
+        { startTime: '05:00', endTime: '16:00', price: 500000 },
+        { startTime: '16:00', endTime: '22:00', price: 800000 },
+        { startTime: '22:00', endTime: '05:00', price: 400000 },
+      ],
+      weekends: [
+        { startTime: '05:00', endTime: '22:00', price: 1000000 },
+        { startTime: '22:00', endTime: '05:00', price: 500000 },
+      ]
+    }
+  }
 
   // Cấu hình các bước đăng ký
   const steps = [
     { id: 1, title: 'Thông tin cơ bản', subtitle: 'Tên, loại sân, mô tả' },
     { id: 2, title: 'Địa chỉ & Liên hệ', subtitle: 'Vị trí, số điện thoại và tọa độ' },
     { id: 3, title: 'Hình ảnh & Giá', subtitle: 'Bảng giá và hình ảnh sân' },
-    { id: 4, title: 'Tiện ích & Liên hệ', subtitle: 'Dịch vụ và thông tin liên hệ' },
+    { id: 4, title: 'Thông tin liên hệ', subtitle: 'Số điện thoại và email' },
   ]
 
   const validateStep1 = () => {
@@ -58,7 +102,38 @@ function FieldRegister() {
   }
 
   const handleNext = () => {
-    if (currentStep === 1 && !validateStep1()) return
+    if (currentStep === 1) {
+      if (!validateStep1()) return
+
+      // Khởi tạo pricing dựa trên lựa chọn ở Bước 1
+      const newPricing = { ...formData.pricing }
+      let updated = false
+
+      const selectedTypes = (['field5', 'field7', 'field11'] as const).filter(
+        type => formData.fieldTypes[type].selected
+      )
+
+      // Xóa các loại sân không còn được chọn khỏi dữ liệu pricing
+      Object.keys(newPricing).forEach(key => {
+        if (!formData.fieldTypes[key as keyof typeof formData.fieldTypes].selected) {
+          delete newPricing[key as keyof typeof formData.pricing]
+          updated = true
+        }
+      })
+
+      // Thêm gợi ý cho các loại sân mới được chọn (nếu chưa có giá)
+      selectedTypes.forEach(type => {
+        if (!newPricing[type]) {
+          newPricing[type] = pricingSuggestions[type]
+          updated = true
+        }
+      })
+
+      if (updated) {
+        setFormData(prev => ({ ...prev, pricing: newPricing }))
+      }
+    }
+
     if (currentStep === 2 && !validateStep2()) return
 
     if (currentStep === 4) {
@@ -95,8 +170,7 @@ function FieldRegister() {
   }
 
   const handlePreview = () => {
-    console.log('Preview data:', formData)
-    toast.success('Đang chuẩn bị bản xem trước...')
+    setIsPreviewOpen(true)
   }
 
   return (
@@ -127,12 +201,18 @@ function FieldRegister() {
               onChange={(newData) => setFormData(newData as any)}
             />
           )}
+          {currentStep === 3 && (
+            <PricingImagesStep
+              formData={formData as FieldFormData}
+              onChange={(newData) => setFormData(newData as any)}
+            />
+          )}
 
-          {currentStep > 2 && (
-            <div className="coming-soon">
-              <h3>Bước {currentStep} đang được phát triển</h3>
-              <p>Nội dung của {steps[currentStep - 1].title} sẽ xuất hiện tại đây.</p>
-            </div>
+          {currentStep === 4 && (
+            <ContactStep
+              formData={formData as FieldFormData}
+              onChange={(newData) => setFormData(newData as any)}
+            />
           )}
         </div>
 
@@ -144,6 +224,12 @@ function FieldRegister() {
           totalSteps={steps.length}
         />
       </div>
+
+      <PreviewModal
+        formData={formData as FieldFormData}
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+      />
     </div>
   )
 }

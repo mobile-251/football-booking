@@ -3,6 +3,21 @@ export interface FieldType {
     count: number
 }
 
+export interface PriceSlot {
+    startTime: string
+    endTime: string
+    price: number
+}
+
+export interface FieldPricing {
+    weekdays: PriceSlot[]
+    weekends: PriceSlot[]
+}
+
+export type PricingData = {
+    [key in 'field5' | 'field7' | 'field11']?: FieldPricing
+}
+
 export interface FieldFormData {
     fieldName: string
     fieldTypes: {
@@ -15,4 +30,7 @@ export interface FieldFormData {
     latitude: number
     longitude: number
     phone: string
+    email: string
+    pricing: PricingData
+    images: File[]
 }
