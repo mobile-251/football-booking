@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import './FieldRegister.css'
 import BasicInfoStep from './BasicInfoStep'
+import LocationStep from './LocationStep'
 import StepProgress from './StepProgress'
 import FormActions from './FormActions'
 import toast, { Toaster } from 'react-hot-toast'
+import type { FieldFormData } from './types'
 
 function FieldRegister() {
   const [currentStep, setCurrentStep] = useState(1)
@@ -15,14 +17,18 @@ function FieldRegister() {
       field11: { selected: false, count: 0 },
     },
     description: '',
+    address: '',
+    latitude: 10.762622, // Default to HCM city center
+    longitude: 106.660172,
+    phone: '',
   })
 
   // Cấu hình các bước đăng ký
   const steps = [
     { id: 1, title: 'Thông tin cơ bản', subtitle: 'Tên, loại sân, mô tả' },
-    { id: 2, title: 'Địa chỉ & Liên hệ', subtitle: 'Vị trí, số điện thoại' },
-    { id: 3, title: 'Tiện ích & Quy định', subtitle: 'Dịch vụ, nội quy sân' },
-    { id: 4, title: 'Hình ảnh & Giá', subtitle: 'Review, mức giá thuê' },
+    { id: 2, title: 'Địa chỉ & Liên hệ', subtitle: 'Vị trí, số điện thoại và tọa độ' },
+    { id: 3, title: 'Hình ảnh & Giá', subtitle: 'Bảng giá và hình ảnh sân' },
+    { id: 4, title: 'Tiện ích & Liên hệ', subtitle: 'Dịch vụ và thông tin liên hệ' },
   ]
 
   const validateStep1 = () => {
@@ -42,11 +48,29 @@ function FieldRegister() {
     return true
   }
 
+  const validateStep2 = () => {
+    const { address } = formData
+    if (!address.trim()) {
+      toast.error('Vui lòng nhập địa chỉ cụ thể')
+      return false
+    }
+    return true
+  }
+
   const handleNext = () => {
-    if (currentStep === 1 && !validateStep1()) {
+    if (currentStep === 1 && !validateStep1()) return
+    if (currentStep === 2 && !validateStep2()) return
+
+    if (currentStep === 4) {
+      toast.success('Đăng ký sân thành công!')
       return
     }
+
     setCurrentStep((prev) => Math.min(prev + 1, 4))
+  }
+
+  const handleBack = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1))
   }
 
   const handleStepClick = (stepId: number) => {
@@ -58,9 +82,14 @@ function FieldRegister() {
     }
 
     if (stepId === currentStep + 1) {
-      if (currentStep === 1 && !validateStep1()) {
-        return
-      }
+      if (currentStep === 1 && !validateStep1()) return
+      if (currentStep === 2 && !validateStep2()) return
+      setCurrentStep(stepId)
+    }
+
+    if (stepId > currentStep + 1) {
+      if (currentStep === 1 && !validateStep1()) return
+      if (currentStep === 2 && !validateStep2()) return
       setCurrentStep(stepId)
     }
   }
@@ -86,9 +115,20 @@ function FieldRegister() {
         />
 
         <div className="form-content">
-          {currentStep === 1 && <BasicInfoStep formData={formData} onChange={setFormData} />}
+          {currentStep === 1 && (
+            <BasicInfoStep
+              formData={formData as FieldFormData}
+              onChange={(newData) => setFormData(newData as any)}
+            />
+          )}
+          {currentStep === 2 && (
+            <LocationStep
+              formData={formData as FieldFormData}
+              onChange={(newData) => setFormData(newData as any)}
+            />
+          )}
 
-          {currentStep > 1 && (
+          {currentStep > 2 && (
             <div className="coming-soon">
               <h3>Bước {currentStep} đang được phát triển</h3>
               <p>Nội dung của {steps[currentStep - 1].title} sẽ xuất hiện tại đây.</p>
@@ -99,6 +139,9 @@ function FieldRegister() {
         <FormActions
           onPreview={handlePreview}
           onNext={handleNext}
+          onBack={handleBack}
+          currentStep={currentStep}
+          totalSteps={steps.length}
         />
       </div>
     </div>

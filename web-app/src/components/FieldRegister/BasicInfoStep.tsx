@@ -1,19 +1,5 @@
 import React from 'react'
-
-interface FieldType {
-    selected: boolean
-    count: number
-}
-
-interface FieldFormData {
-    fieldName: string
-    fieldTypes: {
-        field5: FieldType
-        field7: FieldType
-        field11: FieldType
-    }
-    description: string
-}
+import type { FieldFormData } from './types'
 
 interface BasicInfoStepProps {
     formData: FieldFormData
