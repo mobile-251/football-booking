@@ -29,6 +29,8 @@ jobs:
           run_install: false
 
       - name: Build backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           cd backend/ballmate-rest
           pnpm install --frozen-lockfile
