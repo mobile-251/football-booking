@@ -1,10 +1,24 @@
 import './Header.css'
 import TBIcon from '../../assets/TB.svg'
 
-function Header() {
+interface HeaderProps {
+  onToggleSidebar: () => void
+  isMobile: boolean
+}
+
+function Header({ onToggleSidebar, isMobile }: HeaderProps) {
   return (
     <div className="header">
       <div className="header-main header-main--right">
+        {/* Hamburger button for mobile */}
+        {isMobile && (
+          <button className="hamburger-btn" onClick={onToggleSidebar}>
+            <span className="hamburger-line"></span>
+            <span className="hamburger-line"></span>
+            <span className="hamburger-line"></span>
+          </button>
+        )}
+
         <div className="header-right">
           <div className="notification-icon-container">
             <span className="notification-icon">
