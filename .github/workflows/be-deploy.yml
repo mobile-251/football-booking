@@ -32,12 +32,23 @@ jobs:
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_PATH }}/backend/ballmate-rest/
 
       - name: Build & restart on EC2
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           ssh -i ec2_key.pem -o StrictHostKeyChecking=no \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
             set -e
 
             cd ${{ secrets.EC2_PATH }}/backend/ballmate-rest
+
+            echo "== Create .env file =="
+            cat > .env << 'ENVFILE'
+          DATABASE_URL=${DATABASE_URL}
+          JWT_SECRET=${JWT_SECRET}
+          NODE_ENV=production
+          PORT=3001
+          ENVFILE
 
             echo "== Install dependencies =="
             pnpm install --frozen-lockfile
