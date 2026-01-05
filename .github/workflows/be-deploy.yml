@@ -51,23 +51,26 @@ jobs:
           echo "$PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
 
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'ENDSSH'
-            mkdir -p $APP_PATH
-            cat > $APP_PATH/.env << 'EOF'
+          # Tạo thư mục + .env
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << ENDSSH
+            mkdir -p "$APP_PATH"
+            cat > "$APP_PATH/.env" << 'EOF'
           DATABASE_URL=${DATABASE_URL}
           JWT_SECRET=${JWT_SECRET}
           PORT=${PORT}
           EOF
           ENDSSH
 
+          # Copy dist + package.json
           rsync -avz --delete \
             -e "ssh -o StrictHostKeyChecking=no -i private_key.pem" \
             backend/ballmate-rest/dist \
             backend/ballmate-rest/package.json \
-            ${USER}@${HOST}:$APP_PATH/
+            ${USER}@${HOST}:"$APP_PATH/"
 
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'ENDSSH'
-            cd $APP_PATH
+          # Install prod deps + restart PM2
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << ENDSSH
+            cd "$APP_PATH"
             npm install --omit=dev
             pm2 restart ballmate-rest || pm2 start dist/main.js --name ballmate-rest
             pm2 save
