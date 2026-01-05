@@ -12,12 +12,14 @@ import { PaymentModule } from './payment/payment.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import configuration from './config/configuration';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['.env.local', '.env'],
+      load: [configuration],
     }),
     PrismaModule,
     AuthModule,
@@ -33,4 +35,4 @@ import { HealthModule } from './health/health.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
