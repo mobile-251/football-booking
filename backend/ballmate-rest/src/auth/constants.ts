@@ -1,5 +1,6 @@
-export const jwtConstants = {
-  secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
-  accessTokenExpiry: '15m' as const,
-  refreshTokenExpiry: '7d' as const,
-};
+// JWT constants are now managed via ConfigService in configuration.ts
+// This file is kept for backward compatibility reference only
+// All JWT configuration should be accessed via ConfigService:
+//   - configService.get<string>('jwt.secret')
+//   - configService.get<string>('jwt.accessTokenExpiry')
+//   - configService.get<string>('jwt.refreshTokenExpiry')

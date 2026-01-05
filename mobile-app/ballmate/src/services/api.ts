@@ -1,19 +1,8 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { Platform } from 'react-native';
 import { AuthResponse, Field, Venue, Booking, Review, FieldFilter, ApiError, User } from '../types/types';
+import { Config } from '../config/environment';
 
-// API base URL - automatically detect platform
-const getBaseUrl = () => {
-	if (Platform.OS === 'web') {
-		return 'http://localhost:3000';
-	}
-	if (Platform.OS === 'android') {
-		return 'http://10.0.2.2:3000'; // Android emulator
-	}
-	return 'http://localhost:3000'; // iOS simulator
-};
-
-const API_BASE_URL = getBaseUrl();
+const API_BASE_URL = Config.API_URL;
 
 class ApiService {
 	private client: AxiosInstance;
