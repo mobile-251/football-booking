@@ -56,6 +56,9 @@ jobs:
             echo "== Prisma generate =="
             pnpm prisma generate
 
+            echo "== Prisma migrate deploy =="
+            pnpm prisma migrate deploy
+
             echo "== Build project =="
             pnpm build
 
