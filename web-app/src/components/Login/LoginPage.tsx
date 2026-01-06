@@ -1,36 +1,74 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AxiosClient from '../../api/AxiosClient';
 import toast from 'react-hot-toast';
 import './Login.css';
 
 const LoginPage: React.FC = () => {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        // Kiểm tra xem có flag đăng xuất vừa thực hiện không
+        if (localStorage.getItem('logout_success')) {
+            toast.success('Đăng xuất thành công!');
+            localStorage.removeItem('logout_success');
+        }
+    }, []);
+
+    const validateForm = () => {
+        // Simple email validation regex
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            toast.error('Email không hợp lệ!');
+            return false;
+        }
+
+        if (password.length < 6) {
+            toast.error('Mật khẩu phải có ít nhất 6 ký tự!');
+            return false;
+        }
+
+        return true;
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (!validateForm()) return;
+
+        setIsLoading(true);
         try {
-            console.log('Logging in with:', { username, password });
-            const response: any = await AxiosClient.post('/auth/login', { username, password });
+            console.log('Logging in with:', { email, password });
+            const response: any = await AxiosClient.post('/auth/login', { email, password });
 
             console.log('Login success:', response);
+
+            // Kiểm tra role trước khi cho phép vào hệ thống
+            if (response.user?.role !== 'FIELD_OWNER') {
+                toast.error('Tài khoản của bạn không có quyền truy cập trang quản trị!');
+                setIsLoading(false);
+                return;
+            }
+
             toast.success('Đăng nhập thành công!');
 
-            // Lưu token nếu backend trả về
-            if (response.token) {
-                localStorage.setItem('token', response.token);
+            // Lưu token và thông tin user theo structure của BE
+            if (response.access_token) {
+                localStorage.setItem('access_token', response.access_token);
+                localStorage.setItem('refresh_token', response.refresh_token);
+                localStorage.setItem('user', JSON.stringify(response.user));
             }
 
             navigate('/app');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Login error:', error);
-            toast.error('Sai tài khoản hoặc mật khẩu!');
-
-            // Tạm thời cho phép lách qua để dev nếu API chưa sẵn sàng (options)
-            // navigate('/app'); 
+            const errorMessage = error.response?.data?.message || 'Sai tài khoản hoặc mật khẩu!';
+            toast.error(typeof errorMessage === 'string' ? errorMessage : 'Đăng nhập thất bại!');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -45,13 +83,13 @@ const LoginPage: React.FC = () => {
 
                     <form className="login-form" onSubmit={handleLogin}>
                         <div className="form-group">
-                            <label htmlFor="username">Tên đăng nhập</label>
+                            <label htmlFor="email">Email</label>
                             <input
-                                type="text"
-                                id="username"
-                                placeholder="Nhập tên đăng nhập của bạn"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                type="email"
+                                id="email"
+                                placeholder="player1@ballmate.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                                 required
                             />
                         </div>
@@ -67,6 +105,7 @@ const LoginPage: React.FC = () => {
                                 placeholder="••••••••"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                minLength={6}
                                 required
                             />
                         </div>
@@ -79,11 +118,17 @@ const LoginPage: React.FC = () => {
                             </label>
                         </div>
 
-                        <button type="submit" className="login-button">Đăng Nhập</button>
+                        <button
+                            type="submit"
+                            className={`login-button ${isLoading ? 'loading' : ''}`}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
+                        </button>
                     </form>
 
                     <div className="login-footer">
-                        <p>Chưa có tài khoản? <a href="#">Đăng ký ngay</a></p>
+                        <p>Chưa có tài khoản? <a href="/register" onClick={(e) => { e.preventDefault(); navigate('/register'); }}>Đăng ký ngay</a></p>
                     </div>
                 </div>
             </div>

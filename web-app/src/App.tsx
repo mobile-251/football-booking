@@ -6,6 +6,8 @@ import Header from './components/Header/Header'
 import DevelopmentModal from './components/DevelopmentModal/DevelopmentModal'
 import FieldRegister from './components/FieldRegister/FieldRegister'
 import LoginPage from './components/Login/LoginPage'
+import RegisterPage from './components/Register/RegisterPage'
+import { Toaster } from 'react-hot-toast'
 
 const Dashboard = () => {
   // Khởi tạo state từ localStorage nếu có, nếu không mặc định là 'Tổng quan'
@@ -61,6 +63,14 @@ const Dashboard = () => {
     }
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+    localStorage.setItem('logout_success', 'true')
+    window.location.href = '/login'
+  }
+
   return (
     <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Sidebar
@@ -70,7 +80,9 @@ const Dashboard = () => {
         isOpen={sidebarOpen}
         isMobile={isMobile}
         onToggle={toggleSidebar}
+        onLogout={handleLogout}
       />
+
 
       {/* Mobile overlay */}
       {isMobile && sidebarOpen && (
@@ -99,14 +111,53 @@ const Dashboard = () => {
   )
 }
 
+// Hợp phần kiểm tra đã đăng nhập hay chưa
+const isAuthenticated = () => !!localStorage.getItem('access_token');
+
+// Route chỉ dành cho khách (chưa đăng nhập)
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  return isAuthenticated() ? <Navigate to="/app" replace /> : <>{children}</>;
+};
+
+// Route yêu cầu phải đăng nhập
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  return isAuthenticated() ? <>{children}</> : <Navigate to="/login" replace />;
+};
+
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/app/*" element={<Dashboard />} />
-      <Route path="/" element={<Navigate to="/login" replace />} />
-    </Routes>
+    <>
+      <Toaster position="top-right" />
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <RegisterPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/app/*"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/" element={<Navigate to="/app" replace />} />
+      </Routes>
+    </>
   )
 }
+
 
 export default App

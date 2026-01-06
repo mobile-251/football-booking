@@ -17,6 +17,7 @@ interface SidebarProps {
   isOpen: boolean
   isMobile: boolean
   onToggle: () => void
+  onLogout: () => void
 }
 
 function Sidebar({
@@ -25,7 +26,8 @@ function Sidebar({
   collapsed,
   isOpen,
   isMobile,
-  onToggle
+  onToggle,
+  onLogout
 }: SidebarProps) {
   const menuItems = [
     { id: 'Tổng quan', icon: TQIcon, label: 'Tổng quan' },
@@ -93,7 +95,11 @@ function Sidebar({
           {!collapsed && <span className="menu-label">Chế độ tối</span>}
         </div>
 
-        <div className="sidebar-footer-item logout" title={collapsed ? "Đăng xuất" : ''}>
+        <div
+          className="sidebar-footer-item logout"
+          title={collapsed ? "Đăng xuất" : ''}
+          onClick={onLogout}
+        >
           <span className="menu-icon">
             <img src={LogOutIcon} alt="Logout" />
           </span>

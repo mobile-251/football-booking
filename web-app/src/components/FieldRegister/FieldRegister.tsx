@@ -8,7 +8,7 @@ import FormActions from './FormActions'
 import ContactStep from './ContactStep'
 import PreviewModal from './PreviewModal'
 import AxiosClient from '../../api/AxiosClient'
-import toast, { Toaster } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 import type { FieldFormData, PricingData } from './types'
 
 function FieldRegister() {
@@ -186,7 +186,6 @@ function FieldRegister() {
 
   return (
     <div className="field-register-container">
-      <Toaster position="top-right" />
       <div className="field-register-card">
         <h1 className="field-register-title">Đăng Ký Sân Mới</h1>
         <p className="field-register-subtitle">
