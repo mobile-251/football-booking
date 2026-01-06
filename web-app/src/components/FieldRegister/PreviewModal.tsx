@@ -164,7 +164,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ formData, isOpen, onClose }
                             <div className="info-grid">
                                 <div className="info-item">
                                     <span className="info-label">Số điện thoại</span>
-                                    <div className="info-value contact-mark">{formData.phone || 'Chưa nhập'}</div>
+                                    <div className="info-value contact-mark">{formData.phoneNumber || 'Chưa nhập'}</div>
                                 </div>
                                 <div className="info-item">
                                     <span className="info-label">Địa chỉ Email</span>
