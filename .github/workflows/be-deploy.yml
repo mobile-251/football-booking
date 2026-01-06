@@ -35,6 +35,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
         run: |
           ssh -i ec2_key.pem -o StrictHostKeyChecking=no \
           ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -46,6 +47,7 @@ jobs:
             cat > .env << 'ENVFILE'
           DATABASE_URL=${DATABASE_URL}
           JWT_SECRET=${JWT_SECRET}
+          CORS_ORIGINS=${CORS_ORIGINS}
           NODE_ENV=production
           PORT=3001
           ENVFILE
