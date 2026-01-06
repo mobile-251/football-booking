@@ -26,7 +26,6 @@ function Sidebar({
   collapsed,
   isOpen,
   isMobile,
-  onToggle,
   onLogout
 }: SidebarProps) {
   const menuItems = [
