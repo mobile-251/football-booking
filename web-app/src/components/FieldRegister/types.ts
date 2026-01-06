@@ -27,6 +27,8 @@ export interface FieldFormData {
     }
     description: string
     address: string
+    city: string
+    district?: string
     latitude: number
     longitude: number
     phone: string
