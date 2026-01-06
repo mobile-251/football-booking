@@ -50,7 +50,7 @@ function Sidebar({
     <div className={sidebarClasses}>
 
       <div className="sidebar-header">
-        <div className="sidebar-title">
+        <div className="sidebar-title" onClick={() => onMenuItemClick('Tổng quan')} style={{ cursor: 'pointer' }}>
           <div className="dashboard-icon active">
             <img src={TQIcon} alt="Dashboard" />
           </div>
@@ -88,7 +88,11 @@ function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-footer-item" title={collapsed ? "Chế độ tối" : ''}>
+        <div
+          className="sidebar-footer-item"
+          title={collapsed ? "Chế độ tối" : ''}
+          onClick={() => onMenuItemClick('Chế độ tối')}
+        >
           <span className="menu-icon">
             <img src={DarkIcon} alt="Dark mode" />
           </span>
