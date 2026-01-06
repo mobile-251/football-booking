@@ -200,7 +200,7 @@ function FieldRegister() {
           pricing: formData.pricing,
         };
 
-        const response = await AxiosClient.post('/venue', payload);
+        const response = await AxiosClient.post('/venues', payload);
         console.log('API Response:', response);
         toast.success('Đăng ký sân thành công!');
         // Chuyển hướng hoặc reset form

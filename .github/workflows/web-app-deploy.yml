@@ -36,104 +36,44 @@ jobs:
       - name: Build Web App
         working-directory: ${{ env.WEB_APP_DIR }}
         env:
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 
-      - name: Deploy Web App to EC2
-        env:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
+      - name: Create SSH key
         run: |
-          echo "$PRIVATE_KEY" > private_key.pem
+          echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
-          
-          # Create directory on EC2
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'ENDSSH'
-            sudo mkdir -p /var/www/ballmate
-            sudo chown -R $USER:$USER /var/www/ballmate
-          ENDSSH
-          
-          # Copy build files to EC2
+
+      - name: Create directory on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i private_key.pem \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            'sudo mkdir -p /var/www/ballmate && sudo chown -R $USER:$USER /var/www/ballmate'
+
+      - name: Deploy build files to EC2
+        run: |
           scp -o StrictHostKeyChecking=no -i private_key.pem -r \
             ${{ env.WEB_APP_DIR }}/dist/* \
-            ${USER}@${HOST}:/var/www/ballmate/
-          
-          # Configure Nginx
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'ENDSSH'
-            if [ ! -f /etc/nginx/sites-available/ballmate.aqbtech.id.vn.conf ]; then
-              sudo tee /etc/nginx/sites-available/ballmate.aqbtech.id.vn.conf > /dev/null << 'NGINX_CONFIG'
-          server {
-              listen 80;
-              server_name ballmate.aqbtech.id.vn;
-              
-              root /var/www/ballmate;
-              index index.html;
-              
-              gzip on;
-              gzip_vary on;
-              gzip_min_length 1024;
-              gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json application/javascript;
-              
-              # Proxy API requests to backend
-              location /api/ {
-                  proxy_pass http://localhost:3001;
-                  proxy_http_version 1.1;
-                  
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-                  
-                  proxy_connect_timeout 60s;
-                  proxy_send_timeout 60s;
-                  proxy_read_timeout 60s;
-              }
-              
-              # SPA routing for frontend
-              location / {
-                  try_files \$uri \$uri/ /index.html;
-                  add_header Cache-Control "no-cache, no-store, must-revalidate";
-              }
-              
-              # Static assets caching
-              location /assets {
-                  expires 1y;
-                  add_header Cache-Control "public, immutable";
-              }
-              
-              location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-                  expires 1y;
-                  add_header Cache-Control "public, immutable";
-              }
-          }
-          NGINX_CONFIG
-                        
-                        sudo ln -sf /etc/nginx/sites-available/ballmate.aqbtech.id.vn.conf /etc/nginx/sites-enabled/
-                        
-                        sudo nginx -t
-                      fi
-                      
-                      sudo systemctl reload nginx
-                      
-                      echo "Web App deployed successfully!"
-                    ENDSSH
-                    
-                    rm -f private_key.pem
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/var/www/ballmate/
+
+      - name: Reload Nginx
+        run: |
+          ssh -o StrictHostKeyChecking=no -i private_key.pem \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            'sudo systemctl reload nginx'
+
+      - name: Cleanup SSH key
+        run: rm -f private_key.pem
 
       - name: Verify Deployment
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
         run: |
           echo "Waiting for Nginx to reload..."
           sleep 5
           
-          echo "Checking web app availability at: http://${HOST}/"
-          
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://${HOST}/ || echo "000")
+          echo "Checking web app availability..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.EC2_HOST }}/ || echo "000")
           if [ "$response" = "200" ]; then
             echo "Web App is accessible (HTTP $response)"
           else
             echo "Web App returned HTTP $response"
-            echo "Please check Nginx logs: ssh ${USER}@${HOST} 'sudo tail -f /var/log/nginx/error.log'"
           fi
