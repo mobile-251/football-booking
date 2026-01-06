@@ -39,6 +39,8 @@ model User {
   player    Player?
   owner     FieldOwner?
   admin     Admin?
+  notifications Notification[]
+  messages  Message[]
   @@map("users")
 }
 model Player {
@@ -50,6 +52,8 @@ model Player {
 
   bookings      Booking[]
   reviews       Review[]
+  favorites     Favorite[]
+  conversations Conversation[]
   user      User     @relation(fields: [userId], references: [id])
 
   @@map("players")
@@ -63,6 +67,7 @@ model FieldOwner {
   deletedAt DateTime?
 
   venues        Venue[]
+  conversations Conversation[]
   user      User     @relation(fields: [userId], references: [id])
 
   @@map("field_owners")
@@ -133,6 +138,12 @@ model Field {
   bookings  Booking[]
   reviews   Review[]
 
+  venue         Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  reviews       Review[]
+  favorites     Favorite[]
+  conversations Conversation[]
+  
   @@map("fields")
 }
 
@@ -254,3 +265,94 @@ model RevenueReport {
   @@index([venueId, reportDate])
   @@index([fieldId, reportDate])
 }
+
+// ============================================
+// FAVORITES
+// ============================================
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  playerId  Int
+  fieldId   Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  field     Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, fieldId])
+  @@map("favorites")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_REMINDER
+  PAYMENT_SUCCESS
+  PAYMENT_PENDING
+  PROMO
+  REVIEW_REQUEST
+  SYSTEM
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // Additional data like bookingId, fieldId, etc.
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  // Relations
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([userId, isRead])
+}
+
+// ============================================
+// MESSAGING
+// ============================================
+
+model Conversation {
+  id          Int       @id @default(autoincrement())
+  playerId    Int
+  ownerId     Int       // FieldOwner id
+  fieldId     Int?      // Optional: conversation about a specific field
+  lastMessage String?
+  lastMessageAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  player      Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  owner       FieldOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  field       Field?    @relation(fields: [fieldId], references: [id], onDelete: SetNull)
+  messages    Message[]
+
+  @@unique([playerId, ownerId])
+  @@map("conversations")
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  senderId       Int          // User id
+  content        String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  // Relations
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+  @@index([conversationId, createdAt])
+}
+

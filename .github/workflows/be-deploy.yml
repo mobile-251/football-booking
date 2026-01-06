@@ -1,0 +1,76 @@
+name: Deploy Ballmate REST API (Build on EC2)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - backend/ballmate-rest/**
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create SSH key
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > ec2_key.pem
+          chmod 600 ec2_key.pem
+
+      - name: Sync source to EC2
+        run: |
+          rsync -avz --delete \
+            --exclude node_modules \
+            --exclude dist \
+            -e "ssh -i ec2_key.pem -o StrictHostKeyChecking=no" \
+            backend/ballmate-rest/ \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_PATH }}/backend/ballmate-rest/
+
+      - name: Build & restart on EC2
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+        run: |
+          ssh -i ec2_key.pem -o StrictHostKeyChecking=no \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+            set -e
+
+            cd ${{ secrets.EC2_PATH }}/backend/ballmate-rest
+
+            echo "== Create .env file =="
+            cat > .env << 'ENVFILE'
+          DATABASE_URL=${DATABASE_URL}
+          JWT_SECRET=${JWT_SECRET}
+          CORS_ORIGINS=${CORS_ORIGINS}
+          NODE_ENV=production
+          PORT=3001
+          ENVFILE
+
+            echo "== Install dependencies =="
+            pnpm install --frozen-lockfile
+
+            echo "== Prisma generate =="
+            pnpm prisma generate
+
+            echo "== Prisma migrate deploy =="
+            pnpm prisma migrate deploy
+
+            echo "== Build project =="
+            pnpm build
+
+            echo "== Restart PM2 =="
+            pm2 delete ballmate-rest || true
+            pm2 start dist/src/main.js --name ballmate-rest
+            pm2 save
+
+            echo "Deploy success"
+          EOF
+
+      - name: Cleanup key
+        run: rm -f ec2_key.pem

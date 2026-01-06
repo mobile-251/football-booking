@@ -4,6 +4,7 @@ import {
   HealthCheck,
   HttpHealthIndicator,
 } from '@nestjs/terminus';
+import { ConfigService } from '@nestjs/config';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter } from 'prom-client';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -16,6 +17,7 @@ export class HealthController {
     private health: HealthCheckService,
     private http: HttpHealthIndicator,
     private prisma: PrismaService,
+    private configService: ConfigService,
     @InjectMetric('health_check_calls_total') public counter: Counter<string>,
   ) { }
 
@@ -24,8 +26,9 @@ export class HealthController {
   @ApiOperation({ summary: 'Check system health' })
   check() {
     this.counter.inc();
+    const port = this.configService.get<number>('port');
     return this.health.check([
-      () => this.http.pingCheck('api', 'http://localhost:3000'),
+      () => this.http.pingCheck('api', `http://localhost:${port}/metrics`),
       async () => {
         await this.prisma.$queryRaw`SELECT 1`;
         return { db: { status: 'up' } };
@@ -33,3 +36,4 @@ export class HealthController {
     ]);
   }
 }
+

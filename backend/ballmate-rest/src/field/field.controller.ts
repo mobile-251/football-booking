@@ -16,11 +16,16 @@ import { FieldType } from '@prisma/client';
 
 @Controller('fields')
 export class FieldController {
-  constructor(private readonly fieldService: FieldService) {}
+  constructor(private readonly fieldService: FieldService) { }
 
   @Post()
   create(@Body() createFieldDto: CreateFieldDto) {
     return this.fieldService.create(createFieldDto);
+  }
+
+  @Get('stats')
+  getStats() {
+    return this.fieldService.getStats();
   }
 
   @Get()

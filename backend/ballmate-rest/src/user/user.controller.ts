@@ -22,12 +22,13 @@ import {
 @ApiTags('users')
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Post()
   @ApiOperation({
     summary: 'Create new user',
-    description: 'Register a new user account with email and password. The password will be hashed before storing. Returns the created user data without the password.',
+    description:
+      'Register a new user account with email and password. The password will be hashed before storing. Returns the created user data without the password.',
   })
   @ApiBody({
     type: CreateUserDto,
@@ -57,7 +58,8 @@ export class UserController {
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'User successfully created. Returns user data without password.',
+    description:
+      'User successfully created. Returns user data without password.',
     type: UserResponseDto,
     example: {
       id: 1,

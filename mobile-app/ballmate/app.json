@@ -1,18 +1,20 @@
 {
   "expo": {
     "name": "ballmate",
-    "slug": "ballmate",
+    "slug": "ballmate-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "ballmate",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ballmate.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +30,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "604b471c-b8f6-4c3d-a914-23b3232d5ba7"
+        "projectId": "a2ff0a88-40cf-43b6-b9ff-12c29d45c463"
       }
     },
     "owner": "ballmate-mobile",
@@ -36,7 +38,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/604b471c-b8f6-4c3d-a914-23b3232d5ba7"
+      "url": "https://u.expo.dev/a2ff0a88-40cf-43b6-b9ff-12c29d45c463"
     }
   }
 }

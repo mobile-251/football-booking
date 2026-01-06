@@ -12,12 +12,17 @@ import { PaymentModule } from './payment/payment.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { FavoriteModule } from './favorite/favorite.module';
+import { NotificationModule } from './notification/notification.module';
+import { MessageModule } from './message/message.module';
+import configuration from './config/configuration';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['.env.local', '.env'],
+      load: [configuration],
     }),
     PrismaModule,
     AuthModule,
@@ -29,6 +34,9 @@ import { HealthModule } from './health/health.module';
     PaymentModule,
     RevenueModule,
     HealthModule,
+    FavoriteModule,
+    NotificationModule,
+    MessageModule,
   ],
   controllers: [AppController],
   providers: [AppService],

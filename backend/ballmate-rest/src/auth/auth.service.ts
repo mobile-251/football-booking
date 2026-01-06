@@ -5,12 +5,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserService } from '../user/user.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
-import { jwtConstants } from './constants';
 import { User } from 'src/user/entities/user.entity';
 
 @Injectable()
@@ -19,7 +19,8 @@ export class AuthService {
     private prisma: PrismaService,
     private userService: UserService,
     private jwtService: JwtService,
-  ) {}
+    private configService: ConfigService,
+  ) { }
 
   async register(registerDto: RegisterDto) {
     // Check if user exists
@@ -74,6 +75,15 @@ export class AuthService {
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    let playerInfo: { id: number; userId: number } | null = null;
+    if (user.role === 'PLAYER') {
+      const player = await this.prisma.player.findUnique({
+        where: { userId: user.id },
+        select: { id: true, userId: true },
+      });
+      playerInfo = player;
+    }
+
     return {
       ...tokens,
       user: {
@@ -81,6 +91,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        player: playerInfo,
       },
     };
   }
@@ -116,14 +127,23 @@ export class AuthService {
   private async generateTokens(userId: number, email: string, role: string) {
     const payload = { sub: userId, email, role };
 
+    const jwtSecret = this.configService.get<string>(
+      'jwt.secret',
+      'default-secret',
+    );
+    const accessTokenExpiry =
+      this.configService.get<string>('jwt.accessTokenExpiry') || '15m';
+    const refreshTokenExpiry =
+      this.configService.get<string>('jwt.refreshTokenExpiry') || '7d';
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: jwtConstants.secret,
-        expiresIn: jwtConstants.accessTokenExpiry,
+        secret: jwtSecret,
+        expiresIn: accessTokenExpiry as `${number}${'s' | 'm' | 'h' | 'd'}`,
       }),
       this.jwtService.signAsync(payload, {
-        secret: jwtConstants.secret,
-        expiresIn: jwtConstants.refreshTokenExpiry,
+        secret: jwtSecret,
+        expiresIn: refreshTokenExpiry as `${number}${'s' | 'm' | 'h' | 'd'}`,
       }),
     ]);
 
@@ -157,3 +177,4 @@ export class AuthService {
     }
   }
 }
+

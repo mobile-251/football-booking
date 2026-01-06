@@ -51,6 +51,8 @@ export class FieldService {
             // facilities: true,
             openTime: true,
             closeTime: true,
+            latitude: true,
+            longitude: true,
           },
         },
         reviews: {
@@ -133,5 +135,29 @@ export class FieldService {
     return this.prisma.field.delete({
       where: { id },
     });
+  }
+
+  async getStats() {
+    const [total, field5, field7, field11, minPrice] = await Promise.all([
+      this.prisma.field.count({ where: { isActive: true } }),
+      this.prisma.field.count({ where: { isActive: true, fieldType: 'FIELD_5VS5' } }),
+      this.prisma.field.count({ where: { isActive: true, fieldType: 'FIELD_7VS7' } }),
+      this.prisma.field.count({ where: { isActive: true, fieldType: 'FIELD_11VS11' } }),
+      this.prisma.field.findFirst({
+        where: { isActive: true },
+        orderBy: { pricePerHour: 'asc' },
+        select: { pricePerHour: true },
+      }),
+    ]);
+
+    return {
+      total,
+      byType: {
+        FIELD_5VS5: field5,
+        FIELD_7VS7: field7,
+        FIELD_11VS11: field11,
+      },
+      minPrice: minPrice?.pricePerHour || 0,
+    };
   }
 }
