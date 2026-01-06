@@ -15,7 +15,7 @@ import { UpdateVenueDto } from './dto/update-venue.dto';
 
 @Controller('venues')
 export class VenueController {
-  constructor(private readonly venueService: VenueService) {}
+  constructor(private readonly venueService: VenueService) { }
 
   @Post()
   create(@Body() createVenueDto: CreateVenueDto) {

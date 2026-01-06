@@ -48,7 +48,7 @@ export class FieldService {
             address: true,
             city: true,
             district: true,
-            facilities: true,
+            // facilities: true,
             openTime: true,
             closeTime: true,
             latitude: true,

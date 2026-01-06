@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './FieldRegister.css'
 import BasicInfoStep from './BasicInfoStep'
 import LocationStep from './LocationStep'
@@ -10,6 +10,43 @@ import PreviewModal from './PreviewModal'
 import AxiosClient from '../../api/AxiosClient'
 import toast from 'react-hot-toast'
 import type { FieldFormData, PricingData } from './types'
+
+// Mẫu giá gợi ý cho các loại sân
+const pricingSuggestions = {
+  field5: {
+    weekdays: [
+      { startTime: '05:00', endTime: '16:00', price: 200000 },
+      { startTime: '16:00', endTime: '22:00', price: 350000 },
+      { startTime: '22:00', endTime: '05:00', price: 150000 },
+    ],
+    weekends: [
+      { startTime: '05:00', endTime: '22:00', price: 400000 },
+      { startTime: '22:00', endTime: '05:00', price: 200000 },
+    ]
+  },
+  field7: {
+    weekdays: [
+      { startTime: '05:00', endTime: '16:00', price: 300000 },
+      { startTime: '16:00', endTime: '22:00', price: 500000 },
+      { startTime: '22:00', endTime: '05:00', price: 250000 },
+    ],
+    weekends: [
+      { startTime: '05:00', endTime: '22:00', price: 600000 },
+      { startTime: '22:00', endTime: '05:00', price: 300000 },
+    ]
+  },
+  field11: {
+    weekdays: [
+      { startTime: '05:00', endTime: '16:00', price: 500000 },
+      { startTime: '16:00', endTime: '22:00', price: 800000 },
+      { startTime: '22:00', endTime: '05:00', price: 400000 },
+    ],
+    weekends: [
+      { startTime: '05:00', endTime: '22:00', price: 1000000 },
+      { startTime: '22:00', endTime: '05:00', price: 500000 },
+    ]
+  }
+}
 
 function FieldRegister() {
   const [currentStep, setCurrentStep] = useState(1)
@@ -27,48 +64,11 @@ function FieldRegister() {
     district: '',
     latitude: 10.762622,
     longitude: 106.660172,
-    phone: '',
+    phoneNumber: '',
     email: '',
     pricing: {} as PricingData,
     images: [] as File[],
   })
-
-  // Mẫu giá gợi ý cho các loại sân
-  const pricingSuggestions = {
-    field5: {
-      weekdays: [
-        { startTime: '05:00', endTime: '16:00', price: 200000 },
-        { startTime: '16:00', endTime: '22:00', price: 350000 },
-        { startTime: '22:00', endTime: '05:00', price: 150000 },
-      ],
-      weekends: [
-        { startTime: '05:00', endTime: '22:00', price: 400000 },
-        { startTime: '22:00', endTime: '05:00', price: 200000 },
-      ]
-    },
-    field7: {
-      weekdays: [
-        { startTime: '05:00', endTime: '16:00', price: 300000 },
-        { startTime: '16:00', endTime: '22:00', price: 500000 },
-        { startTime: '22:00', endTime: '05:00', price: 250000 },
-      ],
-      weekends: [
-        { startTime: '05:00', endTime: '22:00', price: 600000 },
-        { startTime: '22:00', endTime: '05:00', price: 300000 },
-      ]
-    },
-    field11: {
-      weekdays: [
-        { startTime: '05:00', endTime: '16:00', price: 500000 },
-        { startTime: '16:00', endTime: '22:00', price: 800000 },
-        { startTime: '22:00', endTime: '05:00', price: 400000 },
-      ],
-      weekends: [
-        { startTime: '05:00', endTime: '22:00', price: 1000000 },
-        { startTime: '22:00', endTime: '05:00', price: 500000 },
-      ]
-    }
-  }
 
   // Cấu hình các bước đăng ký
   const steps = [
@@ -77,6 +77,37 @@ function FieldRegister() {
     { id: 3, title: 'Hình ảnh & Giá', subtitle: 'Bảng giá và hình ảnh sân' },
     { id: 4, title: 'Thông tin liên hệ', subtitle: 'Số điện thoại và email' },
   ]
+
+  // Tự động cập nhật pricing khi thay đổi loại sân
+  useEffect(() => {
+    const newPricing = { ...formData.pricing }
+    let updated = false
+
+    const selectedTypes = (['field5', 'field7', 'field11'] as const).filter(
+      type => formData.fieldTypes[type].selected
+    )
+
+    // Xóa các loại sân không còn được chọn khỏi dữ liệu pricing
+    Object.keys(newPricing).forEach(key => {
+      const typeKey = key as keyof typeof formData.fieldTypes
+      if (!formData.fieldTypes[typeKey]?.selected) {
+        delete newPricing[key as keyof typeof formData.pricing]
+        updated = true
+      }
+    })
+
+    // Thêm gợi ý cho các loại sân mới được chọn (nếu chưa có giá)
+    selectedTypes.forEach(type => {
+      if (!newPricing[type]) {
+        newPricing[type] = (pricingSuggestions as any)[type]
+        updated = true
+      }
+    })
+
+    if (updated) {
+      setFormData(prev => ({ ...prev, pricing: newPricing }))
+    }
+  }, [formData.fieldTypes])
 
   const validateStep1 = () => {
     const { fieldName, fieldTypes } = formData
@@ -109,15 +140,15 @@ function FieldRegister() {
   }
 
   const validateStep4 = () => {
-    const { phone, email } = formData
+    const { phoneNumber, email } = formData
 
     // Validate phone: 10 digits
     const phoneRegex = /^[0-9]{10}$/
-    if (!phone.trim()) {
+    if (!phoneNumber.trim()) {
       toast.error('Vui lòng nhập số điện thoại liên hệ')
       return false
     }
-    if (!phoneRegex.test(phone.trim())) {
+    if (!phoneRegex.test(phoneNumber.trim())) {
       toast.error('Số điện thoại không hợp lệ (cần 10 chữ số)')
       return false
     }
@@ -139,33 +170,6 @@ function FieldRegister() {
   const handleNext = async () => {
     if (currentStep === 1) {
       if (!validateStep1()) return
-
-      const newPricing = { ...formData.pricing }
-      let updated = false
-
-      const selectedTypes = (['field5', 'field7', 'field11'] as const).filter(
-        type => formData.fieldTypes[type].selected
-      )
-
-      // Xóa các loại sân không còn được chọn khỏi dữ liệu pricing
-      Object.keys(newPricing).forEach(key => {
-        if (!formData.fieldTypes[key as keyof typeof formData.fieldTypes].selected) {
-          delete newPricing[key as keyof typeof formData.pricing]
-          updated = true
-        }
-      })
-
-      // Thêm gợi ý cho các loại sân mới được chọn (nếu chưa có giá)
-      selectedTypes.forEach(type => {
-        if (!newPricing[type]) {
-          newPricing[type] = pricingSuggestions[type]
-          updated = true
-        }
-      })
-
-      if (updated) {
-        setFormData(prev => ({ ...prev, pricing: newPricing }))
-      }
     }
 
     if (currentStep === 2 && !validateStep2()) return
@@ -193,7 +197,7 @@ function FieldRegister() {
           district: formData.district || undefined,
           latitude: formData.latitude,
           longitude: formData.longitude,
-          phone: formData.phone,
+          phoneNumber: formData.phoneNumber,
           email: formData.email,
           ownerId: ownerId,
           fieldTypes: formData.fieldTypes,

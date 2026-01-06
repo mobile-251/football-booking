@@ -60,7 +60,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ formData, onChange }) => 
                     id="fieldName"
                     type="text"
                     className="form-input"
-                    placeholder="VD: Sân Bóng Đế Mini Quận 7"
+                    placeholder="VD: Sân Bóng Đá Mini Quận 7"
                     value={formData.fieldName}
                     onChange={(e) => onChange({ ...formData, fieldName: e.target.value })}
                 />

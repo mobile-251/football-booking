@@ -25,8 +25,8 @@ const ContactStep: React.FC<ContactStepProps> = ({ formData, onChange }) => {
                             type="tel"
                             id="phone"
                             placeholder="Nhập số điện thoại (ví dụ: 090xxxxxxx)"
-                            value={formData.phone}
-                            onChange={(e) => onChange({ ...formData, phone: e.target.value })}
+                            value={formData.phoneNumber}
+                            onChange={(e) => onChange({ ...formData, phoneNumber: e.target.value })}
                         />
                     </div>
                 </div>
