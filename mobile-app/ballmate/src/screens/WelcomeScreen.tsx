@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import Config from '../config/environment';
 
 const { width } = Dimensions.get('window');
 
@@ -70,6 +71,11 @@ export default function WelcomeScreen() {
                 <Text style={styles.continueBtnText}>Tiếp tục</Text>
                 <Ionicons name="chevron-forward" size={20} color={theme.colors.primary} />
             </TouchableOpacity>
+
+            {/* Debug Badge - Hiển thị API URL để verify OTA update */}
+            <View style={styles.debugBadge}>
+                <Text style={styles.debugText}>ENV: {Config.APP_ENV} | API: {Config.API_URL}</Text>
+            </View>
         </SafeAreaView>
     );
 }
@@ -176,5 +182,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: theme.colors.primary,
+    },
+    debugBadge: {
+        position: 'absolute',
+        bottom: 8,
+        left: 16,
+        right: 16,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        borderRadius: 8,
+        padding: 8,
+    },
+    debugText: {
+        fontSize: 10,
+        color: 'rgba(255,255,255,0.8)',
+        textAlign: 'center',
     },
 });

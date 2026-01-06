@@ -29,7 +29,7 @@ export const Config = {
      * Set via EXPO_PUBLIC_API_URL environment variable in EAS.
      * Fallback to localhost for local development.
      */
-    API_URL: extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || 'https://ballmate-rest.aqbtech.id.vn',
+    API_URL: extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL,
 
     /**
      * Current application environment.
@@ -53,5 +53,20 @@ export const Config = {
      */
     IS_PREVIEW: extra?.appEnv === 'preview',
 } as const;
+
+/**
+ * Debug function to log current configuration.
+ * Call this on app start to verify OTA update is using correct API_URL.
+ */
+export const debugConfig = () => {
+    console.log('=== App Config Debug ===');
+    console.log('API_URL:', Config.API_URL);
+    console.log('APP_ENV:', Config.APP_ENV);
+    console.log('IS_PRODUCTION:', Config.IS_PRODUCTION);
+    console.log('IS_PREVIEW:', Config.IS_PREVIEW);
+    console.log('IS_DEVELOPMENT:', Config.IS_DEVELOPMENT);
+    console.log('Extra from Constants:', JSON.stringify(Constants.expoConfig?.extra, null, 2));
+    console.log('========================');
+};
 
 export default Config;
