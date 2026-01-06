@@ -4,6 +4,10 @@ import { Config } from '../config/environment';
 
 const API_BASE_URL = Config.API_URL;
 
+// Debug log to show which API URL is being used
+console.log('🔗 API Base URL:', API_BASE_URL);
+console.log('📱 App Environment:', Config.APP_ENV);
+
 class ApiService {
 	private client: AxiosInstance;
 	private accessToken: string | null = null;
@@ -11,6 +15,7 @@ class ApiService {
 	public currentUser: User | null = null;
 
 	constructor() {
+		console.log('🚀 Initializing API Service with URL:', API_BASE_URL);
 		this.client = axios.create({
 			baseURL: API_BASE_URL,
 			timeout: 10000,
@@ -47,11 +52,32 @@ class ApiService {
 
 	// Auth endpoints
 	async login(email: string, password: string): Promise<AuthResponse> {
-		const response = await this.client.post<AuthResponse>('/auth/login', { email, password });
-		this.accessToken = response.data.accessToken;
-		this.refreshToken = response.data.refreshToken;
-		this.currentUser = response.data.user;
-		return response.data;
+		console.log('Attempting login to:', `${API_BASE_URL}/auth/login`);
+		console.log('Email:', email);
+		try {
+			const response = await this.client.post<any>('/auth/login', { email, password });
+			console.log('Login successful!');
+			console.log('Response data:', JSON.stringify(response.data));
+
+			const accessToken = response.data.accessToken || response.data.access_token;
+			const refreshToken = response.data.refreshToken || response.data.refresh_token;
+
+			this.accessToken = accessToken;
+			this.refreshToken = refreshToken;
+			this.currentUser = response.data.user;
+
+			return {
+				accessToken,
+				refreshToken,
+				user: response.data.user,
+			};
+		} catch (error: any) {
+			console.log('Login failed!');
+			console.log('Error details:', error.message);
+			console.log('Error response:', error.response?.data);
+			console.log('Error status:', error.response?.status);
+			throw error;
+		}
 	}
 
 	async register(data: {

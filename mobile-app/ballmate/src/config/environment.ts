@@ -29,7 +29,7 @@ export const Config = {
      * Set via EXPO_PUBLIC_API_URL environment variable in EAS.
      * Fallback to localhost for local development.
      */
-    API_URL: extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001',
+    API_URL: extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || 'https://ballmate-rest.aqbtech.id.vn',
 
     /**
      * Current application environment.
