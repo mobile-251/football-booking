@@ -34,7 +34,7 @@ export class MessageService {
                         venues: { take: 1 },
                     },
                 },
-                field: { select: { id: true, name: true, images: true } },
+                field: { select: { id: true, name: true } },
                 messages: {
                     take: 1,
                     orderBy: { createdAt: 'desc' },
@@ -47,7 +47,7 @@ export class MessageService {
             id: c.id,
             fieldId: c.fieldId,
             fieldName: c.field?.name || c.owner?.venues[0]?.name || 'Sân bóng',
-            fieldImage: c.field?.images?.[0] || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
+            // fieldImage: c.field?.images?.[0] || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
             otherUser: userRole === 'PLAYER'
                 ? { name: c.owner?.user?.fullName, avatar: c.owner?.user?.avatarUrl }
                 : { name: c.player?.user?.fullName, avatar: c.player?.user?.avatarUrl },
