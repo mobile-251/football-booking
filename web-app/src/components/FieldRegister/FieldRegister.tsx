@@ -23,6 +23,8 @@ function FieldRegister() {
     },
     description: '',
     address: '',
+    city: '',
+    district: '',
     latitude: 10.762622,
     longitude: 106.660172,
     phone: '',
@@ -99,6 +101,38 @@ function FieldRegister() {
       toast.error('Vui lòng nhập địa chỉ cụ thể')
       return false
     }
+    if (!formData.city.trim()) {
+      toast.error('Vui lòng chọn Thành phố/Tỉnh')
+      return false
+    }
+    return true
+  }
+
+  const validateStep4 = () => {
+    const { phone, email } = formData
+
+    // Validate phone: 10 digits
+    const phoneRegex = /^[0-9]{10}$/
+    if (!phone.trim()) {
+      toast.error('Vui lòng nhập số điện thoại liên hệ')
+      return false
+    }
+    if (!phoneRegex.test(phone.trim())) {
+      toast.error('Số điện thoại không hợp lệ (cần 10 chữ số)')
+      return false
+    }
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!email.trim()) {
+      toast.error('Vui lòng nhập email liên hệ')
+      return false
+    }
+    if (!emailRegex.test(email.trim())) {
+      toast.error('Email không hợp lệ')
+      return false
+    }
+
     return true
   }
 
@@ -137,16 +171,43 @@ function FieldRegister() {
     if (currentStep === 2 && !validateStep2()) return
 
     if (currentStep === 4) {
+      if (!validateStep4()) return
       console.log('Registering venue with data:', formData);
 
       try {
-        // Gọi API /venue method POST sử dụng async/await
-        const response = await AxiosClient.post('/venue', formData);
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const ownerId = user?.id;
+
+        if (!ownerId) {
+          toast.error('Không tìm thấy thông tin chủ sân. Vui lòng đăng nhập lại.');
+          return;
+        }
+
+        // Chuyển đổi dữ liệu sang format BE yêu cầu (CreateVenueDto)
+        const payload = {
+          name: formData.fieldName,
+          description: formData.description,
+          address: formData.address,
+          city: formData.city,
+          district: formData.district || undefined,
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          phone: formData.phone,
+          email: formData.email,
+          ownerId: ownerId,
+          fieldTypes: formData.fieldTypes,
+          pricing: formData.pricing,
+        };
+
+        const response = await AxiosClient.post('/venue', payload);
         console.log('API Response:', response);
         toast.success('Đăng ký sân thành công!');
-      } catch (error) {
+        // Chuyển hướng hoặc reset form
+      } catch (error: any) {
         console.error('API Error:', error);
-        toast.error('Có lỗi xảy ra khi đăng ký!');
+        const msg = error.response?.data?.message || 'Có lỗi xảy ra khi đăng ký!';
+        toast.error(msg);
       }
 
       return

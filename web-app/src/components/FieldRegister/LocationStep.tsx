@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import axios from 'axios'
 import { MapContainer, TileLayer, Marker, useMapEvents, ZoomControl } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -30,6 +31,63 @@ const MapEvents = ({ onMapClick }: { onMapClick: (lat: number, lng: number) => v
 }
 
 const LocationStep: React.FC<LocationStepProps> = ({ formData, onChange }) => {
+    const [provinces, setProvinces] = useState<any[]>([])
+    const [wards, setWards] = useState<any[]>([])
+    const [isLoadingProvinces, setIsLoadingProvinces] = useState(false)
+    const [isLoadingWards, setIsLoadingWards] = useState(false)
+
+    // Fetch provinces on mount
+    useEffect(() => {
+        const fetchProvinces = async () => {
+            setIsLoadingProvinces(true)
+            try {
+                const response = await axios.get('https://provinces.open-api.vn/api/p/')
+                setProvinces(response.data)
+            } catch (error) {
+                console.error('Error fetching provinces:', error)
+            } finally {
+                setIsLoadingProvinces(false)
+            }
+        }
+        fetchProvinces()
+    }, [])
+
+    // Fetch wards when city changes
+    useEffect(() => {
+        const fetchWards = async () => {
+            if (!formData.city) {
+                setWards([])
+                return
+            }
+
+            const selectedProvince = provinces.find(p => p.name === formData.city)
+            if (!selectedProvince) return
+
+            setIsLoadingWards(true)
+            try {
+                const response = await axios.get(`https://provinces.open-api.vn/api/p/${selectedProvince.code}?depth=3`)
+                const allWards: any[] = []
+                response.data.districts?.forEach((district: any) => {
+                    district.wards?.forEach((ward: any) => {
+                        allWards.push({
+                            code: ward.code,
+                            name: ward.name
+                        })
+                    })
+                })
+                setWards(allWards.sort((a, b) => a.name.localeCompare(b.name)))
+            } catch (error) {
+                console.error('Error fetching wards:', error)
+            } finally {
+                setIsLoadingWards(false)
+            }
+        }
+
+        if (provinces.length > 0) {
+            fetchWards()
+        }
+    }, [formData.city, provinces])
+
     const handleMapClick = (lat: number, lng: number) => {
         onChange({
             ...formData,
@@ -40,6 +98,51 @@ const LocationStep: React.FC<LocationStepProps> = ({ formData, onChange }) => {
 
     return (
         <div className="form-step">
+            {/* Tỉnh/Thành phố & Phường/Xã */}
+            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: formData.city ? '1fr 1fr' : '1fr', gap: '16px' }}>
+                <div className="form-group">
+                    <label htmlFor="city" className="form-label">
+                        Tỉnh / Thành phố <span className="required">*</span>
+                    </label>
+                    <select
+                        id="city"
+                        className="form-input form-select"
+                        value={formData.city}
+                        onChange={(e) => {
+                            onChange({ ...formData, city: e.target.value, district: '' })
+                        }}
+                        disabled={isLoadingProvinces}
+                    >
+                        <option value="">{isLoadingProvinces ? 'Đang tải...' : '-- Chọn Tỉnh/Thành --'}</option>
+                        {provinces.map(p => (
+                            <option key={p.code} value={p.name}>{p.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                {formData.city && (
+                    <div className="form-group">
+                        <label htmlFor="district" className="form-label">
+                            Phường / Xã
+                        </label>
+                        <select
+                            id="district"
+                            className="form-input form-select"
+                            value={formData.district || ''}
+                            onChange={(e) => onChange({ ...formData, district: e.target.value })}
+                            disabled={isLoadingWards}
+                        >
+                            <option value="">
+                                {isLoadingWards ? 'Đang tải Phường/Xã...' : '-- Chọn Phường/Xã --'}
+                            </option>
+                            {wards.map(w => (
+                                <option key={w.code} value={w.name}>{w.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+            </div>
+
             {/* Địa chỉ cụ thể */}
             <div className="form-group">
                 <label htmlFor="address" className="form-label">
@@ -49,7 +152,7 @@ const LocationStep: React.FC<LocationStepProps> = ({ formData, onChange }) => {
                     id="address"
                     type="text"
                     className="form-input"
-                    placeholder="Số nhà, tên đường, phường/xã, quận/huyện..."
+                    placeholder="Số nhà, tên đường, phường/xã..."
                     value={formData.address}
                     onChange={(e) => onChange({ ...formData, address: e.target.value })}
                 />
