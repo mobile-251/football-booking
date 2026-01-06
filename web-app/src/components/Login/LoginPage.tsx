@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AxiosClient from '../../api/AxiosClient';
 import toast from 'react-hot-toast';
@@ -9,6 +9,14 @@ const LoginPage: React.FC = () => {
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        // Kiểm tra xem có flag đăng xuất vừa thực hiện không
+        if (localStorage.getItem('logout_success')) {
+            toast.success('Đăng xuất thành công!');
+            localStorage.removeItem('logout_success');
+        }
+    }, []);
 
     const validateForm = () => {
         // Simple email validation regex

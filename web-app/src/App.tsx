@@ -64,10 +64,11 @@ const Dashboard = () => {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+    localStorage.setItem('logout_success', 'true')
+    window.location.href = '/login'
   }
 
   return (
