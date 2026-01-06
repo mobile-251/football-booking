@@ -7,6 +7,10 @@ interface HeaderProps {
 }
 
 function Header({ onToggleSidebar, isMobile }: HeaderProps) {
+  // Lấy thông tin user từ localStorage
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const fullName = user.fullName || 'Người dùng';
+
   return (
     <div className="header">
       <div className="header-main header-main--right">
@@ -32,7 +36,7 @@ function Header({ onToggleSidebar, isMobile }: HeaderProps) {
               <span className="avatar-icon">👤</span>
             </div>
             <div className="user-details">
-              <div className="user-name">Nguyễn Văn B</div>
+              <div className="user-name">{fullName}</div>
               <div className="user-role">Chủ sân</div>
             </div>
           </div>

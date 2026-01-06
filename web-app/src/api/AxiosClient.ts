@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const AxiosClient = axios.create({
-    baseURL: 'http://localhost:8080/api',
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
     headers: {
         'Content-Type': 'application/json',
     },
@@ -9,6 +9,10 @@ const AxiosClient = axios.create({
 
 AxiosClient.interceptors.request.use(
     (config) => {
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
     },
     (error) => {
@@ -22,6 +26,11 @@ AxiosClient.interceptors.response.use(
         return response.data;
     },
     (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+        }
         return Promise.reject(error);
     }
 );
