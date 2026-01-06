@@ -137,10 +137,7 @@ model Field {
   pricings  FieldPricing[]
   bookings  Booking[]
   reviews   Review[]
-
-  venue         Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  bookings      Booking[]
-  reviews       Review[]
+  
   favorites     Favorite[]
   conversations Conversation[]
   
