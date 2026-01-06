@@ -138,16 +138,11 @@ export class FieldService {
   }
 
   async getStats() {
-    const [total, field5, field7, field11, minPrice] = await Promise.all([
+    const [total, field5, field7, field11] = await Promise.all([
       this.prisma.field.count({ where: { isActive: true } }),
       this.prisma.field.count({ where: { isActive: true, fieldType: 'FIELD_5VS5' } }),
       this.prisma.field.count({ where: { isActive: true, fieldType: 'FIELD_7VS7' } }),
       this.prisma.field.count({ where: { isActive: true, fieldType: 'FIELD_11VS11' } }),
-      this.prisma.field.findFirst({
-        where: { isActive: true },
-        orderBy: { pricePerHour: 'asc' },
-        select: { pricePerHour: true },
-      }),
     ]);
 
     return {
@@ -157,7 +152,7 @@ export class FieldService {
         FIELD_7VS7: field7,
         FIELD_11VS11: field11,
       },
-      minPrice: minPrice?.pricePerHour || 0,
+      // minPrice: minPrice?.pricePerHour || 0,
     };
   }
 }
