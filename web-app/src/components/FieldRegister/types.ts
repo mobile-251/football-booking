@@ -31,7 +31,7 @@ export interface FieldFormData {
     district?: string
     latitude: number
     longitude: number
-    phone: string
+    phoneNumber: string
     email: string
     pricing: PricingData
     images: File[]

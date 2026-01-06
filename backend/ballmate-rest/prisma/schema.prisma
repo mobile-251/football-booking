@@ -91,14 +91,15 @@ model Venue {
   district      String?
   latitude      Float?
   longitude     Float?
-  openTime      String        // "06:00"
-  closeTime     String        // "23:00"
-  facilities    String[]      // ["Parking", "Shower", "Cafe"]
+  openTime      String?       // "06:00"
+  closeTime     String?       // "23:00"
   images        String[]      // URLs to images
   ownerId       Int
   isActive      Boolean       @default(true)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  phoneNumber   String?
+  email         String?
 
   // Relations
   owner         FieldOwner          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -113,24 +114,40 @@ enum FieldType {
   FIELD_11VS11
 }
 
-model Field {
-  id            Int           @id @default(autoincrement())
-  name          String
-  venueId       Int
-  fieldType     FieldType
-  pricePerHour  Float
-  description   String?
-  images        String[]
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+enum DayType {
+  WEEKDAY
+  WEEKEND
+}
 
-  // Relations
-  venue         Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  bookings      Booking[]
-  reviews       Review[]
-  
+model Field {
+  id        Int       @id @default(autoincrement())
+  name      String
+  venueId   Int
+  fieldType FieldType
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  venue     Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  pricings  FieldPricing[]
+  bookings  Booking[]
+  reviews   Review[]
+
   @@map("fields")
+}
+
+model FieldPricing {
+  id        Int      @id @default(autoincrement())
+  fieldId   Int
+  dayType   DayType
+  startTime String   // "05:00"
+  endTime   String   // "16:00"
+  price     Int      // 200000
+  createdAt DateTime @default(now())
+
+  field     Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@map("field_pricings")
 }
 
 // ============================================

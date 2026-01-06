@@ -6,7 +6,7 @@ import { FieldType } from '@prisma/client';
 
 @Injectable()
 export class FieldService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createFieldDto: CreateFieldDto) {
     return this.prisma.field.create({
@@ -48,7 +48,7 @@ export class FieldService {
             address: true,
             city: true,
             district: true,
-            facilities: true,
+            // facilities: true,
             openTime: true,
             closeTime: true,
           },
@@ -106,7 +106,7 @@ export class FieldService {
     const avgRating =
       field.reviews.length > 0
         ? field.reviews.reduce((sum, r) => sum + r.rating, 0) /
-          field.reviews.length
+        field.reviews.length
         : 0;
 
     return {
