@@ -15,12 +15,14 @@ import { HealthModule } from './health/health.module';
 import { FavoriteModule } from './favorite/favorite.module';
 import { NotificationModule } from './notification/notification.module';
 import { MessageModule } from './message/message.module';
+import configuration from './config/configuration';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['.env.local', '.env'],
+      load: [configuration],
     }),
     PrismaModule,
     AuthModule,
@@ -39,5 +41,4 @@ import { MessageModule } from './message/message.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
-
+export class AppModule {}

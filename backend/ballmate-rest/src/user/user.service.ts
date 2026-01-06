@@ -24,11 +24,28 @@ export class UserService {
 
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
+    const { role, ...rest } = createUserDto;
+
+    const data: any = {
+      ...rest,
+      role,
+      password: hashedPassword,
+    };
+
+    if (role === 'PLAYER') {
+      data.player = { create: {} };
+    }
+
+    if (role === 'FIELD_OWNER') {
+      data.owner = { create: {} };
+    }
+
+    if (role === 'ADMIN') {
+      data.admin = { create: {} };
+    }
+
     return this.prisma.user.create({
-      data: {
-        ...createUserDto,
-        password: hashedPassword,
-      },
+      data,
       select: {
         id: true,
         email: true,

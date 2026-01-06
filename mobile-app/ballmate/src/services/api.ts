@@ -1,19 +1,12 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { Platform } from 'react-native';
 import { AuthResponse, Field, Venue, Booking, Review, FieldFilter, ApiError, User } from '../types/types';
+import { Config } from '../config/environment';
 
-// API base URL - automatically detect platform
-const getBaseUrl = () => {
-	if (Platform.OS === 'web') {
-		return 'http://localhost:3000';
-	}
-	if (Platform.OS === 'android') {
-		return 'http://10.0.2.2:3000'; // Android emulator
-	}
-	return 'http://localhost:3000'; // iOS simulator
-};
+const API_BASE_URL = Config.API_URL;
 
-const API_BASE_URL = getBaseUrl();
+// Debug log to show which API URL is being used
+console.log('🔗 API Base URL:', API_BASE_URL);
+console.log('📱 App Environment:', Config.APP_ENV);
 
 class ApiService {
 	private client: AxiosInstance;
@@ -22,6 +15,7 @@ class ApiService {
 	public currentUser: User | null = null;
 
 	constructor() {
+		console.log('🚀 Initializing API Service with URL:', API_BASE_URL);
 		this.client = axios.create({
 			baseURL: API_BASE_URL,
 			timeout: 10000,
@@ -33,7 +27,12 @@ class ApiService {
 		// Add auth interceptor
 		this.client.interceptors.request.use((config) => {
 			console.log('[API] Request to:', config.url, 'Token exists:', !!this.accessToken);
-			if (this.accessToken) {
+
+			// List of public endpoints that don't need access token
+			const publicEndpoints = ['/auth/login', '/auth/register'];
+			const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint));
+
+			if (this.accessToken && !isPublicEndpoint) {
 				config.headers.Authorization = `Bearer ${this.accessToken}`;
 				console.log('[API] Added Authorization header');
 			}
@@ -66,14 +65,32 @@ class ApiService {
 
 	// Auth endpoints
 	async login(email: string, password: string): Promise<AuthResponse> {
-		console.log('[API] Attempting login for:', email);
-		const response = await this.client.post<AuthResponse>('/auth/login', { email, password });
-		console.log('[API] Login response received, token length:', response.data.access_token?.length);
-		this.accessToken = response.data.access_token;
-		this.refreshToken = response.data.refresh_token;
-		this.currentUser = response.data.user;
-		console.log('[API] Token set - accessToken exists:', !!this.accessToken);
-		return response.data;
+		console.log('Attempting login to:', `${API_BASE_URL}/auth/login`);
+		console.log('Email:', email);
+		try {
+			const response = await this.client.post<any>('/auth/login', { email, password });
+			console.log('Login successful!');
+			console.log('Response data:', JSON.stringify(response.data));
+
+			const accessToken = response.data.accessToken || response.data.access_token;
+			const refreshToken = response.data.refreshToken || response.data.refresh_token;
+
+			this.accessToken = accessToken;
+			this.refreshToken = refreshToken;
+			this.currentUser = response.data.user;
+
+			return {
+				access_token: accessToken,
+				refresh_token: refreshToken,
+				user: response.data.user,
+			};
+		} catch (error: any) {
+			console.log('Login failed!');
+			console.log('Error details:', error.message);
+			console.log('Error response:', error.response?.data);
+			console.log('Error status:', error.response?.status);
+			throw error;
+		}
 	}
 
 	async register(data: {
@@ -343,4 +360,3 @@ class ApiService {
 
 export const api = new ApiService();
 export default api;
-

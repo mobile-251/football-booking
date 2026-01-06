@@ -13,9 +13,21 @@ import LogOutIcon from '../../assets/LogOut.svg'
 interface SidebarProps {
   activeMenuItem: string
   onMenuItemClick: (menuItem: string) => void
+  collapsed: boolean
+  isOpen: boolean
+  isMobile: boolean
+  onToggle: () => void
+  onLogout: () => void
 }
 
-function Sidebar({ activeMenuItem, onMenuItemClick }: SidebarProps) {
+function Sidebar({
+  activeMenuItem,
+  onMenuItemClick,
+  collapsed,
+  isOpen,
+  isMobile,
+  onLogout
+}: SidebarProps) {
   const menuItems = [
     { id: 'Tổng quan', icon: TQIcon, label: 'Tổng quan' },
     { id: 'Quản lý sân', icon: QLSIcon, label: 'Quản lý sân' },
@@ -27,33 +39,47 @@ function Sidebar({ activeMenuItem, onMenuItemClick }: SidebarProps) {
     { id: 'Báo cáo', icon: BCIcon, label: 'Báo cáo' },
   ]
 
+  const sidebarClasses = [
+    'sidebar',
+    collapsed && !isMobile ? 'collapsed' : '',
+    isMobile && isOpen ? 'open' : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <div className="sidebar">
-      
+    <div className={sidebarClasses}>
+
       <div className="sidebar-header">
-        <div className="sidebar-title">
+        <div className="sidebar-title" onClick={() => onMenuItemClick('Tổng quan')} style={{ cursor: 'pointer' }}>
           <div className="dashboard-icon active">
             <img src={TQIcon} alt="Dashboard" />
           </div>
-          <div>
-            <div className="dashboard-label">Dashboard</div>
-            <div className="dashboard-subtitle">Quản lý sân</div>
-          </div>
+          {(!collapsed || isMobile) && (
+            <div>
+              <div className="dashboard-label">Dashboard</div>
+              <div className="dashboard-subtitle">Quản lý sân</div>
+            </div>
+          )}
         </div>
-        <button className="collapse-btn">‹</button>
+        {/* {!isMobile && (
+          <button className="collapse-btn" onClick={onToggle} title={collapsed ? "Mở rộng" : "Thu gọn"}>
+            {collapsed ? '›' : '‹'}
+          </button>
+        )} */}
       </div>
+
       <nav className="sidebar-nav">
         {menuItems.map((item) => (
           <div
             key={item.id}
             className={`menu-item ${activeMenuItem === item.id ? 'active' : ''}`}
             onClick={() => onMenuItemClick(item.id)}
+            title={collapsed ? item.label : ''}
           >
             <span className="menu-icon">
-                <img src={item.icon} alt={item.label} />
+              <img src={item.icon} alt={item.label} />
             </span>
-            <span className="menu-label">{item.label}</span>
-            {item.badge && (
+            {!collapsed && <span className="menu-label">{item.label}</span>}
+            {item.badge && !collapsed && (
               <span className="menu-badge">{item.badge}</span>
             )}
           </div>
@@ -61,18 +87,26 @@ function Sidebar({ activeMenuItem, onMenuItemClick }: SidebarProps) {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-footer-item">
+        <div
+          className="sidebar-footer-item"
+          title={collapsed ? "Chế độ tối" : ''}
+          onClick={() => onMenuItemClick('Chế độ tối')}
+        >
           <span className="menu-icon">
             <img src={DarkIcon} alt="Dark mode" />
           </span>
-          <span className="menu-label">Chế độ tối</span>
+          {!collapsed && <span className="menu-label">Chế độ tối</span>}
         </div>
 
-        <div className="sidebar-footer-item logout">
+        <div
+          className="sidebar-footer-item logout"
+          title={collapsed ? "Đăng xuất" : ''}
+          onClick={onLogout}
+        >
           <span className="menu-icon">
             <img src={LogOutIcon} alt="Logout" />
           </span>
-          <span className="menu-label">Đăng xuất</span>
+          {!collapsed && <span className="menu-label">Đăng xuất</span>}
         </div>
       </div>
     </div>
