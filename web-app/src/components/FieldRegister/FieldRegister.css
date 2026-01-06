@@ -124,7 +124,7 @@
 
 
 .step-content {
-  max-width: 160px;
+  max-width: 200px;
 }
 
 .step-title {
@@ -132,6 +132,7 @@
   font-weight: 600;
   color: #374151;
   margin-bottom: 4px;
+  white-space: nowrap;
 }
 
 .step-item.active .step-title {
@@ -151,7 +152,9 @@
   font-size: 12px;
   color: #9CA3AF;
   line-height: 1.4;
+  white-space: nowrap;
 }
+
 
 
 /* Form Content */
