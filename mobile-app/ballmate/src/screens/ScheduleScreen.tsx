@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { Booking, BookingStatus, PAYMENT_METHOD_LABELS, PaymentMethod } from '../types/types';
 import { api } from '../services/api';
+import { formatPrice } from '../utils/formatters';
 
 type TabType = 'all' | 'upcoming' | 'completed' | 'cancelled';
 
@@ -99,7 +100,15 @@ export default function ScheduleScreen() {
 	const loadBookings = async () => {
 		try {
 			setLoading(true);
-			const data = await api.getBookings({ playerId: 1 }); // TODO: Get from auth
+			// Get player ID from current logged-in user
+			const playerId = api.currentUser?.player?.id;
+			if (!playerId) {
+				console.warn('No player ID found, user may not be logged in');
+				setBookings([]);
+				setLoading(false);
+				return;
+			}
+			const data = await api.getBookings({ playerId });
 
 			// Enrich with field/venue info
 			const enrichedBookings = data.map((booking) => ({
@@ -114,84 +123,9 @@ export default function ScheduleScreen() {
 
 			setBookings(enrichedBookings);
 		} catch (error) {
-			// Mock data
-			setBookings([
-				{
-					id: 1,
-					fieldId: 1,
-					playerId: 1,
-					startTime: '2025-10-21T15:00:00Z',
-					endTime: '2025-10-21T18:00:00Z',
-					totalPrice: 3550000,
-					status: 'CONFIRMED',
-					createdAt: '',
-					updatedAt: '',
-					fieldName: 'Sân Bóng mini Bắc Rạch Chiếc',
-					fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=400',
-					venueAddress: 'Đường 410, Phước Long A, Quận 9, TP.HCM',
-					dates: ['Th 3, 21/10/2025', 'Th 4, 22/10/2025'],
-					timeSlots: ['15:00 - 18:00', '19:00 - 22:00'],
-					payment: {
-						id: 1,
-						bookingId: 1,
-						amount: 3550000,
-						method: 'MOMO',
-						status: 'PAID',
-						createdAt: '',
-						updatedAt: '',
-					},
-				},
-				{
-					id: 2,
-					fieldId: 1,
-					playerId: 1,
-					startTime: '2025-10-21T15:00:00Z',
-					endTime: '2025-10-21T18:00:00Z',
-					totalPrice: 3550000,
-					status: 'COMPLETED',
-					createdAt: '',
-					updatedAt: '',
-					fieldName: 'Sân Bóng mini Bắc Rạch Chiếc',
-					fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=400',
-					venueAddress: 'Đường 410, Phước Long A, Quận 9, TP.HCM',
-					dates: ['Th 3, 21/10/2025', 'Th 4, 22/10/2025'],
-					timeSlots: ['15:00 - 18:00', '19:00 - 22:00'],
-					payment: {
-						id: 2,
-						bookingId: 2,
-						amount: 3550000,
-						method: 'MOMO',
-						status: 'PAID',
-						createdAt: '',
-						updatedAt: '',
-					},
-				},
-				{
-					id: 3,
-					fieldId: 1,
-					playerId: 1,
-					startTime: '2025-10-21T15:00:00Z',
-					endTime: '2025-10-21T18:00:00Z',
-					totalPrice: 3550000,
-					status: 'CANCELLED',
-					createdAt: '',
-					updatedAt: '',
-					fieldName: 'Sân Bóng mini Bắc Rạch Chiếc',
-					fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=400',
-					venueAddress: 'Đường 410, Phước Long A, Quận 9, TP.HCM',
-					dates: ['Th 3, 21/10/2025', 'Th 4, 22/10/2025'],
-					timeSlots: ['15:00 - 18:00', '19:00 - 22:00'],
-					payment: {
-						id: 3,
-						bookingId: 3,
-						amount: 3550000,
-						method: 'MOMO',
-						status: 'PENDING',
-						createdAt: '',
-						updatedAt: '',
-					},
-				},
-			]);
+			console.error('Failed to load bookings:', error);
+			// No mock data - show empty state
+			setBookings([]);
 		} finally {
 			setLoading(false);
 		}
@@ -440,7 +374,7 @@ export default function ScheduleScreen() {
 									<Text style={styles.detailValue}>
 										{selectedBooking.payment?.method
 											? PAYMENT_METHOD_LABELS[selectedBooking.payment.method as PaymentMethod] ||
-											  selectedBooking.payment.method
+											selectedBooking.payment.method
 											: 'Chưa thanh toán'}
 									</Text>
 								</View>
@@ -599,6 +533,7 @@ const styles = StyleSheet.create({
 	},
 	listContent: {
 		padding: theme.spacing.lg,
+		paddingBottom: 100,
 	},
 	bookingCard: {
 		backgroundColor: theme.colors.white,

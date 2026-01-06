@@ -19,6 +19,7 @@ import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import BookingModal from '../components/BookingModal';
+import { useAuth } from '../context/AuthContext';
 
 type FieldDetailRouteProp = RouteProp<RootStackParamList, 'FieldDetail'>;
 
@@ -60,6 +61,7 @@ const TERMS = {
 export default function FieldDetailScreen() {
 	const route = useRoute<FieldDetailRouteProp>();
 	const navigation = useNavigation();
+	const { isAuthenticated } = useAuth();
 	const { fieldId } = route.params;
 	const [field, setField] = useState<Field | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -67,11 +69,19 @@ export default function FieldDetailScreen() {
 	const [reviews, setReviews] = useState<Review[]>([]);
 	const [showBookingModal, setShowBookingModal] = useState(false);
 	const [isFavorite, setIsFavorite] = useState(false);
+	const [favoriteLoading, setFavoriteLoading] = useState(false);
 
 	useEffect(() => {
 		loadField();
 		loadReviews();
 	}, [fieldId]);
+
+	// Separate effect for checking favorite status when auth changes
+	useEffect(() => {
+		if (isAuthenticated) {
+			checkFavoriteStatus();
+		}
+	}, [fieldId, isAuthenticated]);
 
 	const loadField = async () => {
 		try {
@@ -80,38 +90,7 @@ export default function FieldDetailScreen() {
 			setField(data);
 		} catch (error) {
 			console.error('Failed to load field:', error);
-			// Mock data
-			setField({
-				id: fieldId,
-				name: 'Sân bóng mini Bắc Rạch Chiếc',
-				venueId: 1,
-				fieldType: 'FIELD_5VS5',
-				pricePerHour: 200000,
-				description:
-					'Sân cỏ nhân tạo chất lượng cao, được bảo trì thường xuyên. Có đèn chiếu sáng cho các trận đấu buổi tối. Không gian rộng rãi, thoáng mát.',
-				images: [
-					'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800',
-					'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800',
-					'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=800',
-				],
-				isActive: true,
-				createdAt: new Date().toISOString(),
-				updatedAt: new Date().toISOString(),
-				venue: {
-					id: 1,
-					name: 'Khu thể thao Rạch Chiếc',
-					address: 'Đường 410, Phước Long A, Quận 9, TP.HCM',
-					city: 'TP.HCM',
-					openTime: '05:00',
-					closeTime: '24:00',
-					facilities: ['Bãi đỗ xe', 'Phòng tắm', 'Căng tin', 'Wifi'],
-					images: [],
-					ownerId: 1,
-					isActive: true,
-					createdAt: new Date().toISOString(),
-					updatedAt: new Date().toISOString(),
-				},
-			});
+			// No mock data - let field remain null to show error state
 		} finally {
 			setLoading(false);
 		}
@@ -122,36 +101,43 @@ export default function FieldDetailScreen() {
 			const data = await api.getReviews(fieldId);
 			setReviews(data);
 		} catch (error) {
-			// Mock reviews
-			setReviews([
-				{
-					id: 1,
-					fieldId,
-					playerId: 1,
-					rating: 5,
-					comment: 'Sân đẹp, mặt cỏ tốt, đèn sáng. Rất hài lòng!',
-					createdAt: '2025-12-20T10:00:00Z',
-					updatedAt: '',
-				},
-				{
-					id: 2,
-					fieldId,
-					playerId: 2,
-					rating: 4,
-					comment: 'Sân ổn, nhân viên nhiệt tình. Bãi đỗ xe hơi chật.',
-					createdAt: '2025-12-18T14:00:00Z',
-					updatedAt: '',
-				},
-				{
-					id: 3,
-					fieldId,
-					playerId: 3,
-					rating: 5,
-					comment: 'Giá cả hợp lý, sân chất lượng cao.',
-					createdAt: '2025-12-15T16:00:00Z',
-					updatedAt: '',
-				},
-			]);
+			console.error('Failed to load reviews:', error);
+			// No mock data - show empty reviews
+			setReviews([]);
+		}
+	};
+
+	const checkFavoriteStatus = async () => {
+		// Only check if user is logged in
+		if (!isAuthenticated) return;
+		try {
+			const { isFavorite: status } = await api.checkFavorite(fieldId);
+			setIsFavorite(status);
+		} catch (error) {
+			console.error('Failed to check favorite status:', error);
+		}
+	};
+
+	const handleToggleFavorite = async () => {
+		console.log('[FieldDetail] Toggle favorite clicked, isAuthenticated:', isAuthenticated);
+		// Check if user is logged in
+		if (!isAuthenticated) {
+			// Could show alert or navigate to login
+			console.log('[FieldDetail] Not authenticated, navigating to Login');
+			navigation.navigate('Login' as never);
+			return;
+		}
+
+		try {
+			setFavoriteLoading(true);
+			console.log('[FieldDetail] Calling api.toggleFavorite for fieldId:', fieldId);
+			const { isFavorite: newStatus } = await api.toggleFavorite(fieldId);
+			console.log('[FieldDetail] Toggle result:', newStatus);
+			setIsFavorite(newStatus);
+		} catch (error) {
+			console.error('Failed to toggle favorite:', error);
+		} finally {
+			setFavoriteLoading(false);
 		}
 	};
 
@@ -251,9 +237,9 @@ export default function FieldDetailScreen() {
 				{(field.images && field.images.length > 0
 					? field.images
 					: [
-							'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800',
-							'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800',
-					  ]
+						'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800',
+						'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800',
+					]
 				).map((uri, index) => (
 					<Image key={index} source={{ uri }} style={styles.galleryImage} resizeMode='cover' />
 				))}
@@ -366,8 +352,16 @@ export default function FieldDetailScreen() {
 								<Text style={styles.typeText}>{FIELD_TYPE_LABELS[field.fieldType]}</Text>
 							</View>
 						</View>
-						<TouchableOpacity style={styles.favoriteBtn} onPress={() => setIsFavorite(!isFavorite)}>
-							<Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={24} color={theme.colors.accent} />
+						<TouchableOpacity
+							style={styles.favoriteBtn}
+							onPress={handleToggleFavorite}
+							disabled={favoriteLoading}
+						>
+							{favoriteLoading ? (
+								<ActivityIndicator size="small" color={theme.colors.accent} />
+							) : (
+								<Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={24} color={theme.colors.accent} />
+							)}
 						</TouchableOpacity>
 					</View>
 

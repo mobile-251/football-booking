@@ -119,6 +119,19 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 			if (availability?.slots) {
 				setTimeSlots(availability.slots);
 			} else {
+				// Generate time slots based on booked hours from API
+				const bookedHours = new Set<number>();
+				if (Array.isArray(availability)) {
+					// API returns array of bookings for that date
+					availability.forEach((booking: { startTime: string; endTime: string }) => {
+						const startHour = new Date(booking.startTime).getHours();
+						const endHour = new Date(booking.endTime).getHours();
+						for (let h = startHour; h < endHour; h++) {
+							bookedHours.add(h);
+						}
+					});
+				}
+
 				const slots: TimeSlotData[] = [];
 				for (let hour = 0; hour < 24; hour++) {
 					const time = `${hour.toString().padStart(2, '0')}:00`;
@@ -126,13 +139,15 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					slots.push({
 						time,
 						price: isPeakHour ? 1200000 : 800000,
-						isAvailable: Math.random() > 0.3,
+						isAvailable: !bookedHours.has(hour),
 						isPeakHour,
 					});
 				}
 				setTimeSlots(slots);
 			}
 		} catch (error) {
+			console.error('Failed to load availability:', error);
+			// On error, show all slots as available (optimistic)
 			const slots: TimeSlotData[] = [];
 			for (let hour = 0; hour < 24; hour++) {
 				const time = `${hour.toString().padStart(2, '0')}:00`;
@@ -140,7 +155,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				slots.push({
 					time,
 					price: isPeakHour ? 1200000 : 800000,
-					isAvailable: Math.random() > 0.3,
+					isAvailable: true,
 					isPeakHour,
 				});
 			}
@@ -895,7 +910,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	};
 
 	return (
-		<Modal visible={visible} transparent animationType='fade' onRequestClose={onClose}>
+		<Modal visible={visible} transparent animationType='fade' onRequestClose={onClose} statusBarTranslucent>
 			<View style={styles.backdrop}>
 				<View style={styles.sheet}>
 					<View style={styles.container}>
@@ -964,14 +979,17 @@ const styles = StyleSheet.create({
 	backdrop: {
 		flex: 1,
 		backgroundColor: 'rgba(0,0,0,0.35)',
-		justifyContent: 'center',
-		padding: theme.spacing.lg,
+		justifyContent: 'flex-end',
+		padding: 0,
 	},
 	sheet: {
 		width: '100%',
-		maxHeight: height * 0.88,
+		maxHeight: height * 0.92,
 		backgroundColor: theme.colors.cardSolid,
-		borderRadius: theme.borderRadius.xl,
+		borderTopLeftRadius: theme.borderRadius.xl,
+		borderTopRightRadius: theme.borderRadius.xl,
+		borderBottomLeftRadius: 0,
+		borderBottomRightRadius: 0,
 		overflow: 'hidden',
 		...theme.shadows.strong,
 	},
@@ -1081,11 +1099,12 @@ const styles = StyleSheet.create({
 	},
 	calendarWeekdays: {
 		flexDirection: 'row',
-		justifyContent: 'space-between',
+		justifyContent: 'flex-start',
+		width: '100%',
 		marginBottom: theme.spacing.sm,
 	},
 	calendarWeekdayText: {
-		width: (width - theme.spacing.lg * 2 - theme.spacing.lg * 2) / 7,
+		flex: 1,
 		textAlign: 'center',
 		fontSize: 12,
 		color: theme.colors.foregroundMuted,
@@ -1093,9 +1112,11 @@ const styles = StyleSheet.create({
 	calendarGrid: {
 		flexDirection: 'row',
 		flexWrap: 'wrap',
+		width: '100%',
 	},
 	calendarDayCell: {
-		width: (width - theme.spacing.lg * 2 - theme.spacing.lg * 2) / 7,
+		flexBasis: '14.285714%',
+		maxWidth: '14.285714%',
 		height: 36,
 		justifyContent: 'center',
 		alignItems: 'center',
@@ -1257,10 +1278,12 @@ const styles = StyleSheet.create({
 	timeSlotsGrid: {
 		flexDirection: 'row',
 		flexWrap: 'wrap',
-		gap: 8,
+		justifyContent: 'flex-start',
 	},
 	timeSlot: {
-		width: (width - 80) / 6,
+		width: '18.5%',
+		marginRight: '1.5%',
+		marginBottom: 8,
 		backgroundColor: theme.colors.white,
 		borderRadius: theme.borderRadius.sm,
 		padding: theme.spacing.sm,

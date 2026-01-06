@@ -1,11 +1,13 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { formatPrice } from '../utils/formatters';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 interface FavoriteField {
 	id: number;
@@ -14,66 +16,76 @@ interface FavoriteField {
 	openTime: string;
 	closeTime: string;
 	pricePerHour: number;
-	distance: number;
 	image: string;
 	available: boolean;
-	nearBy: boolean;
-	isFavorite: boolean;
 }
-
-const MOCK_FAVORITES: FavoriteField[] = [
-	{
-		id: 1,
-		name: 'Sân bóng mini Bắc Rạch Chiếc',
-		address: 'Đường 410, Phước Long A, Quận 9, TP.HCM',
-		openTime: '00:00',
-		closeTime: '24:00',
-		pricePerHour: 200000,
-		distance: 6.7,
-		image: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=400',
-		available: true,
-		nearBy: true,
-		isFavorite: true,
-	},
-	{
-		id: 2,
-		name: 'Sân bóng Thủ Đức FC',
-		address: '123 Võ Văn Ngân, Thủ Đức, TP.HCM',
-		openTime: '06:00',
-		closeTime: '22:00',
-		pricePerHour: 300000,
-		distance: 3.2,
-		image: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=400',
-		available: true,
-		nearBy: false,
-		isFavorite: true,
-	},
-	{
-		id: 3,
-		name: 'Sân bóng Quận 7',
-		address: '456 Nguyễn Thị Thập, Quận 7, TP.HCM',
-		openTime: '05:00',
-		closeTime: '23:00',
-		pricePerHour: 250000,
-		distance: 8.5,
-		image: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=400',
-		available: false,
-		nearBy: false,
-		isFavorite: true,
-	},
-];
 
 export default function FavoritesScreen() {
 	const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+	const { isAuthenticated, isLoading: authLoading } = useAuth();
+	const [favorites, setFavorites] = useState<FavoriteField[]>([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		if (!authLoading) {
+			if (isAuthenticated) {
+				loadFavorites();
+			} else {
+				setLoading(false);
+			}
+		}
+	}, [isAuthenticated, authLoading]);
+
+	const loadFavorites = async () => {
+		try {
+			setLoading(true);
+			const data = await api.getFavorites();
+			const mappedFavorites = data.map((fav: any) => ({
+				id: fav.fieldId,
+				name: fav.field?.name || 'Không có tên',
+				address: fav.field?.venue?.address || 'Không có địa chỉ',
+				openTime: fav.field?.venue?.openTime || '--:--',
+				closeTime: fav.field?.venue?.closeTime || '--:--',
+				pricePerHour: fav.field?.pricePerHour || 0,
+				image: fav.field?.images?.[0] || '',
+				available: fav.field?.isActive ?? false,
+			}));
+			setFavorites(mappedFavorites);
+		} catch (error: any) {
+			console.error('Failed to load favorites:', error);
+			setFavorites([]);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleRemoveFavorite = async (fieldId: number) => {
+		try {
+			await api.removeFavorite(fieldId);
+			setFavorites(favorites.filter(f => f.id !== fieldId));
+		} catch (error) {
+			console.error('Failed to remove favorite:', error);
+		}
+	};
 
 	const handleBookNow = (field: FavoriteField) => {
 		navigation.navigate('FieldDetail', { fieldId: field.id });
 	};
 
+	const handleLogin = () => {
+		navigation.navigate('Login');
+	};
+
 	const renderField = ({ item }: { item: FavoriteField }) => (
 		<View style={styles.fieldCard}>
 			<View style={styles.imageContainer}>
-				<Image source={{ uri: item.image }} style={styles.fieldImage} resizeMode='cover' />
+				{item.image ? (
+					<Image source={{ uri: item.image }} style={styles.fieldImage} resizeMode='cover' />
+				) : (
+					<View style={[styles.fieldImage, styles.placeholderImage]}>
+						<Ionicons name='football-outline' size={40} color={theme.colors.foregroundMuted} />
+					</View>
+				)}
 				<View style={styles.badges}>
 					{item.available && (
 						<View style={styles.badgeAvailable}>
@@ -81,19 +93,9 @@ export default function FavoritesScreen() {
 							<Text style={styles.badgeText}>Còn trống</Text>
 						</View>
 					)}
-					{item.nearBy && (
-						<View style={styles.badgeNearby}>
-							<Ionicons name='location' size={12} color={theme.colors.white} />
-							<Text style={styles.badgeText}>Gần tôi</Text>
-						</View>
-					)}
 				</View>
-				<TouchableOpacity style={styles.heartBtn}>
-					<Ionicons
-						name={item.isFavorite ? 'heart' : 'heart-outline'}
-						size={22}
-						color={item.isFavorite ? '#ef4444' : theme.colors.white}
-					/>
+				<TouchableOpacity style={styles.heartBtn} onPress={() => handleRemoveFavorite(item.id)}>
+					<Ionicons name='heart' size={22} color='#ef4444' />
 				</TouchableOpacity>
 			</View>
 
@@ -103,7 +105,7 @@ export default function FavoritesScreen() {
 				<View style={styles.infoRow}>
 					<Ionicons name='location-outline' size={14} color={theme.colors.foregroundMuted} />
 					<Text style={styles.infoText} numberOfLines={1}>
-						{item.address}
+						{item.address || 'Chưa có địa chỉ'}
 					</Text>
 				</View>
 
@@ -115,8 +117,9 @@ export default function FavoritesScreen() {
 				</View>
 
 				<View style={styles.priceRow}>
-					<Text style={styles.price}>Chỉ từ {formatPrice(item.pricePerHour)}đ/giờ</Text>
-					<Text style={styles.distance}>{item.distance}km</Text>
+					<Text style={styles.price}>
+						{item.pricePerHour > 0 ? `Chỉ từ ${formatPrice(item.pricePerHour)}đ/giờ` : 'Liên hệ giá'}
+					</Text>
 				</View>
 
 				<TouchableOpacity style={styles.bookBtn} onPress={() => handleBookNow(item)}>
@@ -125,6 +128,38 @@ export default function FavoritesScreen() {
 			</View>
 		</View>
 	);
+
+	const renderLoginPrompt = () => (
+		<View style={styles.loginContainer}>
+			<Ionicons name='lock-closed-outline' size={64} color={theme.colors.secondary} />
+			<Text style={styles.loginTitle}>Chưa đăng nhập</Text>
+			<Text style={styles.loginText}>
+				Vui lòng đăng nhập để xem danh sách sân yêu thích của bạn
+			</Text>
+			<TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
+				<Text style={styles.loginBtnText}>Đăng nhập</Text>
+			</TouchableOpacity>
+		</View>
+	);
+
+	if (loading || authLoading) {
+		return (
+			<SafeAreaView style={styles.container} edges={['top']}>
+				<View style={styles.header}>
+					<View style={styles.headerTop}>
+						<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+							<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
+						</TouchableOpacity>
+						<Text style={styles.title}>Sân yêu thích</Text>
+						<View style={{ width: 40 }} />
+					</View>
+				</View>
+				<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+					<ActivityIndicator size="large" color={theme.colors.primary} />
+				</View>
+			</SafeAreaView>
+		);
+	}
 
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
@@ -137,33 +172,41 @@ export default function FavoritesScreen() {
 					<View style={{ width: 40 }} />
 				</View>
 
-				<View style={styles.statsCard}>
-					<View style={styles.statsLeft}>
-						<Text style={styles.statsLabel}>Tổng số sân yêu thích</Text>
-						<Text style={styles.statsValue}>{MOCK_FAVORITES.length}</Text>
-						<Text style={styles.statsSub}>Đã lưu trong danh sách</Text>
+				{isAuthenticated && (
+					<View style={styles.statsCard}>
+						<View style={styles.statsLeft}>
+							<Text style={styles.statsLabel}>Tổng số sân yêu thích</Text>
+							<Text style={styles.statsValue}>{favorites.length}</Text>
+							<Text style={styles.statsSub}>Đã lưu trong danh sách</Text>
+						</View>
+						<View style={styles.heartContainer}>
+							<Ionicons name='heart' size={40} color={theme.colors.white} />
+						</View>
 					</View>
-					<View style={styles.heartContainer}>
-						<Ionicons name='heart' size={40} color={theme.colors.white} />
-					</View>
-				</View>
+				)}
 			</View>
 
-			<FlatList
-				data={MOCK_FAVORITES}
-				renderItem={renderField}
-				keyExtractor={(item) => item.id.toString()}
-				style={styles.list}
-				contentContainerStyle={styles.listContent}
-				showsVerticalScrollIndicator={false}
-				ListEmptyComponent={
-					<View style={styles.emptyContainer}>
-						<Ionicons name='heart-outline' size={64} color={theme.colors.secondary} />
-						<Text style={styles.emptyTitle}>Chưa có sân yêu thích</Text>
-						<Text style={styles.emptyText}>Hãy thêm sân yêu thích để dễ dàng đặt lịch.</Text>
-					</View>
-				}
-			/>
+			{!isAuthenticated ? (
+				renderLoginPrompt()
+			) : (
+				<FlatList
+					data={favorites}
+					renderItem={renderField}
+					keyExtractor={(item) => item.id.toString()}
+					style={styles.list}
+					contentContainerStyle={styles.listContent}
+					showsVerticalScrollIndicator={false}
+					ListEmptyComponent={
+						<View style={styles.emptyContainer}>
+							<Ionicons name='heart-outline' size={64} color={theme.colors.secondary} />
+							<Text style={styles.emptyTitle}>Chưa có sân yêu thích</Text>
+							<Text style={styles.emptyText}>
+								Hãy thêm sân yêu thích từ trang chi tiết sân{'\n'}để dễ dàng đặt lịch sau này.
+							</Text>
+						</View>
+					}
+				/>
+			)}
 		</SafeAreaView>
 	);
 }
@@ -252,6 +295,10 @@ const styles = StyleSheet.create({
 		height: 180,
 		backgroundColor: theme.colors.background,
 	},
+	placeholderImage: {
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
 	badges: {
 		position: 'absolute',
 		top: 12,
@@ -263,15 +310,6 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		backgroundColor: theme.colors.primary,
-		paddingHorizontal: 10,
-		paddingVertical: 5,
-		borderRadius: theme.borderRadius.full,
-		gap: 4,
-	},
-	badgeNearby: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		backgroundColor: '#f59e0b',
 		paddingHorizontal: 10,
 		paddingVertical: 5,
 		borderRadius: theme.borderRadius.full,
@@ -289,7 +327,7 @@ const styles = StyleSheet.create({
 		width: 36,
 		height: 36,
 		borderRadius: 18,
-		backgroundColor: 'rgba(255,255,255,0.3)',
+		backgroundColor: 'rgba(255,255,255,0.9)',
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
@@ -325,11 +363,6 @@ const styles = StyleSheet.create({
 		fontWeight: 'bold',
 		color: theme.colors.foreground,
 	},
-	distance: {
-		fontSize: 14,
-		fontWeight: '600',
-		color: theme.colors.primary,
-	},
 	bookBtn: {
 		backgroundColor: theme.colors.primary,
 		paddingVertical: 14,
@@ -358,5 +391,35 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		color: theme.colors.foregroundMuted,
 		textAlign: 'center',
+	},
+	loginContainer: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+		paddingHorizontal: theme.spacing.xl,
+	},
+	loginTitle: {
+		fontSize: 20,
+		fontWeight: '600',
+		color: theme.colors.foreground,
+		marginTop: theme.spacing.lg,
+		marginBottom: theme.spacing.sm,
+	},
+	loginText: {
+		fontSize: 14,
+		color: theme.colors.foregroundMuted,
+		textAlign: 'center',
+		marginBottom: theme.spacing.xl,
+	},
+	loginBtn: {
+		backgroundColor: theme.colors.primary,
+		paddingHorizontal: theme.spacing.xl,
+		paddingVertical: theme.spacing.md,
+		borderRadius: theme.borderRadius.lg,
+	},
+	loginBtnText: {
+		fontSize: 16,
+		fontWeight: '600',
+		color: theme.colors.white,
 	},
 });

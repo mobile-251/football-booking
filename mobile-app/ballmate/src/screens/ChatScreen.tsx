@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
 	View,
 	Text,
@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
+import { api } from '../services/api';
 
 interface Message {
 	id: number;
@@ -30,59 +31,54 @@ type ChatRouteParams = {
 	};
 };
 
-const MOCK_MESSAGES: Message[] = [
-	{
-		id: 1,
-		text: 'Xin chào! Tôi muốn hỏi về giá thuê sân',
-		time: '10:15',
-		isMe: true,
-	},
-	{
-		id: 2,
-		text: 'Chào bạn! Giá thuê sân 5 người là 120.000đ/giờ nhé',
-		time: '10:20',
-		isMe: false,
-	},
-	{
-		id: 3,
-		text: 'Xin chào! Tôi muốn hỏi về giá thuê sân',
-		time: '10:15',
-		isMe: true,
-	},
-	{
-		id: 4,
-		text: 'Chào bạn! Giá thuê sân 5 người là 120.000đ/giờ nhé',
-		time: '10:20',
-		isMe: false,
-	},
-];
-
 export default function ChatScreen() {
 	const navigation = useNavigation();
 	const route = useRoute<RouteProp<ChatRouteParams, 'Chat'>>();
-	const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+	const [messages, setMessages] = useState<Message[]>([]);
 	const [inputText, setInputText] = useState('');
 	const flatListRef = useRef<FlatList>(null);
+	const [loading, setLoading] = useState(true);
 
 	const fieldName = route.params?.fieldName || 'Sân Bóng Mini Bắc Rạ...';
 	const fieldImage = route.params?.fieldImage || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100';
 
-	const handleSend = () => {
+	useEffect(() => {
+		loadMessages();
+	}, []);
+
+	const loadMessages = async () => {
+		try {
+			setLoading(true);
+			const conversationId = route.params?.conversationId;
+			if (conversationId) {
+				const data = await api.getMessages(conversationId);
+				setMessages(data);
+			}
+		} catch (error) {
+			console.error('Failed to load messages:', error);
+			setMessages([]);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleSend = async () => {
 		if (!inputText.trim()) return;
 
-		const newMessage: Message = {
-			id: messages.length + 1,
-			text: inputText,
-			time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-			isMe: true,
-		};
+		const conversationId = route.params?.conversationId;
+		if (!conversationId) return;
 
-		setMessages([...messages, newMessage]);
-		setInputText('');
+		try {
+			const newMessage = await api.sendMessage(conversationId, inputText.trim());
+			setMessages([...messages, newMessage]);
+			setInputText('');
 
-		setTimeout(() => {
-			flatListRef.current?.scrollToEnd();
-		}, 100);
+			setTimeout(() => {
+				flatListRef.current?.scrollToEnd();
+			}, 100);
+		} catch (error) {
+			console.error('Failed to send message:', error);
+		}
 	};
 
 	const renderMessage = ({ item }: { item: Message }) => (

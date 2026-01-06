@@ -26,6 +26,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         fullName: true,
         role: true,
         isActive: true,
+        player: { select: { id: true } },
+        owner: { select: { id: true } },
       },
     });
 
@@ -33,7 +35,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
-    return user;
+    return {
+      ...user,
+      playerId: user.player?.id,
+      ownerId: user.owner?.id,
+    };
   }
 }
 
