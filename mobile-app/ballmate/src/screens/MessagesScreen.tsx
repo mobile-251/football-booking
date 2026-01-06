@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,12 +7,15 @@ import {
     TouchableOpacity,
     TextInput,
     Image,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 type FilterType = 'all' | 'unread' | 'important';
 
@@ -27,56 +30,53 @@ interface Conversation {
     important?: boolean;
 }
 
-const MOCK_CONVERSATIONS: Conversation[] = [
-    {
-        id: 1,
-        fieldName: 'Sân Bóng Mini Bắc Rạch Chiếc',
-        fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
-        lastMessage: 'Chào bạn! Sân vẫn còn trống khung 18h-19',
-        time: '10:30',
-        unread: true,
-        unreadCount: 2,
-    },
-    {
-        id: 2,
-        fieldName: 'Sân Bóng Mini Bắc Rạch Chiếc',
-        fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
-        lastMessage: 'Cảm ơn bạn đã đặt sân. Hẹn gặp lại!',
-        time: '10:30',
-        unread: false,
-    },
-    {
-        id: 3,
-        fieldName: 'Sân Bóng Mini Bắc Rạch Chiếc',
-        fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
-        lastMessage: 'Chào bạn! Sân vẫn còn trống khung 18h-19',
-        time: '10:30',
-        unread: true,
-        unreadCount: 2,
-    },
-    {
-        id: 4,
-        fieldName: 'Sân Bóng Mini Bắc Rạch Chiếc',
-        fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
-        lastMessage: 'Cảm ơn bạn đã đặt sân. Hẹn gặp lại!',
-        time: '10:30',
-        unread: false,
-    },
-    {
-        id: 5,
-        fieldName: 'Sân Bóng Mini Bắc Rạch Chiếc',
-        fieldImage: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
-        lastMessage: 'Cảm ơn bạn đã đặt sân. Hẹn gặp lại!',
-        time: '10:30',
-        unread: false,
-    },
-];
-
 export default function MessagesScreen() {
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [conversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
+    const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!authLoading) {
+            if (isAuthenticated) {
+                loadConversations();
+            } else {
+                setLoading(false);
+            }
+        }
+    }, [isAuthenticated, authLoading]);
+
+    const loadConversations = async () => {
+        try {
+            setLoading(true);
+            const data = await api.getConversations();
+            const mappedConversations = data.map((c: any) => {
+                const lastMessageAt = c.lastMessageAt ? new Date(c.lastMessageAt) : null;
+                let timeStr = '';
+                if (lastMessageAt) {
+                    timeStr = lastMessageAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                }
+                return {
+                    id: c.id,
+                    fieldName: c.fieldName || 'Sân bóng',
+                    fieldImage: c.fieldImage || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100',
+                    lastMessage: c.lastMessage || '',
+                    time: timeStr,
+                    unread: c.unreadCount > 0,
+                    unreadCount: c.unreadCount || 0,
+                    important: false,
+                };
+            });
+            setConversations(mappedConversations);
+        } catch (error) {
+            console.error('Failed to load conversations:', error);
+            setConversations([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const getFilteredConversations = () => {
         let result = [...conversations];
@@ -124,6 +124,23 @@ export default function MessagesScreen() {
         });
     };
 
+    const handleLogin = () => {
+        navigation.navigate('Login');
+    };
+
+    const renderLoginPrompt = () => (
+        <View style={styles.loginContainer}>
+            <Ionicons name='lock-closed-outline' size={64} color={theme.colors.secondary} />
+            <Text style={styles.loginTitle}>Chưa đăng nhập</Text>
+            <Text style={styles.loginText}>
+                Vui lòng đăng nhập để xem tin nhắn của bạn
+            </Text>
+            <TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
+                <Text style={styles.loginBtnText}>Đăng nhập</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
     const renderConversation = ({ item }: { item: Conversation }) => (
         <TouchableOpacity
             style={styles.conversationItem}
@@ -160,76 +177,101 @@ export default function MessagesScreen() {
         { key: 'important', label: 'Quan trọng' },
     ];
 
+    if (loading || authLoading) {
+        return (
+            <SafeAreaView style={styles.container} edges={['top']}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Tin nhắn</Text>
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             {/* Header */}
             <View style={styles.header}>
                 <Text style={styles.title}>Tin nhắn</Text>
-                <Text style={styles.subtitle}>{unreadCount} tin nhắn chưa đọc</Text>
+                {isAuthenticated && (
+                    <>
+                        <Text style={styles.subtitle}>{unreadCount} tin nhắn chưa đọc</Text>
 
-                {/* Filter Tabs */}
-                <View style={styles.filterTabs}>
-                    {FILTERS.map(filter => (
-                        <TouchableOpacity
-                            key={filter.key}
-                            style={[
-                                styles.filterTab,
-                                activeFilter === filter.key && styles.filterTabActive,
-                            ]}
-                            onPress={() => setActiveFilter(filter.key)}
-                        >
-                            <Text style={[
-                                styles.filterTabText,
-                                activeFilter === filter.key && styles.filterTabTextActive,
-                            ]}>
-                                {filter.label}
-                            </Text>
-                            <Text style={[
-                                styles.filterTabCount,
-                                activeFilter === filter.key && styles.filterTabCountActive,
-                            ]}>
-                                {getFilterCount(filter.key)}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                        {/* Filter Tabs */}
+                        <View style={styles.filterTabs}>
+                            {FILTERS.map(filter => (
+                                <TouchableOpacity
+                                    key={filter.key}
+                                    style={[
+                                        styles.filterTab,
+                                        activeFilter === filter.key && styles.filterTabActive,
+                                    ]}
+                                    onPress={() => setActiveFilter(filter.key)}
+                                >
+                                    <Text style={[
+                                        styles.filterTabText,
+                                        activeFilter === filter.key && styles.filterTabTextActive,
+                                    ]}>
+                                        {filter.label}
+                                    </Text>
+                                    <Text style={[
+                                        styles.filterTabCount,
+                                        activeFilter === filter.key && styles.filterTabCountActive,
+                                    ]}>
+                                        {getFilterCount(filter.key)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </>
+                )}
             </View>
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <View style={styles.searchBar}>
-                    <Ionicons name="search" size={20} color={theme.colors.foregroundMuted} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Tìm sân theo tên hoặc địa điểm..."
-                        placeholderTextColor={theme.colors.foregroundMuted}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                </View>
-                <TouchableOpacity style={styles.searchButton}>
-                    <Text style={styles.searchButtonText}>Tìm kiếm</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Conversations List */}
-            <FlatList
-                data={getFilteredConversations()}
-                renderItem={renderConversation}
-                keyExtractor={(item) => item.id.toString()}
-                style={styles.list}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="chatbubbles-outline" size={64} color={theme.colors.secondary} />
-                        <Text style={styles.emptyTitle}>Không có tin nhắn</Text>
-                        <Text style={styles.emptyText}>
-                            Bạn chưa có cuộc trò chuyện nào.
-                        </Text>
+            {!isAuthenticated ? (
+                renderLoginPrompt()
+            ) : (
+                <>
+                    {/* Search Bar */}
+                    <View style={styles.searchContainer}>
+                        <View style={styles.searchBar}>
+                            <Ionicons name="search" size={20} color={theme.colors.foregroundMuted} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="Tìm cuộc trò chuyện..."
+                                placeholderTextColor={theme.colors.foregroundMuted}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                    <Ionicons name="close-circle" size={20} color={theme.colors.foregroundMuted} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </View>
-                }
-            />
+
+                    {/* Conversations List */}
+                    <FlatList
+                        data={getFilteredConversations()}
+                        renderItem={renderConversation}
+                        keyExtractor={(item) => item.id.toString()}
+                        style={styles.list}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="chatbubbles-outline" size={64} color={theme.colors.secondary} />
+                                <Text style={styles.emptyTitle}>Không có tin nhắn</Text>
+                                <Text style={styles.emptyText}>
+                                    Bạn chưa có cuộc trò chuyện nào.
+                                </Text>
+                            </View>
+                        }
+                    />
+                </>
+            )}
         </SafeAreaView>
     );
 }
@@ -330,6 +372,7 @@ const styles = StyleSheet.create({
     listContent: {
         paddingHorizontal: theme.spacing.lg,
         paddingTop: theme.spacing.sm,
+        paddingBottom: 100,
     },
     conversationItem: {
         flexDirection: 'row',
@@ -408,5 +451,35 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: theme.colors.foregroundMuted,
         textAlign: 'center',
+    },
+    loginContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: theme.spacing.xl,
+    },
+    loginTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: theme.colors.foreground,
+        marginTop: theme.spacing.lg,
+        marginBottom: theme.spacing.sm,
+    },
+    loginText: {
+        fontSize: 14,
+        color: theme.colors.foregroundMuted,
+        textAlign: 'center',
+        marginBottom: theme.spacing.xl,
+    },
+    loginBtn: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.xl,
+        paddingVertical: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+    },
+    loginBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.white,
     },
 });

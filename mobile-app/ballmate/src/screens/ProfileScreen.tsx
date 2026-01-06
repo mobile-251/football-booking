@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -6,12 +6,15 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 
 interface MenuItem {
     icon: keyof typeof Ionicons.glyphMap;
@@ -76,20 +79,56 @@ const MENU_ITEMS: MenuItem[] = [
         title: 'Hỗ trợ',
         subtitle: 'Trung tâm trợ giúp',
     },
-    {
-        icon: 'play-circle-outline',
-        iconColor: '#ec4899',
-        iconBg: '#fce7f3',
-        title: 'Hướng dẫn sử dụng',
-        subtitle: 'Xem lại giới thiệu ứng dụng',
-    },
 ];
+
+interface UserStats {
+    bookingCount: number;
+    totalSpent: number;
+    points: number;
+}
 
 export default function ProfileScreen() {
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+    const { user, logout, isAuthenticated, isLoading: authLoading } = useAuth();
+    const [stats, setStats] = useState<UserStats>({ bookingCount: 0, totalSpent: 0, points: 0 });
+    const [statsLoading, setStatsLoading] = useState(true);
 
-    const handleLogout = () => {
-        console.log('Logout');
+    useEffect(() => {
+        if (isAuthenticated) {
+            loadUserStats();
+        } else {
+            setStatsLoading(false);
+        }
+    }, [isAuthenticated]);
+
+    const loadUserStats = async () => {
+        try {
+            // For now, we'll use placeholder stats since there's no dedicated stats endpoint
+            // In a real app, this would fetch from /api/users/me/stats
+            const bookings = await api.getBookings();
+            const totalSpent = bookings.reduce((sum: number, b: any) => sum + (b.totalPrice || 0), 0);
+            setStats({
+                bookingCount: bookings.length,
+                totalSpent: totalSpent,
+                points: Math.floor(totalSpent / 10000), // 1 point per 10k spent
+            });
+        } catch (error) {
+            console.error('Failed to load user stats:', error);
+        } finally {
+            setStatsLoading(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await logout();
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+            });
+        } catch (error) {
+            console.error('Failed to logout:', error);
+        }
     };
 
     const handleMenuPress = (item: MenuItem) => {
@@ -97,6 +136,59 @@ export default function ProfileScreen() {
             navigation.navigate(item.route as any);
         }
     };
+
+    const formatPrice = (price: number): string => {
+        if (price >= 1000000) {
+            return (price / 1000000).toFixed(1) + 'M';
+        }
+        if (price >= 1000) {
+            return (price / 1000).toFixed(0) + 'K';
+        }
+        return price.toString();
+    };
+
+    const getAvatarUrl = (): string => {
+        if (user?.avatarUrl) return user.avatarUrl;
+        const name = user?.fullName || 'User';
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=22c55e&color=fff&size=150`;
+    };
+
+    const getJoinDate = (): string => {
+        if (!user?.createdAt) return 'Thành viên mới';
+        const date = new Date(user.createdAt);
+        return `Tháng ${date.getMonth() + 1}, ${date.getFullYear()}`;
+    };
+
+    if (authLoading) {
+        return (
+            <SafeAreaView style={styles.container} edges={['top']}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!isAuthenticated || !user) {
+        return (
+            <SafeAreaView style={styles.container} edges={['top']}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Tài khoản</Text>
+                </View>
+                <View style={styles.loginPrompt}>
+                    <Ionicons name="person-circle-outline" size={80} color={theme.colors.secondary} />
+                    <Text style={styles.loginTitle}>Chưa đăng nhập</Text>
+                    <Text style={styles.loginText}>Đăng nhập để xem thông tin tài khoản</Text>
+                    <TouchableOpacity
+                        style={styles.loginBtnPrompt}
+                        onPress={() => navigation.navigate('Login')}
+                    >
+                        <Text style={styles.loginBtnText}>Đăng nhập</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -114,31 +206,36 @@ export default function ProfileScreen() {
                     <View style={styles.profileCard}>
                         <View style={styles.profileLeft}>
                             <Image
-                                source={{ uri: 'https://i.pravatar.cc/150?img=8' }}
+                                source={{ uri: getAvatarUrl() }}
                                 style={styles.avatar}
                             />
                             <View style={styles.profileInfo}>
                                 <View style={styles.nameRow}>
-                                    <Text style={styles.name}>Nguyễn Văn A</Text>
-                                    <TouchableOpacity style={styles.editBtn}>
+                                    <Text style={styles.name}>{user.fullName || 'Người dùng'}</Text>
+                                    <TouchableOpacity
+                                        style={styles.editBtn}
+                                        onPress={() => navigation.navigate('PersonalInfo')}
+                                    >
                                         <Ionicons name="create-outline" size={18} color={theme.colors.foregroundMuted} />
                                     </TouchableOpacity>
                                 </View>
-                                <Text style={styles.email}>nguyenvana@gmail.com</Text>
+                                <Text style={styles.email}>{user.email}</Text>
                                 <View style={styles.locationRow}>
-                                    <Ionicons name="location-outline" size={14} color={theme.colors.foregroundMuted} />
-                                    <Text style={styles.locationText}>TP.HCM</Text>
-                                    <Ionicons name="calendar-outline" size={14} color={theme.colors.foregroundMuted} style={{ marginLeft: 12 }} />
-                                    <Text style={styles.locationText}>Tháng 6, 2024</Text>
+                                    <Ionicons name="calendar-outline" size={14} color={theme.colors.foregroundMuted} />
+                                    <Text style={styles.locationText}>{getJoinDate()}</Text>
                                 </View>
                                 <View style={styles.badgeRow}>
-                                    <View style={styles.vipBadge}>
-                                        <Ionicons name="star" size={12} color={theme.colors.white} />
-                                        <Text style={styles.vipText}>VIP Member</Text>
+                                    <View style={styles.memberBadge}>
+                                        <Ionicons name="person" size={12} color={theme.colors.white} />
+                                        <Text style={styles.memberText}>
+                                            {user.role === 'PLAYER' ? 'Người chơi' : user.role}
+                                        </Text>
                                     </View>
-                                    <View style={styles.pointsBadge}>
-                                        <Text style={styles.pointsText}>1250 điểm</Text>
-                                    </View>
+                                    {stats.points > 0 && (
+                                        <View style={styles.pointsBadge}>
+                                            <Text style={styles.pointsText}>{stats.points} điểm</Text>
+                                        </View>
+                                    )}
                                 </View>
                             </View>
                         </View>
@@ -152,24 +249,27 @@ export default function ProfileScreen() {
                             <Ionicons name="calendar-outline" size={24} color={theme.colors.primary} />
                         </View>
                         <Text style={styles.statLabel}>Lượt đặt</Text>
-                        <Text style={styles.statValue}>24</Text>
-                        <Text style={styles.statSub}>+3 tháng này</Text>
+                        <Text style={styles.statValue}>
+                            {statsLoading ? '-' : stats.bookingCount}
+                        </Text>
                     </View>
                     <View style={styles.statCard}>
                         <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
                             <Ionicons name="wallet-outline" size={24} color="#f59e0b" />
                         </View>
-                        <Text style={styles.statLabel}>Tổng chi tiêu</Text>
-                        <Text style={styles.statValue}>3.2M</Text>
-                        <Text style={styles.statSub}>+450K tháng này</Text>
+                        <Text style={styles.statLabel}>Chi tiêu</Text>
+                        <Text style={styles.statValue}>
+                            {statsLoading ? '-' : formatPrice(stats.totalSpent)}
+                        </Text>
                     </View>
                     <View style={styles.statCard}>
                         <View style={[styles.statIcon, { backgroundColor: '#fee2e2' }]}>
                             <Ionicons name="gift-outline" size={24} color="#ef4444" />
                         </View>
-                        <Text style={styles.statLabel}>Điểm tích lũy</Text>
-                        <Text style={styles.statValue}>1250</Text>
-                        <Text style={styles.statSub}>+120 điểm</Text>
+                        <Text style={styles.statLabel}>Điểm</Text>
+                        <Text style={styles.statValue}>
+                            {statsLoading ? '-' : stats.points}
+                        </Text>
                     </View>
                 </View>
 
@@ -295,16 +395,16 @@ const styles = StyleSheet.create({
         marginTop: 10,
         gap: 8,
     },
-    vipBadge: {
+    memberBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f59e0b',
+        backgroundColor: theme.colors.primary,
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: theme.borderRadius.full,
         gap: 4,
     },
-    vipText: {
+    memberText: {
         fontSize: 11,
         fontWeight: '600',
         color: theme.colors.white,
@@ -351,11 +451,6 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: 'bold',
         color: theme.colors.foreground,
-    },
-    statSub: {
-        fontSize: 10,
-        color: theme.colors.primary,
-        marginTop: 2,
     },
     settingsSection: {
         paddingHorizontal: theme.spacing.lg,
@@ -416,9 +511,40 @@ const styles = StyleSheet.create({
     versionContainer: {
         alignItems: 'center',
         paddingVertical: theme.spacing.xl,
+        paddingBottom: 100,
     },
     versionText: {
         fontSize: 12,
         color: theme.colors.foregroundMuted,
+    },
+    loginPrompt: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: theme.spacing.xl,
+    },
+    loginTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: theme.colors.foreground,
+        marginTop: theme.spacing.lg,
+        marginBottom: theme.spacing.sm,
+    },
+    loginText: {
+        fontSize: 14,
+        color: theme.colors.foregroundMuted,
+        textAlign: 'center',
+        marginBottom: theme.spacing.xl,
+    },
+    loginBtnPrompt: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.xl,
+        paddingVertical: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+    },
+    loginBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.white,
     },
 });

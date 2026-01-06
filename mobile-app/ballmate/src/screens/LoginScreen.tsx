@@ -5,7 +5,6 @@ import {
     StyleSheet,
     TouchableOpacity,
     TextInput,
-    Image,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -16,10 +15,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+    const { login } = useAuth();
     const [email, setEmail] = useState('player1@ballmate.com');
     const [password, setPassword] = useState('password123');
     const [showPassword, setShowPassword] = useState(false);
@@ -34,7 +34,7 @@ export default function LoginScreen() {
 
         setLoading(true);
         try {
-            await api.login(email, password);
+            await login(email, password);
             // Navigate to main app after successful login
             navigation.reset({
                 index: 0,

@@ -9,9 +9,11 @@ interface FieldCardProps {
 	field: Field;
 	onPress: () => void;
 	distance?: string;
+	isFavorite?: boolean;
+	onToggleFavorite?: () => void;
 }
 
-export default function FieldCard({ field, onPress, distance = '6.7km' }: FieldCardProps) {
+export default function FieldCard({ field, onPress, distance, isFavorite = false, onToggleFavorite }: FieldCardProps) {
 	return (
 		<TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
 			<View style={styles.imageContainer}>
@@ -27,13 +29,15 @@ export default function FieldCard({ field, onPress, distance = '6.7km' }: FieldC
 						<Ionicons name='checkmark-circle' size={12} color={theme.colors.white} />
 						<Text style={styles.badgeText}>Còn trống</Text>
 					</View>
-					<View style={styles.badgeOrange}>
-						<Ionicons name='location' size={12} color={theme.colors.white} />
-						<Text style={styles.badgeText}>Gần tôi</Text>
-					</View>
+					{distance && (
+						<View style={styles.badgeOrange}>
+							<Ionicons name='location' size={12} color={theme.colors.white} />
+							<Text style={styles.badgeText}>Gần tôi</Text>
+						</View>
+					)}
 				</View>
-				<TouchableOpacity style={styles.favoriteBtn}>
-					<Ionicons name='heart' size={20} color={theme.colors.accent} />
+				<TouchableOpacity style={styles.favoriteBtn} onPress={onToggleFavorite} activeOpacity={0.8}>
+					<Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={20} color={theme.colors.accent} />
 				</TouchableOpacity>
 			</View>
 
@@ -60,7 +64,7 @@ export default function FieldCard({ field, onPress, distance = '6.7km' }: FieldC
 					<View>
 						<Text style={styles.priceLabel}>Chỉ từ {formatPrice(field.pricePerHour)}đ/giờ</Text>
 					</View>
-					<Text style={styles.distance}>{distance}</Text>
+					{distance && <Text style={styles.distance}>{distance}</Text>}
 				</View>
 
 				<TouchableOpacity style={styles.bookButton} onPress={onPress}>

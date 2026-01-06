@@ -8,10 +8,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { BookingStatus, Prisma } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class BookingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationService: NotificationService,
+  ) { }
 
   async create(createBookingDto: CreateBookingDto) {
     const { fieldId, startTime, endTime, playerId, totalPrice, note } =
@@ -62,7 +66,7 @@ export class BookingService {
       );
     }
 
-    return this.prisma.booking.create({
+    const booking = await this.prisma.booking.create({
       data: {
         fieldId,
         playerId,
@@ -92,6 +96,24 @@ export class BookingService {
         },
       },
     });
+
+    // Send notification for new booking
+    try {
+      await this.notificationService.createBookingNotification(
+        booking.player.user.id,
+        'confirmed',
+        {
+          fieldName: booking.field.name,
+          date: start.toLocaleDateString('vi-VN'),
+          time: start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          bookingId: booking.id,
+        },
+      );
+    } catch (e) {
+      console.error('Failed to send booking notification:', e);
+    }
+
+    return booking;
   }
 
   async findAll(filters?: {
@@ -191,14 +213,44 @@ export class BookingService {
   }
 
   async cancelBooking(id: number) {
-    await this.findOne(id);
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: {
+        field: true,
+        player: {
+          include: { user: { select: { id: true } } },
+        },
+      },
+    });
 
-    return this.prisma.booking.update({
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${id} not found`);
+    }
+
+    const updatedBooking = await this.prisma.booking.update({
       where: { id },
       data: {
         status: BookingStatus.CANCELLED,
       },
     });
+
+    // Send cancellation notification
+    try {
+      await this.notificationService.createBookingNotification(
+        booking.player.user.id,
+        'cancelled',
+        {
+          fieldName: booking.field.name,
+          date: booking.startTime.toLocaleDateString('vi-VN'),
+          time: booking.startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          bookingId: booking.id,
+        },
+      );
+    } catch (e) {
+      console.error('Failed to send cancellation notification:', e);
+    }
+
+    return updatedBooking;
   }
 
   async remove(id: number) {

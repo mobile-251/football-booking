@@ -1,15 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     FlatList,
     TouchableOpacity,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 type FilterType = 'all' | 'unread';
 
@@ -21,49 +25,6 @@ interface Notification {
     time: string;
     read: boolean;
 }
-
-const MOCK_NOTIFICATIONS: Notification[] = [
-    {
-        id: 1,
-        type: 'booking',
-        title: 'Đặt sân thành công',
-        message: 'Sân Bóng mini Bắc Rạch Chiếc vào lúc 18:51 ngày 9/10/2025',
-        time: '5 phút trước',
-        read: false,
-    },
-    {
-        id: 2,
-        type: 'promo',
-        title: 'Ưu đãi đặc biệt',
-        message: 'Giảm 20% cho lần đặt sân tiếp theo. Mã: FOOTBALL20',
-        time: '1 giờ trước',
-        read: false,
-    },
-    {
-        id: 3,
-        type: 'review',
-        title: 'Đánh giá trải nghiệm',
-        message: 'Hãy đánh giá trải nghiệm của bạn tại Sân Bóng Đá Làng Đại Học',
-        time: '3 giờ trước',
-        read: true,
-    },
-    {
-        id: 4,
-        type: 'reminder',
-        title: 'Nhắc nhở đặt sân',
-        message: 'Bạn có lịch đặt sân vào 18:00 hôm nay. Hãy đến sớm 10 phút!',
-        time: '5 giờ trước',
-        read: true,
-    },
-    {
-        id: 5,
-        type: 'payment',
-        title: 'Xác nhận thanh toán',
-        message: 'Thanh toán 200.000đ cho đơn đặt sân #12345 đã được xác nhận',
-        time: '1 ngày trước',
-        read: true,
-    },
-];
 
 const getIconForType = (type: Notification['type']) => {
     switch (type) {
@@ -83,9 +44,65 @@ const getIconForType = (type: Notification['type']) => {
 };
 
 export default function NotificationsScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-    const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!authLoading) {
+            if (isAuthenticated) {
+                loadNotifications();
+            } else {
+                setLoading(false);
+            }
+        }
+    }, [isAuthenticated, authLoading]);
+
+    const loadNotifications = async () => {
+        try {
+            setLoading(true);
+            const data = await api.getNotifications();
+            const mappedNotifications = data.map((n: any) => {
+                const typeMap: Record<string, Notification['type']> = {
+                    BOOKING_CONFIRMED: 'booking',
+                    BOOKING_CANCELLED: 'booking',
+                    BOOKING_REMINDER: 'reminder',
+                    PAYMENT_SUCCESS: 'payment',
+                    PAYMENT_PENDING: 'payment',
+                    PROMO: 'promo',
+                    REVIEW_REQUEST: 'review',
+                    SYSTEM: 'booking',
+                };
+                const createdAt = new Date(n.createdAt);
+                const now = new Date();
+                const diffMs = now.getTime() - createdAt.getTime();
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                let timeAgo = '';
+                if (diffMins < 60) timeAgo = `${diffMins} phút trước`;
+                else if (diffHours < 24) timeAgo = `${diffHours} giờ trước`;
+                else timeAgo = `${diffDays} ngày trước`;
+
+                return {
+                    id: n.id,
+                    type: typeMap[n.type] || 'booking',
+                    title: n.title,
+                    message: n.message,
+                    time: timeAgo,
+                    read: n.isRead,
+                };
+            });
+            setNotifications(mappedNotifications);
+        } catch (error) {
+            console.error('Failed to load notifications:', error);
+            setNotifications([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const getFilteredNotifications = () => {
         if (activeFilter === 'unread') {
@@ -96,19 +113,51 @@ export default function NotificationsScreen() {
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
-    const handleMarkAllAsRead = () => {
-        setNotifications(notifications.map(n => ({ ...n, read: true })));
+    const handleMarkAllAsRead = async () => {
+        try {
+            await api.markAllNotificationsAsRead();
+            setNotifications(notifications.map(n => ({ ...n, read: true })));
+        } catch (error) {
+            console.error('Failed to mark all as read:', error);
+        }
     };
 
-    const handleMarkAsRead = (id: number) => {
-        setNotifications(notifications.map(n =>
-            n.id === id ? { ...n, read: true } : n
-        ));
+    const handleMarkAsRead = async (id: number) => {
+        try {
+            await api.markNotificationAsRead(id);
+            setNotifications(notifications.map(n =>
+                n.id === id ? { ...n, read: true } : n
+            ));
+        } catch (error) {
+            console.error('Failed to mark as read:', error);
+        }
     };
 
-    const handleDelete = (id: number) => {
-        setNotifications(notifications.filter(n => n.id !== id));
+    const handleDelete = async (id: number) => {
+        try {
+            await api.deleteNotification(id);
+            setNotifications(notifications.filter(n => n.id !== id));
+        } catch (error) {
+            console.error('Failed to delete notification:', error);
+        }
     };
+
+    const handleLogin = () => {
+        navigation.navigate('Login');
+    };
+
+    const renderLoginPrompt = () => (
+        <View style={styles.loginContainer}>
+            <Ionicons name='lock-closed-outline' size={64} color={theme.colors.secondary} />
+            <Text style={styles.loginTitle}>Chưa đăng nhập</Text>
+            <Text style={styles.loginText}>
+                Vui lòng đăng nhập để xem thông báo của bạn
+            </Text>
+            <TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
+                <Text style={styles.loginBtnText}>Đăng nhập</Text>
+            </TouchableOpacity>
+        </View>
+    );
 
     const renderNotification = ({ item }: { item: Notification }) => {
         const iconConfig = getIconForType(item.type);
@@ -153,6 +202,25 @@ export default function NotificationsScreen() {
         );
     };
 
+    if (loading || authLoading) {
+        return (
+            <SafeAreaView style={styles.container} edges={['top']}>
+                <View style={styles.header}>
+                    <View style={styles.headerTop}>
+                        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                            <Ionicons name="chevron-back" size={24} color={theme.colors.white} />
+                        </TouchableOpacity>
+                        <Text style={styles.title}>Thông báo</Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             {/* Header */}
@@ -170,87 +238,96 @@ export default function NotificationsScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Stats Card */}
-                <View style={styles.statsCard}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Tổng thông báo</Text>
-                        <Text style={styles.statValue}>{notifications.length}</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Chưa đọc</Text>
-                        <View style={styles.unreadValue}>
-                            <Text style={styles.statValue}>{unreadCount}</Text>
-                            {unreadCount > 0 && <View style={styles.redDot} />}
+                {isAuthenticated && (
+                    <View style={styles.statsCard}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Tổng thông báo</Text>
+                            <Text style={styles.statValue}>{notifications.length}</Text>
+                        </View>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Chưa đọc</Text>
+                            <View style={styles.unreadValue}>
+                                <Text style={styles.statValue}>{unreadCount}</Text>
+                                {unreadCount > 0 && <View style={styles.redDot} />}
+                            </View>
+                        </View>
+                        <View style={styles.bellContainer}>
+                            <Ionicons name="notifications-outline" size={32} color={theme.colors.white} />
                         </View>
                     </View>
-                    <View style={styles.bellContainer}>
-                        <Ionicons name="notifications-outline" size={32} color={theme.colors.white} />
+                )}
+            </View>
+
+            {!isAuthenticated ? (
+                renderLoginPrompt()
+            ) : (
+                <>
+                    {/* Filter Tabs */}
+                    <View style={styles.filterContainer}>
+                        <TouchableOpacity
+                            style={[
+                                styles.filterTab,
+                                activeFilter === 'all' && styles.filterTabActive,
+                            ]}
+                            onPress={() => setActiveFilter('all')}
+                        >
+                            <Text style={[
+                                styles.filterTabText,
+                                activeFilter === 'all' && styles.filterTabTextActive,
+                            ]}>
+                                Tất cả ({notifications.length})
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                styles.filterTab,
+                                activeFilter === 'unread' && styles.filterTabActive,
+                            ]}
+                            onPress={() => setActiveFilter('unread')}
+                        >
+                            <Text style={[
+                                styles.filterTabText,
+                                activeFilter === 'unread' && styles.filterTabTextActive,
+                            ]}>
+                                Chưa đọc ({unreadCount})
+                            </Text>
+                            {unreadCount > 0 && <View style={styles.filterDot} />}
+                        </TouchableOpacity>
                     </View>
-                </View>
-            </View>
 
-            {/* Filter Tabs */}
-            <View style={styles.filterContainer}>
-                <TouchableOpacity
-                    style={[
-                        styles.filterTab,
-                        activeFilter === 'all' && styles.filterTabActive,
-                    ]}
-                    onPress={() => setActiveFilter('all')}
-                >
-                    <Text style={[
-                        styles.filterTabText,
-                        activeFilter === 'all' && styles.filterTabTextActive,
-                    ]}>
-                        Tất cả ({notifications.length})
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[
-                        styles.filterTab,
-                        activeFilter === 'unread' && styles.filterTabActive,
-                    ]}
-                    onPress={() => setActiveFilter('unread')}
-                >
-                    <Text style={[
-                        styles.filterTabText,
-                        activeFilter === 'unread' && styles.filterTabTextActive,
-                    ]}>
-                        Chưa đọc ({unreadCount})
-                    </Text>
-                    {unreadCount > 0 && <View style={styles.filterDot} />}
-                </TouchableOpacity>
-            </View>
+                    {/* Notifications List */}
+                    <FlatList
+                        data={getFilteredNotifications()}
+                        renderItem={renderNotification}
+                        keyExtractor={(item) => item.id.toString()}
+                        style={styles.list}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="notifications-off-outline" size={64} color={theme.colors.secondary} />
+                                <Text style={styles.emptyTitle}>Không có thông báo</Text>
+                                <Text style={styles.emptyText}>
+                                    Bạn chưa có thông báo nào.
+                                </Text>
+                            </View>
+                        }
+                    />
 
-            {/* Notifications List */}
-            <FlatList
-                data={getFilteredNotifications()}
-                renderItem={renderNotification}
-                keyExtractor={(item) => item.id.toString()}
-                style={styles.list}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="notifications-off-outline" size={64} color={theme.colors.secondary} />
-                        <Text style={styles.emptyTitle}>Không có thông báo</Text>
-                        <Text style={styles.emptyText}>
-                            Bạn chưa có thông báo nào.
-                        </Text>
-                    </View>
-                }
-            />
-
-            {/* Mark All as Read Button */}
-            <View style={styles.bottomAction}>
-                <TouchableOpacity
-                    style={styles.markAllBtn}
-                    onPress={handleMarkAllAsRead}
-                >
-                    <Ionicons name="checkmark" size={20} color={theme.colors.white} />
-                    <Text style={styles.markAllText}>Đánh dấu tất cả đã đọc</Text>
-                </TouchableOpacity>
-            </View>
+                    {/* Mark All as Read Button */}
+                    {notifications.length > 0 && (
+                        <View style={styles.bottomAction}>
+                            <TouchableOpacity
+                                style={styles.markAllBtn}
+                                onPress={handleMarkAllAsRead}
+                            >
+                                <Ionicons name="checkmark" size={20} color={theme.colors.white} />
+                                <Text style={styles.markAllText}>Đánh dấu tất cả đã đọc</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </>
+            )}
         </SafeAreaView>
     );
 }
@@ -464,5 +541,35 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: theme.colors.foregroundMuted,
         textAlign: 'center',
+    },
+    loginContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: theme.spacing.xl,
+    },
+    loginTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: theme.colors.foreground,
+        marginTop: theme.spacing.lg,
+        marginBottom: theme.spacing.sm,
+    },
+    loginText: {
+        fontSize: 14,
+        color: theme.colors.foregroundMuted,
+        textAlign: 'center',
+        marginBottom: theme.spacing.xl,
+    },
+    loginBtn: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.xl,
+        paddingVertical: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+    },
+    loginBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.white,
     },
 });

@@ -12,6 +12,9 @@ import { PaymentModule } from './payment/payment.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { FavoriteModule } from './favorite/favorite.module';
+import { NotificationModule } from './notification/notification.module';
+import { MessageModule } from './message/message.module';
 
 @Module({
   imports: [
@@ -29,8 +32,12 @@ import { HealthModule } from './health/health.module';
     PaymentModule,
     RevenueModule,
     HealthModule,
+    FavoriteModule,
+    NotificationModule,
+    MessageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
+

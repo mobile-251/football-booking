@@ -32,8 +32,10 @@ class ApiService {
 
 		// Add auth interceptor
 		this.client.interceptors.request.use((config) => {
+			console.log('[API] Request to:', config.url, 'Token exists:', !!this.accessToken);
 			if (this.accessToken) {
 				config.headers.Authorization = `Bearer ${this.accessToken}`;
+				console.log('[API] Added Authorization header');
 			}
 			return config;
 		});
@@ -49,6 +51,7 @@ class ApiService {
 	}
 
 	setAccessToken(token: string | null) {
+		console.log('[API] setAccessToken called, token length:', token?.length);
 		this.accessToken = token;
 	}
 
@@ -56,12 +59,20 @@ class ApiService {
 		this.refreshToken = token;
 	}
 
+	// Check if user is authenticated
+	get isAuthenticated(): boolean {
+		return !!this.accessToken;
+	}
+
 	// Auth endpoints
 	async login(email: string, password: string): Promise<AuthResponse> {
+		console.log('[API] Attempting login for:', email);
 		const response = await this.client.post<AuthResponse>('/auth/login', { email, password });
-		this.accessToken = response.data.accessToken;
-		this.refreshToken = response.data.refreshToken;
+		console.log('[API] Login response received, token length:', response.data.access_token?.length);
+		this.accessToken = response.data.access_token;
+		this.refreshToken = response.data.refresh_token;
 		this.currentUser = response.data.user;
+		console.log('[API] Token set - accessToken exists:', !!this.accessToken);
 		return response.data;
 	}
 
@@ -72,8 +83,8 @@ class ApiService {
 		phoneNumber?: string;
 	}): Promise<AuthResponse> {
 		const response = await this.client.post<AuthResponse>('/auth/register', data);
-		this.accessToken = response.data.accessToken;
-		this.refreshToken = response.data.refreshToken;
+		this.accessToken = response.data.access_token;
+		this.refreshToken = response.data.refresh_token;
 		return response.data;
 	}
 
@@ -85,12 +96,22 @@ class ApiService {
 				headers: { Authorization: `Bearer ${this.refreshToken}` },
 			}
 		);
-		this.accessToken = response.data.accessToken;
+		this.accessToken = response.data.access_token;
 		return response.data;
 	}
 
 	async getProfile(): Promise<User> {
 		const response = await this.client.get<User>('/auth/profile');
+		return response.data;
+	}
+
+	async updateProfile(data: { fullName?: string; phoneNumber?: string }): Promise<User> {
+		if (!this.currentUser) {
+			throw new Error('No user logged in');
+		}
+		const response = await this.client.patch<User>(`/users/${this.currentUser.id}`, data);
+		// Update cached user data
+		this.currentUser = { ...this.currentUser, ...response.data };
 		return response.data;
 	}
 
@@ -133,6 +154,11 @@ class ApiService {
 
 	async getField(id: number): Promise<Field> {
 		const response = await this.client.get<Field>(`/fields/${id}`);
+		return response.data;
+	}
+
+	async getFieldStats(): Promise<{ total: number; byType: Record<string, number>; minPrice: number }> {
+		const response = await this.client.get('/fields/stats');
 		return response.data;
 	}
 
@@ -234,12 +260,87 @@ class ApiService {
 		await this.client.delete(`/reviews/${id}`);
 	}
 
+	// Favorites endpoints
+	async getFavorites(): Promise<any[]> {
+		const response = await this.client.get('/favorites');
+		return response.data;
+	}
+
+	async addFavorite(fieldId: number): Promise<any> {
+		const response = await this.client.post(`/favorites/${fieldId}`);
+		return response.data;
+	}
+
+	async removeFavorite(fieldId: number): Promise<void> {
+		await this.client.delete(`/favorites/${fieldId}`);
+	}
+
+	async checkFavorite(fieldId: number): Promise<{ isFavorite: boolean }> {
+		const response = await this.client.get(`/favorites/${fieldId}/check`);
+		return response.data;
+	}
+
+	async toggleFavorite(fieldId: number): Promise<{ isFavorite: boolean; message: string }> {
+		const response = await this.client.post(`/favorites/${fieldId}/toggle`);
+		return response.data;
+	}
+
+	// Notifications endpoints
+	async getNotifications(unreadOnly?: boolean): Promise<any[]> {
+		const response = await this.client.get('/notifications', {
+			params: { unreadOnly: unreadOnly ? 'true' : undefined },
+		});
+		return response.data;
+	}
+
+	async getUnreadNotificationCount(): Promise<{ unreadCount: number }> {
+		const response = await this.client.get('/notifications/unread-count');
+		return response.data;
+	}
+
+	async markNotificationAsRead(id: number): Promise<any> {
+		const response = await this.client.patch(`/notifications/${id}/read`);
+		return response.data;
+	}
+
+	async markAllNotificationsAsRead(): Promise<{ message: string }> {
+		const response = await this.client.patch('/notifications/read-all');
+		return response.data;
+	}
+
+	async deleteNotification(id: number): Promise<void> {
+		await this.client.delete(`/notifications/${id}`);
+	}
+
+	// Messaging endpoints
+	async getConversations(): Promise<any[]> {
+		const response = await this.client.get('/conversations');
+		return response.data;
+	}
+
+	async getMessages(conversationId: number): Promise<any[]> {
+		const response = await this.client.get(`/conversations/${conversationId}/messages`);
+		return response.data;
+	}
+
+	async sendMessage(conversationId: number, content: string): Promise<any> {
+		const response = await this.client.post(`/conversations/${conversationId}/messages`, { content });
+		return response.data;
+	}
+
+	async startConversation(fieldId: number, message?: string): Promise<any> {
+		const response = await this.client.post('/conversations/start', { fieldId, message });
+		return response.data;
+	}
+
 	// Logout
 	logout() {
 		this.accessToken = null;
 		this.refreshToken = null;
+		this.currentUser = null;
 	}
 }
 
 export const api = new ApiService();
 export default api;
+

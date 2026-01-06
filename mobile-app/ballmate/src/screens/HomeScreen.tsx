@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import {
     Image,
     ActivityIndicator,
     RefreshControl,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,19 +21,22 @@ import { Field, FieldType, FIELD_TYPE_LABELS } from '../types/types';
 import { api } from '../services/api';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import FieldCard from '../components/FieldCard';
+import { formatPrice } from '../utils/formatters';
+import * as Location from 'expo-location';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const CATEGORIES = [
-    { key: 'all', label: 'Tất cả', count: 36 },
-    { key: 'FIELD_5VS5', label: 'Sân 5', count: 12 },
-    { key: 'FIELD_7VS7', label: 'Sân 7', count: 12 },
-    { key: 'FIELD_11VS11', label: 'Sân 11', count: 5 },
-];
+interface CategoryItem {
+    key: string;
+    label: string;
+    count: number;
+}
 
-const QUICK_FILTERS = [
+type QuickFilterKey = 'near' | 'available' | 'rating' | 'popular';
+
+const QUICK_FILTERS: { key: QuickFilterKey; label: string; icon: string }[] = [
     { key: 'near', label: 'Gần tôi nhất', icon: 'location-outline' },
-    { key: 'available', label: 'Còn trống', icon: 'checkmark-circle-outline', active: true },
+    { key: 'available', label: 'Còn trống', icon: 'checkmark-circle-outline' },
     { key: 'rating', label: 'Đánh giá cao', icon: 'star-outline' },
     { key: 'popular', label: 'Phổ biến', icon: 'trending-up-outline' },
 ];
@@ -40,90 +44,226 @@ const QUICK_FILTERS = [
 export default function HomeScreen() {
     const navigation = useNavigation<NavigationProp>();
     const [searchQuery, setSearchQuery] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
+    const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+    const [searchSuggestions, setSearchSuggestions] = useState<Field[]>([]);
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const [selectedFilter, setSelectedFilter] = useState('available');
+    const [selectedFilter, setSelectedFilter] = useState<QuickFilterKey>('available');
     const [fields, setFields] = useState<Field[]>([]);
+    const [allFields, setAllFields] = useState<Field[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [categories, setCategories] = useState<CategoryItem[]>([
+        { key: 'all', label: 'Tất cả', count: 0 },
+        { key: 'FIELD_5VS5', label: 'Sân 5', count: 0 },
+        { key: 'FIELD_7VS7', label: 'Sân 7', count: 0 },
+        { key: 'FIELD_11VS11', label: 'Sân 11', count: 0 },
+    ]);
+    const [stats, setStats] = useState<{ total: number; minPrice: number }>({ total: 0, minPrice: 0 });
+    const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
+    const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
-        loadFields();
-    }, [selectedCategory]);
+        loadInitialData();
+        loadFavorites();
+    }, []);
 
-    const loadFields = async () => {
+    useEffect(() => {
+        filterFields();
+    }, [selectedCategory, selectedFilter, appliedSearch, allFields]);
+
+    const loadInitialData = async () => {
         try {
             setLoading(true);
-            const filter = selectedCategory !== 'all'
-                ? { fieldType: selectedCategory as FieldType }
-                : undefined;
-            const data = await api.getFields(filter);
-            setFields(data);
+            const [fieldsData, statsData] = await Promise.all([api.getFields(), api.getFieldStats()]);
+            setAllFields(fieldsData);
+            setStats({ total: statsData.total, minPrice: statsData.minPrice });
+            setCategories([
+                { key: 'all', label: 'Tất cả', count: statsData.total },
+                { key: 'FIELD_5VS5', label: 'Sân 5', count: statsData.byType.FIELD_5VS5 || 0 },
+                { key: 'FIELD_7VS7', label: 'Sân 7', count: statsData.byType.FIELD_7VS7 || 0 },
+                { key: 'FIELD_11VS11', label: 'Sân 11', count: statsData.byType.FIELD_11VS11 || 0 },
+            ]);
         } catch (error) {
             console.error('Failed to load fields:', error);
-            // Mock data for demo
-            setFields([
-                {
-                    id: 1,
-                    name: 'Sân bóng mini Bắc Rạch Chiếc',
-                    venueId: 1,
-                    fieldType: 'FIELD_5VS5',
-                    pricePerHour: 200000,
-                    description: 'Sân cỏ nhân tạo chất lượng cao',
-                    images: ['https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800'],
-                    isActive: true,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    venue: {
-                        id: 1,
-                        name: 'Khu thể thao Rạch Chiếc',
-                        address: 'Đường 410, Phước Long A, Quận 9, TP.HCM',
-                        city: 'TP.HCM',
-                        openTime: '00:00',
-                        closeTime: '24:00',
-                        facilities: ['Parking', 'Shower'],
-                        images: [],
-                        ownerId: 1,
-                        isActive: true,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                    },
-                },
-                {
-                    id: 2,
-                    name: 'Sân bóng Phú Thọ',
-                    venueId: 2,
-                    fieldType: 'FIELD_7VS7',
-                    pricePerHour: 350000,
-                    description: 'Sân tiêu chuẩn FIFA',
-                    images: ['https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800'],
-                    isActive: true,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    venue: {
-                        id: 2,
-                        name: 'CLB Thể thao Phú Thọ',
-                        address: '1 Lữ Gia, Quận 11, TP.HCM',
-                        city: 'TP.HCM',
-                        openTime: '06:00',
-                        closeTime: '22:00',
-                        facilities: ['Parking', 'Cafe', 'Shower'],
-                        images: [],
-                        ownerId: 2,
-                        isActive: true,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                    },
-                },
-            ]);
+            setAllFields([]);
         } finally {
             setLoading(false);
         }
     };
 
+    const loadFavorites = async () => {
+        try {
+            const data = await api.getFavorites();
+            setFavoriteIds(new Set(data.map((fav: any) => fav.fieldId).filter(Boolean)));
+        } catch {
+            // Not authenticated or endpoint failed; keep empty set.
+            setFavoriteIds(new Set());
+        }
+    };
+
+    const handleToggleFavorite = async (fieldId: number) => {
+        let previousHas = false;
+        setFavoriteIds((prev) => {
+            const next = new Set(prev);
+            previousHas = next.has(fieldId);
+            if (previousHas) next.delete(fieldId);
+            else next.add(fieldId);
+            return next;
+        });
+
+        try {
+            const { isFavorite } = await api.toggleFavorite(fieldId);
+            setFavoriteIds((prev) => {
+                const next = new Set(prev);
+                if (isFavorite) next.add(fieldId);
+                else next.delete(fieldId);
+                return next;
+            });
+        } catch (error) {
+            setFavoriteIds((prev) => {
+                const next = new Set(prev);
+                if (previousHas) next.add(fieldId);
+                else next.delete(fieldId);
+                return next;
+            });
+            console.error('Failed to toggle favorite:', error);
+        }
+    };
+
+    // Calculate distance between two coordinates using Haversine formula
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+        const R = 6371; // Earth's radius in km
+        const dLat = ((lat2 - lat1) * Math.PI) / 180;
+        const dLon = ((lon2 - lon1) * Math.PI) / 180;
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    };
+
+    // Request location permission
+    const requestLocationPermission = async () => {
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+                setLocationPermission(true);
+                const location = await Location.getCurrentPositionAsync({});
+                setUserLocation({
+                    lat: location.coords.latitude,
+                    lng: location.coords.longitude,
+                });
+                return true;
+            } else {
+                setLocationPermission(false);
+                Alert.alert('Quyền truy cập vị trí', 'Để sử dụng tính năng "Gần tôi nhất", bạn cần cho phép truy cập vị trí.', [
+                    { text: 'Đã hiểu', style: 'default' },
+                ]);
+                return false;
+            }
+        } catch (error) {
+            console.error('Location error:', error);
+            return false;
+        }
+    };
+
+    // Handle near filter - check location permission first
+    const handleFilterSelect = async (filterKey: QuickFilterKey) => {
+        if (filterKey === 'near' && !userLocation) {
+            const hasPermission = await requestLocationPermission();
+            if (!hasPermission) return;
+        }
+        setSelectedFilter(filterKey);
+    };
+
+    const filterFields = useCallback(() => {
+        let result = [...allFields];
+
+        // Filter by category
+        if (selectedCategory !== 'all') {
+            result = result.filter((f) => f.fieldType === selectedCategory);
+        }
+
+        // Filter by search query
+        if (appliedSearch) {
+            const query = appliedSearch.toLowerCase();
+            result = result.filter(
+                (f) =>
+                    f.name.toLowerCase().includes(query) ||
+                    f.venue?.address?.toLowerCase().includes(query) ||
+                    f.venue?.name?.toLowerCase().includes(query)
+            );
+        }
+
+        // Sort by quick filter
+        switch (selectedFilter) {
+            case 'near':
+                if (userLocation) {
+                    result = result
+                        .map((f) => {
+                            const fieldLat = f.venue?.latitude || 0;
+                            const fieldLng = f.venue?.longitude || 0;
+                            const distance = calculateDistance(userLocation.lat, userLocation.lng, fieldLat, fieldLng);
+                            return { ...f, distance };
+                        })
+                        .sort((a, b) => (a.distance || 999) - (b.distance || 999));
+                }
+                break;
+            case 'rating':
+                result.sort((a, b) => {
+                    const aRating = a.reviews?.length ? a.reviews.reduce((sum, r) => sum + r.rating, 0) / a.reviews.length : 0;
+                    const bRating = b.reviews?.length ? b.reviews.reduce((sum, r) => sum + r.rating, 0) / b.reviews.length : 0;
+                    return bRating - aRating;
+                });
+                break;
+            case 'popular':
+                result.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
+                break;
+            case 'available':
+                result = result.filter((f) => f.isActive);
+                break;
+        }
+
+        setFields(result);
+    }, [allFields, selectedCategory, selectedFilter, appliedSearch, userLocation]);
+
     const onRefresh = async () => {
         setRefreshing(true);
-        await loadFields();
+        await loadInitialData();
         setRefreshing(false);
+    };
+
+    const handleSearch = () => {
+        setAppliedSearch(searchQuery);
+        setShowSearchDropdown(false);
+    };
+
+    const handleSearchChange = (text: string) => {
+        setSearchQuery(text);
+        const q = text.trim().toLowerCase();
+        if (q.length >= 1) {
+            const suggestions = allFields
+                .filter(
+                    (f) =>
+                        (f.name || '').toLowerCase().includes(q) ||
+                        (f.venue?.name || '').toLowerCase().includes(q) ||
+                        (f.venue?.address || '').toLowerCase().includes(q)
+                )
+                .slice(0, 5);
+            setSearchSuggestions(suggestions);
+            setShowSearchDropdown(suggestions.length > 0);
+        } else {
+            setSearchSuggestions([]);
+            setShowSearchDropdown(false);
+        }
+    };
+
+    const handleSuggestionPress = (field: Field) => {
+        setShowSearchDropdown(false);
+        setSearchQuery('');
+        navigation.navigate('FieldDetail', { fieldId: field.id });
     };
 
     const handleFieldPress = (field: Field) => {
@@ -134,9 +274,7 @@ export default function HomeScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
                 {/* Header */}
                 <View style={styles.header}>
@@ -144,41 +282,81 @@ export default function HomeScreen() {
                         <View style={styles.locationInfo}>
                             <Text style={styles.locationLabel}>Vị trí hiện tại</Text>
                             <View style={styles.locationValue}>
-                                <Ionicons name="location" size={16} color={theme.colors.white} />
+                                <Ionicons name='location' size={16} color={theme.colors.white} />
                                 <Text style={styles.locationText}>Thủ Đức, TP.HCM</Text>
-                                <Ionicons name="chevron-down" size={16} color={theme.colors.white} />
+                                <Ionicons name='chevron-down' size={16} color={theme.colors.white} />
                             </View>
                         </View>
-                        <TouchableOpacity style={styles.notificationBtn}>
-                            <Ionicons name="notifications-outline" size={24} color={theme.colors.white} />
-                            <View style={styles.notificationBadge}>
-                                <Text style={styles.badgeText}>3</Text>
-                            </View>
+                        <TouchableOpacity style={styles.notificationBtn} onPress={() => navigation.navigate('Notifications')}>
+                            <Ionicons name='notifications-outline' size={24} color={theme.colors.white} />
                         </TouchableOpacity>
                     </View>
 
                     {/* Logo */}
                     <View style={styles.logoContainer}>
-                        <Ionicons name="football" size={28} color={theme.colors.accent} />
+                        <Ionicons name='football' size={28} color={theme.colors.accent} />
                         <Text style={styles.logoText}>BallMate</Text>
                     </View>
                     <Text style={styles.tagline}>Đặt sân nhanh chóng, chơi bóng hết mình</Text>
 
                     {/* Search Bar */}
-                    <View style={styles.searchContainer}>
-                        <View style={styles.searchInputWrapper}>
-                            <Ionicons name="search" size={20} color={theme.colors.foregroundMuted} />
-                            <TextInput
-                                style={styles.searchInput}
-                                placeholder="Tìm sân theo tên hoặc địa điểm..."
-                                placeholderTextColor={theme.colors.foregroundMuted}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
+                    <View style={styles.searchWrapper}>
+                        <View style={styles.searchContainer}>
+                            <View style={styles.searchInputWrapper}>
+                                <Ionicons name='search' size={20} color={theme.colors.foregroundMuted} />
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder='Tìm sân theo tên hoặc địa điểm...'
+                                    placeholderTextColor={theme.colors.foregroundMuted}
+                                    value={searchQuery}
+                                    onChangeText={handleSearchChange}
+                                    onSubmitEditing={handleSearch}
+                                    returnKeyType='search'
+                                    onFocus={() => searchQuery.length > 0 && searchSuggestions.length > 0 && setShowSearchDropdown(true)}
+                                />
+                                {searchQuery.length > 0 && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setSearchQuery('');
+                                            setAppliedSearch('');
+                                            setShowSearchDropdown(false);
+                                        }}
+                                    >
+                                        <Ionicons name='close-circle' size={18} color={theme.colors.foregroundMuted} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+                                <Text style={styles.searchButtonText}>Tìm kiếm</Text>
+                            </TouchableOpacity>
                         </View>
-                        <TouchableOpacity style={styles.searchButton}>
-                            <Text style={styles.searchButtonText}>Tìm kiếm</Text>
-                        </TouchableOpacity>
+
+                        {/* Search Dropdown */}
+                        {showSearchDropdown && searchSuggestions.length > 0 && (
+                            <View style={styles.searchDropdown}>
+                                {searchSuggestions.map((field, index) => (
+                                    <TouchableOpacity
+                                        key={field.id}
+                                        style={[
+                                            styles.searchSuggestionItem,
+                                            index < searchSuggestions.length - 1 && styles.searchSuggestionBorder,
+                                        ]}
+                                        onPress={() => handleSuggestionPress(field)}
+                                    >
+                                        <View style={styles.suggestionIcon}>
+                                            <Ionicons name='football-outline' size={20} color={theme.colors.primary} />
+                                        </View>
+                                        <View style={styles.suggestionContent}>
+                                            <Text style={styles.suggestionTitle}>{field.name}</Text>
+                                            <Text style={styles.suggestionSubtitle}>
+                                                {field.venue?.name || 'Sân bóng'} • {FIELD_TYPE_LABELS[field.fieldType]}
+                                            </Text>
+                                        </View>
+                                        <Ionicons name='chevron-forward' size={18} color={theme.colors.foregroundMuted} />
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -189,34 +367,21 @@ export default function HomeScreen() {
                         <View style={styles.sectionHeader}>
                             <Text style={styles.sectionTitle}>Danh mục</Text>
                             <TouchableOpacity>
-                                <Ionicons name="options-outline" size={20} color={theme.colors.foregroundMuted} />
+                                <Ionicons name='options-outline' size={20} color={theme.colors.foregroundMuted} />
                             </TouchableOpacity>
                         </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             <View style={styles.categoryRow}>
-                                {CATEGORIES.map((cat) => (
+                                {categories.map((cat) => (
                                     <TouchableOpacity
                                         key={cat.key}
-                                        style={[
-                                            styles.categoryChip,
-                                            selectedCategory === cat.key && styles.categoryChipActive,
-                                        ]}
+                                        style={[styles.categoryChip, selectedCategory === cat.key && styles.categoryChipActive]}
                                         onPress={() => setSelectedCategory(cat.key)}
                                     >
-                                        <Text
-                                            style={[
-                                                styles.categoryText,
-                                                selectedCategory === cat.key && styles.categoryTextActive,
-                                            ]}
-                                        >
+                                        <Text style={[styles.categoryText, selectedCategory === cat.key && styles.categoryTextActive]}>
                                             {cat.label}
                                         </Text>
-                                        <Text
-                                            style={[
-                                                styles.categoryCount,
-                                                selectedCategory === cat.key && styles.categoryCountActive,
-                                            ]}
-                                        >
+                                        <Text style={[styles.categoryCount, selectedCategory === cat.key && styles.categoryCountActive]}>
                                             {cat.count}
                                         </Text>
                                     </TouchableOpacity>
@@ -232,23 +397,15 @@ export default function HomeScreen() {
                             {QUICK_FILTERS.map((filter) => (
                                 <TouchableOpacity
                                     key={filter.key}
-                                    style={[
-                                        styles.filterChip,
-                                        selectedFilter === filter.key && styles.filterChipActive,
-                                    ]}
-                                    onPress={() => setSelectedFilter(filter.key)}
+                                    style={[styles.filterChip, selectedFilter === filter.key && styles.filterChipActive]}
+                                    onPress={() => handleFilterSelect(filter.key)}
                                 >
                                     <Ionicons
                                         name={filter.icon as any}
                                         size={16}
                                         color={selectedFilter === filter.key ? theme.colors.white : theme.colors.foreground}
                                     />
-                                    <Text
-                                        style={[
-                                            styles.filterText,
-                                            selectedFilter === filter.key && styles.filterTextActive,
-                                        ]}
-                                    >
+                                    <Text style={[styles.filterText, selectedFilter === filter.key && styles.filterTextActive]}>
                                         {filter.label}
                                     </Text>
                                 </TouchableOpacity>
@@ -259,14 +416,32 @@ export default function HomeScreen() {
                     {/* Stats */}
                     <View style={styles.statsRow}>
                         <View>
-                            <Text style={styles.statsNumber}>36 sân bóng đá</Text>
-                            <Text style={styles.statsLabel}>Trong bán kính 5km</Text>
+                            <Text style={styles.statsNumber}>{stats.total} sân bóng đá</Text>
                         </View>
                         <View style={styles.statsRight}>
-                            <Text style={styles.priceRange}>Từ 120.000đ/giờ</Text>
-                            <Text style={styles.priceLabel}>Giá trung bình</Text>
+                            <Text style={styles.priceRange}>
+                                {stats.minPrice > 0 ? `Từ ${formatPrice(stats.minPrice)}đ/giờ` : 'Đang cập nhật'}
+                            </Text>
+                            <Text style={styles.priceLabel}>Giá thấp nhất</Text>
                         </View>
                     </View>
+
+                    {/* Search Results Info */}
+                    {appliedSearch && (
+                        <View style={styles.searchResultsInfo}>
+                            <Text style={styles.searchResultsText}>
+                                Tìm thấy {fields.length} kết quả cho "{appliedSearch}"
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setSearchQuery('');
+                                    setAppliedSearch('');
+                                }}
+                            >
+                                <Text style={styles.clearSearchText}>Xóa</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {/* Field List */}
                     <View style={styles.section}>
@@ -278,15 +453,33 @@ export default function HomeScreen() {
                         </View>
 
                         {loading ? (
-                            <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
+                            <ActivityIndicator size='large' color={theme.colors.primary} style={styles.loader} />
+                        ) : fields.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <Ionicons name='football-outline' size={48} color={theme.colors.foregroundMuted} />
+                                <Text style={styles.emptyStateTitle}>Không tìm thấy sân</Text>
+                                <Text style={styles.emptyStateText}>
+                                    {appliedSearch ? 'Thử tìm kiếm với từ khóa khác' : 'Chưa có sân nào trong danh mục này'}
+                                </Text>
+                            </View>
                         ) : (
-                            fields.map((field) => (
-                                <FieldCard
-                                    key={field.id}
-                                    field={field}
-                                    onPress={() => handleFieldPress(field)}
-                                />
-                            ))
+                            fields.map((field) => {
+                                const fieldWithDistance = field as Field & { distance?: number };
+                                return (
+                                    <FieldCard
+                                        key={field.id}
+                                        field={field}
+                                        onPress={() => handleFieldPress(field)}
+                                        isFavorite={favoriteIds.has(field.id)}
+                                        onToggleFavorite={() => handleToggleFavorite(field.id)}
+                                        distance={
+                                            userLocation && fieldWithDistance.distance !== undefined
+                                                ? `${fieldWithDistance.distance.toFixed(1)} km`
+                                                : undefined
+                                        }
+                                    />
+                                );
+                            })
                         )}
                     </View>
                 </View>
@@ -306,6 +499,9 @@ const styles = StyleSheet.create({
         paddingBottom: theme.spacing.xl,
         borderBottomLeftRadius: 24,
         borderBottomRightRadius: 24,
+        position: 'relative',
+        zIndex: 10,
+        elevation: 10,
     },
     locationRow: {
         flexDirection: 'row',
@@ -333,22 +529,6 @@ const styles = StyleSheet.create({
         position: 'relative',
         padding: 8,
     },
-    notificationBadge: {
-        position: 'absolute',
-        top: 4,
-        right: 4,
-        backgroundColor: theme.colors.accent,
-        borderRadius: 10,
-        width: 18,
-        height: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    badgeText: {
-        color: theme.colors.white,
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
     logoContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -364,6 +544,10 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: 'rgba(255,255,255,0.8)',
         marginBottom: theme.spacing.lg,
+    },
+    searchWrapper: {
+        position: 'relative',
+        zIndex: 100,
     },
     searchContainer: {
         flexDirection: 'row',
@@ -398,6 +582,9 @@ const styles = StyleSheet.create({
     },
     content: {
         padding: theme.spacing.lg,
+        paddingBottom: 100,
+        position: 'relative',
+        zIndex: 1,
     },
     section: {
         marginBottom: theme.spacing.xl,
@@ -509,7 +696,88 @@ const styles = StyleSheet.create({
         color: theme.colors.foregroundMuted,
         marginTop: 2,
     },
+    searchResultsInfo: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: theme.spacing.md,
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.sm,
+        backgroundColor: theme.colors.background,
+        borderRadius: theme.borderRadius.sm,
+    },
+    searchResultsText: {
+        fontSize: 13,
+        color: theme.colors.foregroundMuted,
+    },
+    clearSearchText: {
+        fontSize: 13,
+        color: theme.colors.primary,
+        fontWeight: '500',
+    },
     loader: {
         marginVertical: 40,
+    },
+    emptyState: {
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    emptyStateTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.colors.foreground,
+        marginTop: theme.spacing.md,
+    },
+    emptyStateText: {
+        fontSize: 14,
+        color: theme.colors.foregroundMuted,
+        textAlign: 'center',
+        marginTop: theme.spacing.sm,
+    },
+    searchDropdown: {
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        backgroundColor: theme.colors.white,
+        borderRadius: theme.borderRadius.lg,
+        marginTop: 8,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        zIndex: 1000,
+    },
+    searchSuggestionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: theme.spacing.md,
+    },
+    searchSuggestionBorder: {
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+    },
+    suggestionIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: theme.colors.primary + '20',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    suggestionContent: {
+        flex: 1,
+        marginLeft: theme.spacing.md,
+    },
+    suggestionTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.foreground,
+    },
+    suggestionSubtitle: {
+        fontSize: 12,
+        color: theme.colors.foregroundMuted,
+        marginTop: 2,
     },
 });

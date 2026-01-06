@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
+import { api } from '../services/api';
+import { formatPrice } from '../utils/formatters';
 
 interface Transaction {
 	id: number;
@@ -16,44 +18,46 @@ interface Transaction {
 	transactionId: string;
 }
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-	{
-		id: 1,
-		fieldName: 'Sân Bóng Đá Làng Đại Học',
-		fieldType: 'Sân 5, 7 người',
-		date: '09/10/2025',
-		time: '18:51',
-		paymentMethod: 'MoMo',
-		amount: 3550000,
-		transactionId: 'TXN001',
-	},
-	{
-		id: 2,
-		fieldName: 'Sân Bóng Đá Làng Đại Học',
-		fieldType: 'Sân 5, 7 người',
-		date: '09/10/2025',
-		time: '18:51',
-		paymentMethod: 'MoMo',
-		amount: 3550000,
-		transactionId: 'TXN001',
-	},
-	{
-		id: 3,
-		fieldName: 'Sân Bóng Đá Làng Đại Học',
-		fieldType: 'Sân 5, 7 người',
-		date: '09/10/2025',
-		time: '18:51',
-		paymentMethod: 'MoMo',
-		amount: 3550000,
-		transactionId: 'TXN001',
-	},
-];
-
 export default function TransactionHistoryScreen() {
 	const navigation = useNavigation();
+	const [transactions, setTransactions] = useState<Transaction[]>([]);
+	const [loading, setLoading] = useState(true);
 
-	const totalThisMonth = MOCK_TRANSACTIONS.reduce((sum, t) => sum + t.amount, 0);
-	const transactionCount = MOCK_TRANSACTIONS.length;
+	useEffect(() => {
+		loadTransactions();
+	}, []);
+
+	const loadTransactions = async () => {
+		try {
+			setLoading(true);
+			const payments = await api.getPayments();
+			const mappedTransactions = payments.map((payment: any) => {
+				const createdAt = new Date(payment.createdAt);
+				return {
+					id: payment.id,
+					fieldName: payment.booking?.field?.name || 'Sân bóng',
+					fieldType: payment.booking?.field?.fieldType === 'FIELD_5VS5' ? 'Sân 5 người' :
+						payment.booking?.field?.fieldType === 'FIELD_7VS7' ? 'Sân 7 người' : 'Sân 11 người',
+					date: createdAt.toLocaleDateString('vi-VN'),
+					time: createdAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+					paymentMethod: payment.method === 'CASH' ? 'Tiền mặt' :
+						payment.method === 'MOMO' ? 'MoMo' :
+							payment.method === 'BANK_TRANSFER' ? 'Chuyển khoản' : payment.method,
+					amount: payment.amount,
+					transactionId: `TXN${payment.id.toString().padStart(3, '0')}`,
+				};
+			});
+			setTransactions(mappedTransactions);
+		} catch (error) {
+			console.error('Failed to load transactions:', error);
+			setTransactions([]);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const totalThisMonth = transactions.reduce((sum, t) => sum + t.amount, 0);
+	const transactionCount = transactions.length;
 
 	const renderTransaction = ({ item }: { item: Transaction }) => (
 		<View style={styles.transactionCard}>
@@ -90,6 +94,25 @@ export default function TransactionHistoryScreen() {
 		</View>
 	);
 
+	if (loading) {
+		return (
+			<SafeAreaView style={styles.container} edges={['top']}>
+				<View style={styles.header}>
+					<View style={styles.headerTop}>
+						<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+							<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
+						</TouchableOpacity>
+						<Text style={styles.title}>Lịch sử giao dịch</Text>
+						<View style={{ width: 40 }} />
+					</View>
+				</View>
+				<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+					<ActivityIndicator size="large" color={theme.colors.primary} />
+				</View>
+			</SafeAreaView>
+		);
+	}
+
 	return (
 		<SafeAreaView style={styles.container} edges={['top']}>
 			{/* Header */}
@@ -110,7 +133,7 @@ export default function TransactionHistoryScreen() {
 							<Text style={styles.statLabel}>Tháng này</Text>
 						</View>
 						<Text style={styles.statValue}>{formatPrice(totalThisMonth)}</Text>
-						<Text style={styles.statSub}>+450K so với tháng trước</Text>
+						<Text style={styles.statSub}>{transactionCount} giao dịch</Text>
 					</View>
 					<View style={styles.statCard}>
 						<View style={styles.statHeader}>
@@ -125,7 +148,7 @@ export default function TransactionHistoryScreen() {
 
 			{/* Transactions List */}
 			<FlatList
-				data={MOCK_TRANSACTIONS}
+				data={transactions}
 				renderItem={renderTransaction}
 				keyExtractor={(item) => item.id.toString()}
 				style={styles.list}
