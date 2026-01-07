@@ -199,9 +199,29 @@
     padding: 16px;
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 20px;
     border-bottom: 1px solid #eef2f1;
     font-weight: 600;
+}
+
+.schedule-header button {
+    background: none;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: all 0.2s;
+}
+
+.schedule-header button:hover {
+    background: #f3f4f6;
+    color: #111;
 }
 
 .schedule-grid {
