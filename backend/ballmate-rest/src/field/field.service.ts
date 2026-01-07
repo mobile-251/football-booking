@@ -155,4 +155,84 @@ export class FieldService {
       // minPrice: minPrice?.pricePerHour || 0,
     };
   }
+
+  /**
+   * Get field pricing for a specific date
+   * Returns hourly slots with prices from FieldPricing table
+   */
+  async getFieldPricing(fieldId: number, date: string) {
+    const field = await this.prisma.field.findUnique({
+      where: { id: fieldId },
+      include: {
+        venue: {
+          select: {
+            openTime: true,
+            closeTime: true,
+          },
+        },
+        pricings: true,
+      },
+    });
+
+    if (!field) {
+      throw new NotFoundException(`Field with ID ${fieldId} not found`);
+    }
+
+    // Determine if date is weekday or weekend
+    const dateObj = new Date(date);
+    const dayOfWeek = dateObj.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+    const dayType = isWeekend ? 'WEEKEND' : 'WEEKDAY';
+
+    // Get pricings for the day type
+    const pricings = field.pricings.filter(p => p.dayType === dayType);
+
+    // Parse venue hours (default 6:00-23:00 if not set)
+    const openHour = field.venue?.openTime ? parseInt(field.venue.openTime.split(':')[0]) : 6;
+    const closeHour = field.venue?.closeTime ? parseInt(field.venue.closeTime.split(':')[0]) : 23;
+
+    // Generate hourly slots
+    const slots: {
+      startTime: string;
+      endTime: string;
+      price: number;
+      isPeakHour: boolean;
+    }[] = [];
+
+    for (let hour = openHour; hour < closeHour; hour++) {
+      const startTime = `${hour.toString().padStart(2, '0')}:00`;
+      const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
+      const isPeakHour = hour >= 17 && hour < 21; // 17:00-21:00 is peak
+
+      // Find matching pricing slot
+      let price = 0;
+      for (const pricing of pricings) {
+        const pStart = parseInt(pricing.startTime.split(':')[0]);
+        const pEnd = parseInt(pricing.endTime.split(':')[0]);
+        if (hour >= pStart && hour < pEnd) {
+          price = pricing.price;
+          break;
+        }
+      }
+
+      // If no pricing found, use default based on peak hour
+      if (price === 0) {
+        price = isPeakHour ? 500000 : 300000; // Default prices
+      }
+
+      slots.push({
+        startTime,
+        endTime,
+        price,
+        isPeakHour,
+      });
+    }
+
+    return {
+      fieldId,
+      dayType,
+      date,
+      slots,
+    };
+  }
 }

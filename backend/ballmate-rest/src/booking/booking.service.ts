@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { CompleteBookingDto } from './dto/complete-booking.dto';
 import { BookingStatus, Prisma } from '@prisma/client';
 import { NotificationService } from '../notification/notification.service';
 
@@ -17,8 +18,44 @@ export class BookingService {
     private notificationService: NotificationService,
   ) { }
 
+  /**
+   * Generate unique booking code: BM + 6 alphanumeric chars
+   * Format: BM1A2B3C
+   */
+  private generateBookingCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded I, O, 0, 1 for clarity
+    let code = 'BM';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  /**
+   * Generate unique booking code, retry if collision
+   */
+  private async generateUniqueBookingCode(): Promise<string> {
+    let code = this.generateBookingCode();
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (attempts < maxAttempts) {
+      const existing = await this.prisma.booking.findUnique({
+        where: { bookingCode: code },
+      });
+      if (!existing) {
+        return code;
+      }
+      code = this.generateBookingCode();
+      attempts++;
+    }
+
+    // Fallback: add timestamp suffix
+    return `BM${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  }
+
   async create(createBookingDto: CreateBookingDto) {
-    const { fieldId, startTime, endTime, playerId, totalPrice, note } =
+    const { fieldId, startTime, endTime, playerId, totalPrice, note, customerName, customerPhone } =
       createBookingDto;
 
     const start = new Date(startTime);
@@ -66,8 +103,14 @@ export class BookingService {
       );
     }
 
+    // Generate unique booking code
+    const bookingCode = await this.generateUniqueBookingCode();
+
     const booking = await this.prisma.booking.create({
       data: {
+        bookingCode,
+        customerName,
+        customerPhone,
         fieldId,
         playerId,
         startTime: start,
@@ -202,7 +245,14 @@ export class BookingService {
   }
 
   async confirmBooking(id: number) {
-    await this.findOne(id);
+    const booking = await this.findOne(id);
+
+    // Only allow confirming PENDING bookings
+    if (booking.status !== BookingStatus.PENDING) {
+      throw new BadRequestException(
+        `Cannot confirm booking with status ${booking.status}. Only PENDING bookings can be confirmed.`,
+      );
+    }
 
     return this.prisma.booking.update({
       where: { id },
@@ -225,6 +275,20 @@ export class BookingService {
 
     if (!booking) {
       throw new NotFoundException(`Booking with ID ${id} not found`);
+    }
+
+    // Cannot cancel CONFIRMED bookings
+    if (booking.status === BookingStatus.CONFIRMED) {
+      throw new BadRequestException(
+        'Cannot cancel a confirmed booking. Only PENDING bookings can be cancelled.',
+      );
+    }
+
+    // Cannot cancel already cancelled or completed bookings
+    if (booking.status !== BookingStatus.PENDING) {
+      throw new BadRequestException(
+        `Cannot cancel booking with status ${booking.status}. Only PENDING bookings can be cancelled.`,
+      );
     }
 
     const updatedBooking = await this.prisma.booking.update({
@@ -251,6 +315,41 @@ export class BookingService {
     }
 
     return updatedBooking;
+  }
+
+  /**
+   * Complete booking (check-in) - Player provides booking code to Field Owner
+   */
+  async completeBooking(id: number, completeBookingDto: CompleteBookingDto) {
+    const booking = await this.findOne(id);
+
+    // Verify booking code matches
+    if (booking.bookingCode !== completeBookingDto.bookingCode) {
+      throw new BadRequestException('Invalid booking code');
+    }
+
+    // Only allow completing CONFIRMED bookings
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(
+        `Cannot complete booking with status ${booking.status}. Only CONFIRMED bookings can be completed.`,
+      );
+    }
+
+    return this.prisma.booking.update({
+      where: { id },
+      data: {
+        status: BookingStatus.COMPLETED,
+      },
+      include: {
+        field: {
+          include: {
+            venue: true,
+          },
+        },
+        player: true,
+        payment: true,
+      },
+    });
   }
 
   async remove(id: number) {

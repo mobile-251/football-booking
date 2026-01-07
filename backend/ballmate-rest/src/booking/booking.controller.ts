@@ -12,11 +12,12 @@ import {
 import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
+import { CompleteBookingDto } from './dto/complete-booking.dto';
 import { BookingStatus } from '@prisma/client';
 
 @Controller('bookings')
 export class BookingController {
-  constructor(private readonly bookingService: BookingService) {}
+  constructor(private readonly bookingService: BookingService) { }
 
   @Post()
   create(@Body() createBookingDto: CreateBookingDto) {
@@ -67,6 +68,17 @@ export class BookingController {
   @Patch(':id/cancel')
   cancelBooking(@Param('id', ParseIntPipe) id: number) {
     return this.bookingService.cancelBooking(id);
+  }
+
+  /**
+   * Complete booking (check-in) - Field Owner verifies Player's booking code
+   */
+  @Patch(':id/complete')
+  completeBooking(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() completeBookingDto: CompleteBookingDto,
+  ) {
+    return this.bookingService.completeBooking(id, completeBookingDto);
   }
 
   @Delete(':id')

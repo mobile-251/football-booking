@@ -7,6 +7,12 @@ export class CreateBookingDto {
   @IsNumber()
   playerId: number; // Now refers to Player.id, not User.id
 
+  @IsString()
+  customerName: string; // Họ tên người đặt
+
+  @IsString()
+  customerPhone: string; // SĐT người đặt
+
   @IsISO8601()
   startTime: string;
 
@@ -20,3 +26,4 @@ export class CreateBookingDto {
   @IsString()
   note?: string;
 }
+

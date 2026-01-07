@@ -41,6 +41,18 @@ export class FieldController {
     });
   }
 
+  /**
+   * Get field pricing for a specific date
+   * Query param: date (YYYY-MM-DD)
+   */
+  @Get(':id/pricing')
+  getFieldPricing(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('date') date: string,
+  ) {
+    return this.fieldService.getFieldPricing(id, date);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.fieldService.findOne(id);

@@ -171,6 +171,9 @@ enum BookingStatus {
 
 model Booking {
   id            Int             @id @default(autoincrement())
+  bookingCode   String          @unique  // Mã đặt sân 8 ký tự (BM + 6 chars)
+  customerName  String                   // Họ tên người đặt
+  customerPhone String                   // SĐT người đặt
   fieldId       Int
   playerId      Int
   startTime     DateTime
@@ -188,6 +191,7 @@ model Booking {
   
   @@map("bookings")
   @@index([fieldId, startTime, endTime]) // Index để kiểm tra trùng lịch nhanh
+  @@index([bookingCode])                 // Index cho tra cứu mã đặt sân
 }
 
 // ============================================
