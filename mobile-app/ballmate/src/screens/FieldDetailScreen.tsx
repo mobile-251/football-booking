@@ -407,7 +407,7 @@ export default function FieldDetailScreen() {
 							<Text style={styles.infoTitle}>Tiện ích</Text>
 						</View>
 						<View style={styles.facilitiesRow}>
-							{field.venue?.facilities.map((facility, index) => (
+							{field.venue?.facilities?.map((facility, index) => (
 								<View key={index} style={styles.facilityTag}>
 									<Text style={styles.facilityText}>{facility}</Text>
 								</View>
