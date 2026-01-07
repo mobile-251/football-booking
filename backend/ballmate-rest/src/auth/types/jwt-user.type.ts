@@ -4,4 +4,6 @@ export interface JwtUser {
   fullName: string;
   role: string;
   isActive: boolean;
+  playerId?: number;
+  ownerId?: number;
 }

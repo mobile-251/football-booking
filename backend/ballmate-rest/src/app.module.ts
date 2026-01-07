@@ -15,6 +15,7 @@ import { HealthModule } from './health/health.module';
 import { FavoriteModule } from './favorite/favorite.module';
 import { NotificationModule } from './notification/notification.module';
 import { MessageModule } from './message/message.module';
+import { FileModule } from './file/file.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -37,8 +38,9 @@ import configuration from './config/configuration';
     FavoriteModule,
     NotificationModule,
     MessageModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
