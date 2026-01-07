@@ -1,13 +1,14 @@
 .field-register-container {
   width: 100%;
   min-height: calc(100vh - 64px);
-  padding: 24px;
+  padding: 20px;
 }
 
 
 .field-register-card {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
+  /* Force full width */
+  margin: 0;
   background: white;
   border-radius: 16px;
   padding: 32px;
@@ -15,10 +16,7 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Expand card when sidebar is collapsed */
-.sidebar-collapsed~.main-content .field-register-card {
-  max-width: 1400px;
-}
+/* No max-width limitation needed now */
 
 
 /* Header */

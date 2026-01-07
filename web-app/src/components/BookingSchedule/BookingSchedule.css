@@ -1,0 +1,501 @@
+.booking-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 40px;
+    /* Fix header overlap */
+    padding: 0 20px;
+    /* Add spacing from main sidebar */
+}
+
+.booking-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.booking-top h2 {
+    margin: 0;
+    color: #0F5132;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 24px;
+}
+
+.booking-top p {
+    margin: 4px 0 0;
+    color: #1F6650;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.btn-export {
+    background: #1f6650;
+    color: white;
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.booking-body {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    /* quan trọng */
+}
+
+/* SIDEBAR (Internal) */
+.booking-sidebar {
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    /* Make sidebar sticky */
+    position: sticky;
+    top: 20px;
+    height: fit-content;
+}
+
+.calendar-card,
+.legend-card,
+.stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid #f0f0f0;
+}
+
+.stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #1f2937;
+}
+
+.calendar-header button {
+    background: none;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: all 0.2s;
+}
+
+.calendar-header button:hover {
+    background: #f3f4f6;
+    color: #111;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    text-align: center;
+}
+
+.cal-day {
+    font-size: 13px;
+    color: #9ca3af;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.cal-date {
+    height: 32px;
+    border-radius: 8px;
+    line-height: 32px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    transition: all 0.2s;
+}
+
+.cal-date:hover:not(.active) {
+    background-color: #f3f4f6;
+}
+
+.cal-date.active {
+    background: #1f6650;
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(31, 102, 80, 0.2);
+}
+
+.legend-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #4b5563;
+    font-size: 14px;
+}
+
+.dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+}
+
+.dot.booked {
+    background: #cfe4dc;
+}
+
+.dot.maintenance {
+    background: #f9d2d2;
+}
+
+.dot.empty {
+    background: rgba(255, 255, 255, 0.50);
+    border: 1px solid #d1d5db;
+}
+
+.stat-card span {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.stat-card strong {
+    font-size: 22px;
+}
+
+/* SCHEDULE */
+.schedule {
+    flex: 1;
+    background: white;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    /* CHO PHÉP NÓ DÀI RA */
+}
+
+.schedule-header {
+    padding: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    border-bottom: 1px solid #eef2f1;
+    font-weight: 600;
+}
+
+.schedule-grid {
+    display: grid;
+    grid-template-columns: 80px repeat(6, 1fr);
+    overflow: auto;
+    padding: 16px;
+}
+
+/* TIME */
+.time-column {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #f0f0f0;
+    /* Separator */
+    padding-right: 12px;
+}
+
+.time-spacer {
+    height: 64px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.time-slot {
+    height: 64px;
+    font-size: 13px;
+    color: #9ca3af;
+    display: flex;
+    align-items: flex-start;
+    /* Align time to top line */
+    justify-content: center;
+    padding-top: 8px;
+    /* Slight offset */
+    font-weight: 500;
+}
+
+/* FIELD */
+.field-column {
+    background: white;
+    /* Clean background */
+    border-radius: 12px;
+    position: relative;
+    border: 1px solid #f3f4f6;
+    /* Subtle border */
+    overflow: hidden;
+}
+
+.field-header {
+    position: sticky;
+    top: 0;
+    background: #fdfdfd;
+    padding: 16px 8px;
+    text-align: center;
+    border-bottom: 1px solid #e5e7eb;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.field-name {
+    font-weight: 700;
+    color: #111827;
+    font-size: 15px;
+}
+
+.field-type {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.field-body {
+    position: relative;
+    height: calc(64px * 18);
+    background-image: linear-gradient(#f9fafb 1px, transparent 1px);
+    background-size: 100% 64px;
+    /* Grid lines match hour height */
+}
+
+/* BOOKING */
+.booking-card {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.booking-card.booked {
+    background: #cfe4dc;
+    border-left: 4px solid #1f6650;
+}
+
+.booking-card.maintenance {
+    background: #f9d2d2;
+    border-left: 4px solid #e11d48;
+}
+
+.booking-card:hover {
+    transform: scale(1.03);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+    z-index: 5;
+}
+
+.booking-name {
+    font-weight: 700;
+}
+
+/* MODAL */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background: white;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #1F6650;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #9ca3af;
+    display: flex;
+    padding: 4px;
+    border-radius: 50%;
+    transition: background 0.2s;
+}
+
+.close-btn:hover {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.modal-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.detail-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.detail-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: #eafbe7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.detail-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.detail-info label {
+    color: #6F9A8D;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 16px;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.detail-value,
+.detail-value.highlight,
+.detail-value.money {
+    color: #1F6650;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 24px;
+    text-align: left;
+}
+
+.detail-value.note {
+    font-style: normal;
+    /* Remove italic if user wants uniform style, or keep it. User didn't specify note specifically but "content". I'll keep it simple or inherit. Let's make it match for consistency as requested "mấy cái... gì đó" */
+    font-weight: 400;
+    /* Notes usually lighter? But user said "content" is 600. I will stick to user request for "content" generally. */
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .booking-body {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .booking-sidebar {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+
+    .calendar-card {
+        grid-row: span 2;
+    }
+
+    .schedule {
+        min-height: 500px;
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .booking-page {
+        margin-top: 20px;
+        padding: 0 16px;
+    }
+
+    .booking-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .btn-export {
+        width: 100%;
+    }
+
+    .booking-sidebar {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .schedule-grid {
+        min-width: 800px;
+        /* Force horizontal scroll on small screens */
+    }
+
+    .schedule {
+        overflow-x: auto;
+    }
+}
