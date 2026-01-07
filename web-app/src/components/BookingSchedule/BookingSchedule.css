@@ -203,6 +203,36 @@
     gap: 20px;
     border-bottom: 1px solid #eef2f1;
     font-weight: 600;
+    position: relative;
+}
+
+.date-nav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.field-filter {
+    position: absolute;
+    right: 16px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #374151;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+    outline: none;
+    transition: border 0.2s;
+}
+
+.field-filter:hover {
+    border-color: #9ca3af;
+}
+
+.field-filter:focus {
+    border-color: #1F6650;
 }
 
 .schedule-header button {
@@ -517,5 +547,17 @@
 
     .schedule {
         overflow-x: auto;
+    }
+
+    .schedule-header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px;
+        height: auto;
+    }
+
+    .field-filter {
+        position: static;
+        width: 100%;
     }
 }
