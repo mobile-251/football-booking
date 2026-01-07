@@ -123,7 +123,7 @@ export class VenueService {
   }
 
   async findAll(city?: string) {
-    return this.prisma.venue.findMany({
+    const venues = await this.prisma.venue.findMany({
       where: city ? { city, isActive: true } : { isActive: true },
       include: {
         owner: {
@@ -138,17 +138,40 @@ export class VenueService {
           },
         },
         fields: {
-          select: {
-            id: true,
-            name: true,
-            fieldType: true,
-            isActive: true,
+          where: { isActive: true },
+          include: {
+            pricings: {
+              select: {
+                price: true,
+              },
+            },
           },
         },
       },
       orderBy: {
         createdAt: 'desc',
       },
+    });
+
+    // Compute minPrice for each venue from FieldPricing
+    return venues.map(venue => {
+      const allPrices: number[] = [];
+      venue.fields.forEach(field => {
+        field.pricings.forEach(pricing => {
+          allPrices.push(pricing.price);
+        });
+      });
+
+      const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
+
+      return {
+        ...venue,
+        minPrice,
+        fields: venue.fields.map(field => ({
+          ...field,
+          pricings: undefined, // Remove pricings from response
+        })),
+      };
     });
   }
 
@@ -158,10 +181,30 @@ export class VenueService {
       include: {
         owner: {
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                phoneNumber: true,
+                email: true,
+              },
+            },
           },
         },
-        fields: true,
+        fields: {
+          include: {
+            pricings: true,
+            reviews: {
+              select: { rating: true },
+            },
+            _count: {
+              select: {
+                bookings: true,
+                reviews: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -169,7 +212,56 @@ export class VenueService {
       throw new NotFoundException(`Venue with ID ${id} not found`);
     }
 
-    return venue;
+    // Compute aggregates from all fields
+    const allPrices: number[] = [];
+    const allRatings: number[] = [];
+    let totalBookings = 0;
+    let totalReviews = 0;
+
+    venue.fields.forEach(field => {
+      // Collect prices
+      field.pricings.forEach(pricing => {
+        allPrices.push(pricing.price);
+      });
+      // Collect ratings
+      field.reviews.forEach(review => {
+        allRatings.push(review.rating);
+      });
+      // Sum counts
+      totalBookings += field._count.bookings;
+      totalReviews += field._count.reviews;
+    });
+
+    const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
+    const averageRating = allRatings.length > 0
+      ? parseFloat((allRatings.reduce((sum, r) => sum + r, 0) / allRatings.length).toFixed(1))
+      : 0;
+    const activeFieldCount = venue.fields.filter(f => f.isActive).length;
+
+    // Transform fields to include per-field counts and remove raw reviews
+    const transformedFields = venue.fields.map(field => ({
+      id: field.id,
+      name: field.name,
+      fieldType: field.fieldType,
+      isActive: field.isActive,
+      createdAt: field.createdAt,
+      updatedAt: field.updatedAt,
+      venueId: field.venueId,
+      pricings: field.pricings,
+      reviewCount: field._count.reviews,
+      bookingCount: field._count.bookings,
+    }));
+
+    return {
+      ...venue,
+      fields: transformedFields, // deprecated
+      fieldsPricings: transformedFields,
+      minPrice,
+      averageRating,
+      totalBookings,
+      totalReviews,
+      activeFieldCount,
+    };
   }
 
   async update(id: number, updateVenueDto: UpdateVenueDto) {

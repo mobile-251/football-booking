@@ -115,46 +115,44 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const loadTimeSlots = async (fieldId: number, date: string) => {
 		setLoadingSlots(true);
 		try {
+			// Fetch pricing from backend
+			const pricingData = await api.getFieldPricing(fieldId, date);
+			// Fetch availability (booked slots)
 			const availability = await api.getFieldAvailability(fieldId, date);
-			if (availability?.slots) {
-				setTimeSlots(availability.slots);
-			} else {
-				// Generate time slots based on booked hours from API
-				const bookedHours = new Set<number>();
-				if (Array.isArray(availability)) {
-					// API returns array of bookings for that date
-					availability.forEach((booking: { startTime: string; endTime: string }) => {
-						const startHour = new Date(booking.startTime).getHours();
-						const endHour = new Date(booking.endTime).getHours();
-						for (let h = startHour; h < endHour; h++) {
-							bookedHours.add(h);
-						}
-					});
-				}
-
-				const slots: TimeSlotData[] = [];
-				for (let hour = 0; hour < 24; hour++) {
-					const time = `${hour.toString().padStart(2, '0')}:00`;
-					const isPeakHour = hour >= 17 && hour <= 21;
-					slots.push({
-						time,
-						price: isPeakHour ? 1200000 : 800000,
-						isAvailable: !bookedHours.has(hour),
-						isPeakHour,
-					});
-				}
-				setTimeSlots(slots);
+			
+			// Build booked hours set
+			const bookedHours = new Set<number>();
+			if (Array.isArray(availability)) {
+				availability.forEach((booking: { startTime: string; endTime: string }) => {
+					const startHour = new Date(booking.startTime).getHours();
+					const endHour = new Date(booking.endTime).getHours();
+					for (let h = startHour; h < endHour; h++) {
+						bookedHours.add(h);
+					}
+				});
 			}
+
+			// Convert pricing slots to TimeSlotData format
+			const slots: TimeSlotData[] = pricingData.slots.map((slot) => {
+				const hour = parseInt(slot.startTime.split(':')[0]);
+				return {
+					time: slot.startTime,
+					price: slot.price,
+					isAvailable: !bookedHours.has(hour),
+					isPeakHour: slot.isPeakHour,
+				};
+			});
+			setTimeSlots(slots);
 		} catch (error) {
-			console.error('Failed to load availability:', error);
-			// On error, show all slots as available (optimistic)
+			console.error('Failed to load pricing/availability:', error);
+			// Fallback: generate default slots if API fails
 			const slots: TimeSlotData[] = [];
-			for (let hour = 0; hour < 24; hour++) {
+			for (let hour = 6; hour < 23; hour++) {
 				const time = `${hour.toString().padStart(2, '0')}:00`;
-				const isPeakHour = hour >= 17 && hour <= 21;
+				const isPeakHour = hour >= 17 && hour < 21;
 				slots.push({
 					time,
-					price: isPeakHour ? 1200000 : 800000,
+					price: isPeakHour ? 500000 : 300000,
 					isAvailable: true,
 					isPeakHour,
 				});
@@ -312,6 +310,8 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				const booking = await api.createBooking({
 					fieldId: slot.fieldId,
 					playerId: currentUser.player.id,
+					customerName: fullName,     // Send customer contact info
+					customerPhone: phoneNumber, // Send customer contact info
 					startTime: startDateTime.toISOString(),
 					endTime: endDateTime.toISOString(),
 					totalPrice: slot.price,

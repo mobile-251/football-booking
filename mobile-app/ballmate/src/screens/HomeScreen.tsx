@@ -17,10 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../constants/theme';
-import { Field, FieldType, FIELD_TYPE_LABELS } from '../types/types';
+import { Venue } from '../types/types';
 import { api } from '../services/api';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import FieldCard from '../components/FieldCard';
+import VenueCard from '../components/VenueCard';
 import { formatPrice } from '../utils/formatters';
 import * as Location from 'expo-location';
 
@@ -32,13 +32,11 @@ interface CategoryItem {
     count: number;
 }
 
-type QuickFilterKey = 'near' | 'available' | 'rating' | 'popular';
+type QuickFilterKey = 'near' | 'available';
 
 const QUICK_FILTERS: { key: QuickFilterKey; label: string; icon: string }[] = [
     { key: 'near', label: 'Gần tôi nhất', icon: 'location-outline' },
-    { key: 'available', label: 'Còn trống', icon: 'checkmark-circle-outline' },
-    { key: 'rating', label: 'Đánh giá cao', icon: 'star-outline' },
-    { key: 'popular', label: 'Phổ biến', icon: 'trending-up-outline' },
+    { key: 'available', label: 'Đang hoạt động', icon: 'checkmark-circle-outline' },
 ];
 
 export default function HomeScreen() {
@@ -46,91 +44,81 @@ export default function HomeScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [appliedSearch, setAppliedSearch] = useState('');
     const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-    const [searchSuggestions, setSearchSuggestions] = useState<Field[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState('all');
+    const [searchSuggestions, setSearchSuggestions] = useState<(Venue & { minPrice?: number })[]>([]);
     const [selectedFilter, setSelectedFilter] = useState<QuickFilterKey>('available');
-    const [fields, setFields] = useState<Field[]>([]);
-    const [allFields, setAllFields] = useState<Field[]>([]);
+    const [venues, setVenues] = useState<(Venue & { minPrice?: number })[]>([]);
+    const [allVenues, setAllVenues] = useState<(Venue & { minPrice?: number })[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [categories, setCategories] = useState<CategoryItem[]>([
-        { key: 'all', label: 'Tất cả', count: 0 },
-        { key: 'FIELD_5VS5', label: 'Sân 5', count: 0 },
-        { key: 'FIELD_7VS7', label: 'Sân 7', count: 0 },
-        { key: 'FIELD_11VS11', label: 'Sân 11', count: 0 },
-    ]);
     const [stats, setStats] = useState<{ total: number; minPrice: number }>({ total: 0, minPrice: 0 });
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
-    const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         loadInitialData();
-        loadFavorites();
     }, []);
 
     useEffect(() => {
-        filterFields();
-    }, [selectedCategory, selectedFilter, appliedSearch, allFields]);
+        filterVenues();
+    }, [selectedFilter, appliedSearch, allVenues, userLocation]);
 
     const loadInitialData = async () => {
         try {
             setLoading(true);
-            const [fieldsData, statsData] = await Promise.all([api.getFields(), api.getFieldStats()]);
-            setAllFields(fieldsData);
-            setStats({ total: statsData.total, minPrice: statsData.minPrice });
-            setCategories([
-                { key: 'all', label: 'Tất cả', count: statsData.total },
-                { key: 'FIELD_5VS5', label: 'Sân 5', count: statsData.byType.FIELD_5VS5 || 0 },
-                { key: 'FIELD_7VS7', label: 'Sân 7', count: statsData.byType.FIELD_7VS7 || 0 },
-                { key: 'FIELD_11VS11', label: 'Sân 11', count: statsData.byType.FIELD_11VS11 || 0 },
-            ]);
+            const venuesData = await api.getVenues();
+            setAllVenues(venuesData as (Venue & { minPrice?: number })[]);
+            
+            // Compute stats
+            const totalFields = venuesData.reduce((sum, v) => sum + (v.fields?.length || 0), 0);
+            const allMinPrices = venuesData.map((v: any) => v.minPrice || 0).filter(p => p > 0);
+            const globalMinPrice = allMinPrices.length > 0 ? Math.min(...allMinPrices) : 0;
+            setStats({ total: totalFields, minPrice: globalMinPrice });
         } catch (error) {
-            console.error('Failed to load fields:', error);
-            setAllFields([]);
+            console.error('Failed to load venues:', error);
+            setAllVenues([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const loadFavorites = async () => {
-        try {
-            const data = await api.getFavorites();
-            setFavoriteIds(new Set(data.map((fav: any) => fav.fieldId).filter(Boolean)));
-        } catch {
-            // Not authenticated or endpoint failed; keep empty set.
-            setFavoriteIds(new Set());
-        }
-    };
+    // const loadFavorites = async () => {
+    //     try {
+    //         const data = await api.getFavorites();
+    //         setFavoriteIds(new Set(data.map((fav: any) => fav.fieldId).filter(Boolean)));
+    //     } catch {
+    //         // Not authenticated or endpoint failed; keep empty set.
+    //         setFavoriteIds(new Set());
+    //     }
+    // };
 
-    const handleToggleFavorite = async (fieldId: number) => {
-        let previousHas = false;
-        setFavoriteIds((prev) => {
-            const next = new Set(prev);
-            previousHas = next.has(fieldId);
-            if (previousHas) next.delete(fieldId);
-            else next.add(fieldId);
-            return next;
-        });
+    // const handleToggleFavorite = async (fieldId: number) => {
+    //     let previousHas = false;
+    //     setFavoriteIds((prev) => {
+    //         const next = new Set(prev);
+    //         previousHas = next.has(fieldId);
+    //         if (previousHas) next.delete(fieldId);
+    //         else next.add(fieldId);
+    //         return next;
+    //     });
 
-        try {
-            const { isFavorite } = await api.toggleFavorite(fieldId);
-            setFavoriteIds((prev) => {
-                const next = new Set(prev);
-                if (isFavorite) next.add(fieldId);
-                else next.delete(fieldId);
-                return next;
-            });
-        } catch (error) {
-            setFavoriteIds((prev) => {
-                const next = new Set(prev);
-                if (previousHas) next.add(fieldId);
-                else next.delete(fieldId);
-                return next;
-            });
-            console.error('Failed to toggle favorite:', error);
-        }
-    };
+    //     try {
+    //         const { isFavorite } = await api.toggleFavorite(fieldId);
+    //         setFavoriteIds((prev) => {
+    //             const next = new Set(prev);
+    //             if (isFavorite) next.add(fieldId);
+    //             else next.delete(fieldId);
+    //             return next;
+    //         });
+    //     } catch (error) {
+    //         setFavoriteIds((prev) => {
+    //             const next = new Set(prev);
+    //             if (previousHas) next.add(fieldId);
+    //             else next.delete(fieldId);
+    //             return next;
+    //         });
+    //         console.error('Failed to toggle favorite:', error);
+    //     }
+    // };
 
     // Calculate distance between two coordinates using Haversine formula
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -178,22 +166,16 @@ export default function HomeScreen() {
         setSelectedFilter(filterKey);
     };
 
-    const filterFields = useCallback(() => {
-        let result = [...allFields];
-
-        // Filter by category
-        if (selectedCategory !== 'all') {
-            result = result.filter((f) => f.fieldType === selectedCategory);
-        }
+    const filterVenues = useCallback(() => {
+        let result = [...allVenues];
 
         // Filter by search query
         if (appliedSearch) {
             const query = appliedSearch.toLowerCase();
             result = result.filter(
-                (f) =>
-                    f.name.toLowerCase().includes(query) ||
-                    f.venue?.address?.toLowerCase().includes(query) ||
-                    f.venue?.name?.toLowerCase().includes(query)
+                (v) =>
+                    v.name.toLowerCase().includes(query) ||
+                    v.address?.toLowerCase().includes(query)
             );
         }
 
@@ -202,32 +184,22 @@ export default function HomeScreen() {
             case 'near':
                 if (userLocation) {
                     result = result
-                        .map((f) => {
-                            const fieldLat = f.venue?.latitude || 0;
-                            const fieldLng = f.venue?.longitude || 0;
-                            const distance = calculateDistance(userLocation.lat, userLocation.lng, fieldLat, fieldLng);
-                            return { ...f, distance };
+                        .map((v) => {
+                            const venueLat = v.latitude || 0;
+                            const venueLng = v.longitude || 0;
+                            const distance = calculateDistance(userLocation.lat, userLocation.lng, venueLat, venueLng);
+                            return { ...v, distance };
                         })
-                        .sort((a, b) => (a.distance || 999) - (b.distance || 999));
+                        .sort((a, b) => ((a as any).distance || 999) - ((b as any).distance || 999));
                 }
                 break;
-            case 'rating':
-                result.sort((a, b) => {
-                    const aRating = a.reviews?.length ? a.reviews.reduce((sum, r) => sum + r.rating, 0) / a.reviews.length : 0;
-                    const bRating = b.reviews?.length ? b.reviews.reduce((sum, r) => sum + r.rating, 0) / b.reviews.length : 0;
-                    return bRating - aRating;
-                });
-                break;
-            case 'popular':
-                result.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
-                break;
             case 'available':
-                result = result.filter((f) => f.isActive);
+                result = result.filter((v) => v.isActive);
                 break;
         }
 
-        setFields(result);
-    }, [allFields, selectedCategory, selectedFilter, appliedSearch, userLocation]);
+        setVenues(result);
+    }, [allVenues, selectedFilter, appliedSearch, userLocation]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -244,12 +216,11 @@ export default function HomeScreen() {
         setSearchQuery(text);
         const q = text.trim().toLowerCase();
         if (q.length >= 1) {
-            const suggestions = allFields
+            const suggestions = allVenues
                 .filter(
-                    (f) =>
-                        (f.name || '').toLowerCase().includes(q) ||
-                        (f.venue?.name || '').toLowerCase().includes(q) ||
-                        (f.venue?.address || '').toLowerCase().includes(q)
+                    (v) =>
+                        (v.name || '').toLowerCase().includes(q) ||
+                        (v.address || '').toLowerCase().includes(q)
                 )
                 .slice(0, 5);
             setSearchSuggestions(suggestions);
@@ -260,14 +231,14 @@ export default function HomeScreen() {
         }
     };
 
-    const handleSuggestionPress = (field: Field) => {
+    const handleSuggestionPress = (venue: Venue & { minPrice?: number }) => {
         setShowSearchDropdown(false);
         setSearchQuery('');
-        navigation.navigate('FieldDetail', { fieldId: field.id });
+        navigation.navigate('VenueDetail', { venueId: venue.id });
     };
 
-    const handleFieldPress = (field: Field) => {
-        navigation.navigate('FieldDetail', { fieldId: field.id });
+    const handleVenuePress = (venue: Venue & { minPrice?: number }) => {
+        navigation.navigate('VenueDetail', { venueId: venue.id });
     };
 
     return (
@@ -334,22 +305,22 @@ export default function HomeScreen() {
                         {/* Search Dropdown */}
                         {showSearchDropdown && searchSuggestions.length > 0 && (
                             <View style={styles.searchDropdown}>
-                                {searchSuggestions.map((field, index) => (
+                                {searchSuggestions.map((venue, index) => (
                                     <TouchableOpacity
-                                        key={field.id}
+                                        key={venue.id}
                                         style={[
                                             styles.searchSuggestionItem,
                                             index < searchSuggestions.length - 1 && styles.searchSuggestionBorder,
                                         ]}
-                                        onPress={() => handleSuggestionPress(field)}
+                                        onPress={() => handleSuggestionPress(venue)}
                                     >
                                         <View style={styles.suggestionIcon}>
                                             <Ionicons name='football-outline' size={20} color={theme.colors.primary} />
                                         </View>
                                         <View style={styles.suggestionContent}>
-                                            <Text style={styles.suggestionTitle}>{field.name}</Text>
+                                            <Text style={styles.suggestionTitle}>{venue.name}</Text>
                                             <Text style={styles.suggestionSubtitle}>
-                                                {field.venue?.name || 'Sân bóng'} • {FIELD_TYPE_LABELS[field.fieldType]}
+                                                {venue?.name || 'Sân bóng'}
                                             </Text>
                                         </View>
                                         <Ionicons name='chevron-forward' size={18} color={theme.colors.foregroundMuted} />
@@ -362,33 +333,7 @@ export default function HomeScreen() {
 
                 {/* Content */}
                 <View style={styles.content}>
-                    {/* Categories */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Danh mục</Text>
-                            <TouchableOpacity>
-                                <Ionicons name='options-outline' size={20} color={theme.colors.foregroundMuted} />
-                            </TouchableOpacity>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            <View style={styles.categoryRow}>
-                                {categories.map((cat) => (
-                                    <TouchableOpacity
-                                        key={cat.key}
-                                        style={[styles.categoryChip, selectedCategory === cat.key && styles.categoryChipActive]}
-                                        onPress={() => setSelectedCategory(cat.key)}
-                                    >
-                                        <Text style={[styles.categoryText, selectedCategory === cat.key && styles.categoryTextActive]}>
-                                            {cat.label}
-                                        </Text>
-                                        <Text style={[styles.categoryCount, selectedCategory === cat.key && styles.categoryCountActive]}>
-                                            {cat.count}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </ScrollView>
-                    </View>
+
 
                     {/* Quick Filters */}
                     <View style={styles.section}>
@@ -430,7 +375,7 @@ export default function HomeScreen() {
                     {appliedSearch && (
                         <View style={styles.searchResultsInfo}>
                             <Text style={styles.searchResultsText}>
-                                Tìm thấy {fields.length} kết quả cho "{appliedSearch}"
+                                Tìm thấy {venues.length} kết quả cho "{appliedSearch}"
                             </Text>
                             <TouchableOpacity
                                 onPress={() => {
@@ -443,10 +388,10 @@ export default function HomeScreen() {
                         </View>
                     )}
 
-                    {/* Field List */}
+                    {/* Venue List */}
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Sân thể thao gần bạn</Text>
+                            <Text style={styles.sectionTitle}>Cụm sân thể thao</Text>
                             <TouchableOpacity>
                                 <Text style={styles.seeAllText}>Xem tất cả</Text>
                             </TouchableOpacity>
@@ -454,27 +399,25 @@ export default function HomeScreen() {
 
                         {loading ? (
                             <ActivityIndicator size='large' color={theme.colors.primary} style={styles.loader} />
-                        ) : fields.length === 0 ? (
+                        ) : venues.length === 0 ? (
                             <View style={styles.emptyState}>
                                 <Ionicons name='football-outline' size={48} color={theme.colors.foregroundMuted} />
-                                <Text style={styles.emptyStateTitle}>Không tìm thấy sân</Text>
+                                <Text style={styles.emptyStateTitle}>Không tìm thấy cụm sân</Text>
                                 <Text style={styles.emptyStateText}>
-                                    {appliedSearch ? 'Thử tìm kiếm với từ khóa khác' : 'Chưa có sân nào trong danh mục này'}
+                                    {appliedSearch ? 'Thử tìm kiếm với từ khóa khác' : 'Chưa có cụm sân nào'}
                                 </Text>
                             </View>
                         ) : (
-                            fields.map((field) => {
-                                const fieldWithDistance = field as Field & { distance?: number };
+                            venues.map((venue) => {
+                                const venueWithDistance = venue as (typeof venue) & { distance?: number };
                                 return (
-                                    <FieldCard
-                                        key={field.id}
-                                        field={field}
-                                        onPress={() => handleFieldPress(field)}
-                                        isFavorite={favoriteIds.has(field.id)}
-                                        onToggleFavorite={() => handleToggleFavorite(field.id)}
+                                    <VenueCard
+                                        key={venue.id}
+                                        venue={venue}
+                                        onPress={() => handleVenuePress(venue)}
                                         distance={
-                                            userLocation && fieldWithDistance.distance !== undefined
-                                                ? `${fieldWithDistance.distance.toFixed(1)} km`
+                                            userLocation && venueWithDistance.distance !== undefined
+                                                ? `${venueWithDistance.distance.toFixed(1)} km`
                                                 : undefined
                                         }
                                     />

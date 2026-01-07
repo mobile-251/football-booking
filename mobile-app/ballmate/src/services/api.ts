@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { AuthResponse, Field, Venue, Booking, Review, FieldFilter, ApiError, User } from '../types/types';
+import { AuthResponse, Field, Venue, VenueDetail, Booking, Review, FieldFilter, ApiError, User } from '../types/types';
 import { Config } from '../config/environment';
 
 const API_BASE_URL = Config.API_URL;
@@ -158,8 +158,8 @@ class ApiService {
 		return response.data;
 	}
 
-	async getVenue(id: number): Promise<Venue> {
-		const response = await this.client.get<Venue>(`/venues/${id}`);
+	async getVenue(id: number): Promise<VenueDetail> {
+		const response = await this.client.get<VenueDetail>(`/venues/${id}`);
 		return response.data;
 	}
 
@@ -179,6 +179,25 @@ class ApiService {
 		return response.data;
 	}
 
+	/**
+	 * Get field pricing for a specific date
+	 * Returns slots with prices from backend FieldPricing
+	 */
+	async getFieldPricing(fieldId: number, date: string): Promise<{
+		fieldId: number;
+		dayType: 'WEEKDAY' | 'WEEKEND';
+		date: string;
+		slots: {
+			startTime: string;
+			endTime: string;
+			price: number;
+			isPeakHour: boolean;
+		}[];
+	}> {
+		const response = await this.client.get(`/fields/${fieldId}/pricing`, { params: { date } });
+		return response.data;
+	}
+
 	// Booking endpoints
 	async getBookings(params?: { playerId?: number; fieldId?: number; status?: string }): Promise<Booking[]> {
 		const response = await this.client.get<Booking[]>('/bookings', { params });
@@ -188,6 +207,8 @@ class ApiService {
 	async createBooking(data: {
 		fieldId: number;
 		playerId: number;
+		customerName: string;   // Họ tên người đặt
+		customerPhone: string;  // SĐT người đặt
 		startTime: string;
 		endTime: string;
 		totalPrice: number;

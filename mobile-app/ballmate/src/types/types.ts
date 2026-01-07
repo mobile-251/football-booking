@@ -29,6 +29,7 @@ export interface Venue {
     longitude?: number;
     openTime: string;
     closeTime: string;
+    phoneNumber?: string;
     facilities: string[];
     images: string[];
     ownerId: number;
@@ -95,6 +96,44 @@ export interface Review {
     comment?: string;
     createdAt: string;
     updatedAt: string;
+}
+
+// Field Pricing for venue detail
+export type DayType = 'WEEKDAY' | 'WEEKEND';
+
+export interface FieldPricing {
+    id: number;
+    fieldId: number;
+    dayType: DayType;
+    startTime: string;
+    endTime: string;
+    price: number;
+}
+
+// Field with pricing and stats for VenueDetail
+export interface FieldWithPricing extends Omit<Field, 'pricePerHour' | 'description' | 'images' | 'venue' | 'reviews'> {
+    pricings: FieldPricing[];
+    reviewCount: number;
+    bookingCount: number;
+}
+
+// Venue Detail response from API
+export interface VenueDetail extends Venue {
+    owner: {
+        id: number;
+        user: {
+            id: number;
+            fullName: string;
+            phoneNumber?: string;
+            email: string;
+        };
+    };
+    fieldsPricings: FieldWithPricing[];
+    minPrice: number;
+    totalBookings: number;
+    averageRating: number;
+    totalReviews: number;
+    activeFieldCount: number;
 }
 
 // API Response types

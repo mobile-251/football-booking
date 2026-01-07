@@ -8,40 +8,23 @@ import {
 	TouchableOpacity,
 	ActivityIndicator,
 	Dimensions,
-	FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
-import { Field, FIELD_TYPE_LABELS, Review } from '../types/types';
+import { VenueDetail, FIELD_TYPE_LABELS, Review, FieldWithPricing, Field } from '../types/types';
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import BookingModal from '../components/BookingModal';
 import { useAuth } from '../context/AuthContext';
 
-type FieldDetailRouteProp = RouteProp<RootStackParamList, 'FieldDetail'>;
+type VenueDetailRouteProp = RouteProp<RootStackParamList, 'VenueDetail'>;
 
 const { width } = Dimensions.get('window');
 
 type TabType = 'images' | 'reviews' | 'terms';
-
-interface PriceRow {
-	time: string;
-	weekday: number;
-	friday: number;
-	saturday: number;
-	sunday: number;
-}
-
-const PRICE_TABLE: PriceRow[] = [
-	{ time: '05h - 08h', weekday: 300000, friday: 350000, saturday: 400000, sunday: 400000 },
-	{ time: '08h - 15h', weekday: 250000, friday: 300000, saturday: 350000, sunday: 350000 },
-	{ time: '15h - 17h', weekday: 350000, friday: 400000, saturday: 450000, sunday: 450000 },
-	{ time: '17h - 22h', weekday: 500000, friday: 550000, saturday: 600000, sunday: 600000 },
-	{ time: '22h - 24h', weekday: 350000, friday: 400000, saturday: 450000, sunday: 450000 },
-];
 
 const TERMS = {
 	booking: [
@@ -58,140 +41,121 @@ const TERMS = {
 	],
 };
 
-export default function FieldDetailScreen() {
-	const route = useRoute<FieldDetailRouteProp>();
+export default function VenueDetailScreen() {
+	const route = useRoute<VenueDetailRouteProp>();
 	const navigation = useNavigation();
 	const { isAuthenticated } = useAuth();
-	const { fieldId } = route.params;
-	const [field, setField] = useState<Field | null>(null);
+	const { venueId } = route.params;
+	const [venue, setVenue] = useState<VenueDetail | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [activeTab, setActiveTab] = useState<TabType>('images');
-	const [reviews, setReviews] = useState<Review[]>([]);
+	const [reviews, setReviews] = useState<Review[]>([]); // Currently fetching from venue.fields aggregation or separate API? 
+	// Note: API implementation for getReviews(venueId) might be needed if we want venue-level reviews, 
+	// but currently we can aggregate from fields or just show empty if API doesn't support venue-level yet.
+	// For now, let's use the reviews aggregated in the backend if available, or just empty. 
+	// The backend return `averageRating` and `totalReviews` but not the list itself in `VenueDetail`.
+	// We'll skip fetching detailed review list for now or fetch properly if needed. 
+	// Let's assume we show stats mostly.
+
 	const [showBookingModal, setShowBookingModal] = useState(false);
 	const [isFavorite, setIsFavorite] = useState(false);
 	const [favoriteLoading, setFavoriteLoading] = useState(false);
 
 	useEffect(() => {
-		loadField();
-		loadReviews();
-	}, [fieldId]);
+		loadVenue();
+	}, [venueId]);
 
-	// Separate effect for checking favorite status when auth changes
-	useEffect(() => {
-		if (isAuthenticated) {
-			checkFavoriteStatus();
-		}
-	}, [fieldId, isAuthenticated]);
-
-	const loadField = async () => {
+	const loadVenue = async () => {
 		try {
 			setLoading(true);
-			const data = await api.getField(fieldId);
-			setField(data);
+			const data = await api.getVenue(venueId);
+			setVenue(data);
 		} catch (error) {
-			console.error('Failed to load field:', error);
-			// No mock data - let field remain null to show error state
+			console.error('Failed to load venue:', error);
 		} finally {
 			setLoading(false);
 		}
 	};
 
-	const loadReviews = async () => {
-		try {
-			const data = await api.getReviews(fieldId);
-			setReviews(data);
-		} catch (error) {
-			console.error('Failed to load reviews:', error);
-			// No mock data - show empty reviews
-			setReviews([]);
-		}
+	const getUniqueFieldTypes = () => {
+		if (!venue?.fields) return [];
+		const types = new Set(venue.fields.map(f => f.fieldType));
+		const order: Record<string, number> = { 'FIELD_5VS5': 1, 'FIELD_7VS7': 2, 'FIELD_11VS11': 3 };
+		return Array.from(types).sort((a, b) => (order[a] || 99) - (order[b] || 99));
 	};
 
-	const checkFavoriteStatus = async () => {
-		// Only check if user is logged in
-		if (!isAuthenticated) return;
-		try {
-			const { isFavorite: status } = await api.checkFavorite(fieldId);
-			setIsFavorite(status);
-		} catch (error) {
-			console.error('Failed to check favorite status:', error);
-		}
-	};
+	const renderPriceTable = () => {
+		if (!venue?.fields) return null;
 
-	const handleToggleFavorite = async () => {
-		console.log('[FieldDetail] Toggle favorite clicked, isAuthenticated:', isAuthenticated);
-		// Check if user is logged in
-		if (!isAuthenticated) {
-			// Could show alert or navigate to login
-			console.log('[FieldDetail] Not authenticated, navigating to Login');
-			navigation.navigate('Login' as never);
-			return;
-		}
+		const fieldTypes = getUniqueFieldTypes();
 
-		try {
-			setFavoriteLoading(true);
-			console.log('[FieldDetail] Calling api.toggleFavorite for fieldId:', fieldId);
-			const { isFavorite: newStatus } = await api.toggleFavorite(fieldId);
-			console.log('[FieldDetail] Toggle result:', newStatus);
-			setIsFavorite(newStatus);
-		} catch (error) {
-			console.error('Failed to toggle favorite:', error);
-		} finally {
-			setFavoriteLoading(false);
-		}
-	};
-
-	const getAverageRating = () => {
-		if (reviews.length === 0) return 0;
-		return (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1);
-	};
-
-	if (loading) {
 		return (
-			<View style={styles.loadingContainer}>
-				<ActivityIndicator size='large' color={theme.colors.primary} />
+			<View style={styles.priceTableContainer}>
+				<View style={styles.sectionHeader}>
+					<Ionicons name='pricetag' size={20} color={theme.colors.primary} />
+					<Text style={styles.sectionTitle}>Bảng giá</Text>
+				</View>
+
+				{fieldTypes.map((type) => {
+					// Find a representative field for this type to get pricing
+					const field = venue?.fieldsPricings?.find(f => f.fieldType === type);
+					if (!field) return null;
+
+					// Process pricings into rows
+					// We assume pricing structure is consistent for the type
+					// Group by time slots
+					const weekdayPricings = field.pricings.filter(p => p.dayType === 'WEEKDAY');
+					const weekendPricings = field.pricings.filter(p => p.dayType === 'WEEKEND');
+
+					// Create a map of time -> prices
+					const priceMap = new Map<string, { weekday?: number; weekend?: number }>();
+
+					weekdayPricings.forEach(p => {
+						const key = `${p.startTime.substring(0, 5)} - ${p.endTime.substring(0, 5)}`;
+						const current = priceMap.get(key) || {};
+						priceMap.set(key, { ...current, weekday: p.price });
+					});
+
+					weekendPricings.forEach(p => {
+						const key = `${p.startTime.substring(0, 5)} - ${p.endTime.substring(0, 5)}`;
+						const current = priceMap.get(key) || {};
+						priceMap.set(key, { ...current, weekend: p.price });
+					});
+
+					const rows = Array.from(priceMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+					return (
+						<View key={type} style={styles.typePriceContainer}>
+							<Text style={styles.typeHeader}>{FIELD_TYPE_LABELS[type]}</Text>
+
+							{/* Table Header */}
+							<View style={styles.tableHeader}>
+								<View style={[styles.tableCell, styles.tableCellFirst]}>
+									<Ionicons name='time-outline' size={16} color={theme.colors.primary} />
+								</View>
+								<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6</Text>
+								<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN</Text>
+							</View>
+
+							{/* Rows */}
+							{rows.map(([time, prices], index) => (
+								<View key={index} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
+									<Text style={[styles.tableTime, styles.tableCellFirst]}>{time}</Text>
+									<Text style={styles.tableCellPrice}>
+										{prices.weekday ? `${prices.weekday / 1000}k` : '-'}
+									</Text>
+									<Text style={styles.tableCellPrice}>
+										{prices.weekend ? `${prices.weekend / 1000}k` : '-'}
+									</Text>
+								</View>
+							))}
+						</View>
+					);
+				})}
 			</View>
 		);
-	}
+	};
 
-	if (!field) {
-		return (
-			<View style={styles.loadingContainer}>
-				<Text>Không tìm thấy sân</Text>
-			</View>
-		);
-	}
-
-	const renderPriceTable = () => (
-		<View style={styles.priceTableContainer}>
-			<View style={styles.sectionHeader}>
-				<Ionicons name='pricetag' size={20} color={theme.colors.primary} />
-				<Text style={styles.sectionTitle}>Bảng giá</Text>
-			</View>
-
-			{/* Table Header */}
-			<View style={styles.tableHeader}>
-				<View style={[styles.tableCell, styles.tableCellFirst]}>
-					<Ionicons name='time-outline' size={16} color={theme.colors.primary} />
-				</View>
-				<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6</Text>
-				{/* <Text style={[styles.tableHeaderText, styles.tableCell]}>T6</Text>
-				<Text style={[styles.tableHeaderText, styles.tableCell]}>T7</Text> */}
-				<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN</Text>
-			</View>
-
-			{/* Table Rows */}
-			{PRICE_TABLE.map((row, index) => (
-				<View key={index} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
-					<Text style={[styles.tableTime, styles.tableCellFirst]}>{row.time}</Text>
-					<Text style={styles.tableCellPrice}>{row.weekday / 1000}k</Text>
-					<Text style={styles.tableCellPrice}>{row.friday / 1000}k</Text>
-					<Text style={styles.tableCellPrice}>{row.saturday / 1000}k</Text>
-					<Text style={styles.tableCellPrice}>{row.sunday / 1000}k</Text>
-				</View>
-			))}
-		</View>
-	);
 
 	const renderTabs = () => (
 		<View style={styles.tabContainer}>
@@ -234,8 +198,8 @@ export default function FieldDetailScreen() {
 	const renderImageGallery = () => (
 		<View style={styles.galleryContainer}>
 			<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-				{(field.images && field.images.length > 0
-					? field.images
+				{(venue?.images && venue.images.length > 0
+					? venue.images
 					: [
 						'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800',
 						'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800',
@@ -247,45 +211,8 @@ export default function FieldDetailScreen() {
 		</View>
 	);
 
-	const renderReviews = () => (
-		<View style={styles.reviewsContainer}>
-			{/* Summary */}
-			<View style={styles.reviewSummary}>
-				<View style={styles.ratingBig}>
-					<Text style={styles.ratingBigNumber}>{getAverageRating()}</Text>
-					<Ionicons name='star' size={24} color='#f59e0b' />
-				</View>
-				<Text style={styles.reviewCount}>{reviews.length} đánh giá</Text>
-			</View>
-
-			{/* List */}
-			{reviews.map((review) => (
-				<View key={review.id} style={styles.reviewCard}>
-					<View style={styles.reviewHeader}>
-						<View style={styles.reviewerInfo}>
-							<View style={styles.avatar}>
-								<Ionicons name='person' size={20} color={theme.colors.white} />
-							</View>
-							<View>
-								<Text style={styles.reviewerName}>Người dùng #{review.playerId}</Text>
-								<Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString('vi-VN')}</Text>
-							</View>
-						</View>
-						<View style={styles.reviewRating}>
-							{[...Array(5)].map((_, i) => (
-								<Ionicons key={i} name={i < review.rating ? 'star' : 'star-outline'} size={14} color='#f59e0b' />
-							))}
-						</View>
-					</View>
-					{review.comment && <Text style={styles.reviewComment}>{review.comment}</Text>}
-				</View>
-			))}
-		</View>
-	);
-
 	const renderTerms = () => (
 		<View style={styles.termsContainer}>
-			{/* Booking Terms */}
 			<View style={styles.termsSection}>
 				<View style={styles.termsSectionHeader}>
 					<View style={styles.termsIcon}>
@@ -301,7 +228,6 @@ export default function FieldDetailScreen() {
 				))}
 			</View>
 
-			{/* Usage Terms */}
 			<View style={styles.termsSection}>
 				<View style={styles.termsSectionHeader}>
 					<View style={styles.termsIcon}>
@@ -324,7 +250,20 @@ export default function FieldDetailScreen() {
 			case 'images':
 				return renderImageGallery();
 			case 'reviews':
-				return renderReviews();
+				return (
+					<View style={styles.reviewsContainer}>
+						<View style={styles.reviewSummary}>
+							<View style={styles.ratingBig}>
+								<Text style={styles.ratingBigNumber}>{venue?.averageRating || 0}</Text>
+								<Ionicons name='star' size={24} color='#f59e0b' />
+							</View>
+							<Text style={styles.reviewCount}>{venue?.totalReviews || 0} đánh giá</Text>
+						</View>
+						<Text style={{ textAlign: 'center', color: theme.colors.foregroundMuted }}>
+							Chi tiết đánh giá xem tại từng sân
+						</Text>
+					</View>
+				);
 			case 'terms':
 				return renderTerms();
 			default:
@@ -332,12 +271,28 @@ export default function FieldDetailScreen() {
 		}
 	};
 
+	if (loading) {
+		return (
+			<View style={styles.loadingContainer}>
+				<ActivityIndicator size='large' color={theme.colors.primary} />
+			</View>
+		);
+	}
+
+	if (!venue) {
+		return (
+			<View style={styles.loadingContainer}>
+				<Text>Không tìm thấy sân</Text>
+			</View>
+		);
+	}
+
 	return (
 		<SafeAreaView style={styles.container} edges={['bottom']}>
 			<ScrollView showsVerticalScrollIndicator={false}>
 				{/* Main Image */}
 				<Image
-					source={{ uri: field.images?.[0] || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800' }}
+					source={{ uri: venue.images?.[0] || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800' }}
 					style={styles.mainImage}
 					resizeMode='cover'
 				/>
@@ -347,29 +302,19 @@ export default function FieldDetailScreen() {
 					{/* Title */}
 					<View style={styles.titleRow}>
 						<View style={styles.titleInfo}>
-							<Text style={styles.fieldName}>{field.name}</Text>
-							<View style={styles.typeTag}>
-								<Text style={styles.typeText}>{FIELD_TYPE_LABELS[field.fieldType]}</Text>
-							</View>
+							<Text style={styles.venueName}>{venue.name}</Text>
+							<Text style={styles.activeFieldText}>{venue.activeFieldCount} sân hoạt động</Text>
 						</View>
-						<TouchableOpacity
-							style={styles.favoriteBtn}
-							onPress={handleToggleFavorite}
-							disabled={favoriteLoading}
-						>
-							{favoriteLoading ? (
-								<ActivityIndicator size="small" color={theme.colors.accent} />
-							) : (
-								<Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={24} color={theme.colors.accent} />
-							)}
+						<TouchableOpacity style={styles.favoriteBtn}>
+							<Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={24} color={theme.colors.accent} />
 						</TouchableOpacity>
 					</View>
 
 					{/* Rating */}
 					<View style={styles.ratingRow}>
 						<Ionicons name='star' size={16} color='#f59e0b' />
-						<Text style={styles.ratingText}>{getAverageRating()}</Text>
-						<Text style={styles.reviewCountSmall}>({reviews.length} đánh giá)</Text>
+						<Text style={styles.ratingText}>{venue.averageRating || 0}</Text>
+						<Text style={styles.reviewCountSmall}>({venue.totalReviews} đánh giá)</Text>
 					</View>
 
 					{/* Location */}
@@ -378,7 +323,9 @@ export default function FieldDetailScreen() {
 							<Ionicons name='location' size={20} color={theme.colors.primary} />
 							<Text style={styles.infoTitle}>Địa chỉ</Text>
 						</View>
-						<Text style={styles.infoValue}>{field.venue?.address}</Text>
+						<Text style={styles.infoValue}>
+							{venue.address}, {venue.district}, {venue.city}
+						</Text>
 					</View>
 
 					{/* Contact */}
@@ -386,19 +333,20 @@ export default function FieldDetailScreen() {
 						<View style={styles.contactRow}>
 							<View style={styles.contactItem}>
 								<Ionicons name='call-outline' size={18} color={theme.colors.primary} />
-								<Text style={styles.contactText}>0123 456 789</Text>
+								<Text style={styles.contactText}>{venue.phoneNumber || 'Liên hệ'}</Text>
 							</View>
 							<View style={styles.contactItem}>
 								<Ionicons name='time-outline' size={18} color={theme.colors.primary} />
 								<Text style={styles.contactText}>
-									{field.venue?.openTime} - {field.venue?.closeTime}
+									{venue.openTime} - {venue.closeTime}
 								</Text>
 							</View>
 						</View>
 					</View>
 
-					{/* Price Table */}
+					{/* Price Table via Field Types */}
 					{renderPriceTable()}
+
 
 					{/* Facilities */}
 					<View style={styles.infoCard}>
@@ -407,11 +355,15 @@ export default function FieldDetailScreen() {
 							<Text style={styles.infoTitle}>Tiện ích</Text>
 						</View>
 						<View style={styles.facilitiesRow}>
-							{field.venue?.facilities?.map((facility, index) => (
-								<View key={index} style={styles.facilityTag}>
-									<Text style={styles.facilityText}>{facility}</Text>
-								</View>
-							))}
+							{venue.facilities?.length > 0 ? (
+								venue.facilities.map((facility, index) => (
+									<View key={index} style={styles.facilityTag}>
+										<Text style={styles.facilityText}>{facility}</Text>
+									</View>
+								))
+							) : (
+								<Text style={styles.infoValue}>Đang cập nhật...</Text>
+							)}
 						</View>
 					</View>
 
@@ -421,10 +373,10 @@ export default function FieldDetailScreen() {
 							<Ionicons name='information-circle' size={20} color={theme.colors.primary} />
 							<Text style={styles.infoTitle}>Mô tả</Text>
 						</View>
-						<Text style={styles.description}>{field.description}</Text>
+						<Text style={styles.description}>{venue.description || 'Chưa có mô tả'}</Text>
 					</View>
 
-					{/* Tabs Section */}
+					{/* Tabs */}
 					{renderTabs()}
 					{renderTabContent()}
 				</View>
@@ -435,24 +387,37 @@ export default function FieldDetailScreen() {
 				<View style={styles.priceInfo}>
 					<Text style={styles.priceLabel}>Giá từ</Text>
 					<Text style={styles.price}>
-						{formatPrice(field.pricePerHour)}đ<Text style={styles.priceUnit}>/giờ</Text>
+						{formatPrice(venue.minPrice)}đ<Text style={styles.priceUnit}>/giờ</Text>
 					</Text>
 				</View>
-				<TouchableOpacity style={styles.bookButton} onPress={() => setShowBookingModal(true)}>
+				<TouchableOpacity
+					style={styles.bookButton}
+					onPress={() => setShowBookingModal(true)}
+				>
 					<Text style={styles.bookButtonText}>Đặt lịch ngay</Text>
 				</TouchableOpacity>
 			</View>
 
 			{/* Booking Modal */}
-			<BookingModal
-				visible={showBookingModal}
-				onClose={() => setShowBookingModal(false)}
-				field={field}
-				onBookingSuccess={() => {
-					setShowBookingModal(false);
-					// Could navigate to bookings screen or show notification
-				}}
-			/>
+			{venue.fields && venue.fields.length > 0 && (
+				<BookingModal
+					visible={showBookingModal}
+					onClose={() => setShowBookingModal(false)}
+					field={
+						{
+							...venue.fieldsPricings[0],
+							pricePerHour: Math.min(...(venue.fieldsPricings[0].pricings?.map((p) => p.price) || [0])),
+							description: venue.description || '',
+							images: venue.images || [],
+							venue: venue,
+							reviews: [],
+						} as unknown as Field
+					}
+					onBookingSuccess={() => {
+						setShowBookingModal(false);
+					}}
+				/>
+			)}
 		</SafeAreaView>
 	);
 }
@@ -466,7 +431,6 @@ const styles = StyleSheet.create({
 		flex: 1,
 		justifyContent: 'center',
 		alignItems: 'center',
-		backgroundColor: theme.colors.background,
 	},
 	mainImage: {
 		width: width,
@@ -485,26 +449,19 @@ const styles = StyleSheet.create({
 		flex: 1,
 		marginRight: theme.spacing.md,
 	},
-	fieldName: {
+	venueName: {
 		fontSize: 22,
 		fontWeight: 'bold',
 		color: theme.colors.foreground,
-		marginBottom: theme.spacing.sm,
+		marginBottom: 4,
 	},
-	typeTag: {
-		backgroundColor: theme.colors.secondary,
-		paddingHorizontal: theme.spacing.md,
-		paddingVertical: 4,
-		borderRadius: theme.borderRadius.full,
-		alignSelf: 'flex-start',
-	},
-	typeText: {
-		color: theme.colors.white,
-		fontSize: 12,
+	activeFieldText: {
+		fontSize: 13,
+		color: theme.colors.primary,
 		fontWeight: '600',
 	},
 	favoriteBtn: {
-		padding: theme.spacing.sm,
+		padding: 4,
 	},
 	ratingRow: {
 		flexDirection: 'row',
@@ -557,6 +514,7 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		color: theme.colors.foreground,
 	},
+	// Price Table Styles
 	priceTableContainer: {
 		backgroundColor: theme.colors.white,
 		borderRadius: theme.borderRadius.md,
@@ -574,6 +532,17 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontWeight: '600',
 		color: theme.colors.foreground,
+	},
+	typePriceContainer: {
+		marginTop: theme.spacing.sm,
+		marginBottom: theme.spacing.md,
+	},
+	typeHeader: {
+		fontSize: 14,
+		fontWeight: 'bold',
+		color: theme.colors.foreground,
+		marginBottom: theme.spacing.sm,
+		// paddingLeft: 4,
 	},
 	tableHeader: {
 		flexDirection: 'row',
@@ -615,6 +584,44 @@ const styles = StyleSheet.create({
 		color: theme.colors.foreground,
 		textAlign: 'center',
 	},
+	// Fields List Styles
+	sectionContainer: {
+		marginBottom: theme.spacing.md,
+	},
+	fieldItem: {
+		backgroundColor: theme.colors.white,
+		borderRadius: theme.borderRadius.md,
+		padding: theme.spacing.md,
+		marginBottom: theme.spacing.xs,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		...theme.shadows.soft,
+	},
+	fieldInfo: {
+		flex: 1,
+	},
+	fieldNameItem: {
+		fontSize: 14,
+		fontWeight: '600',
+		color: theme.colors.foreground,
+		marginBottom: 2,
+	},
+	fieldTypeItem: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+	},
+	fieldStats: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 6,
+		marginRight: theme.spacing.sm,
+	},
+	fieldStatText: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+	},
+	// Utils
 	facilitiesRow: {
 		flexDirection: 'row',
 		flexWrap: 'wrap',
@@ -635,6 +642,7 @@ const styles = StyleSheet.create({
 		color: theme.colors.foregroundMuted,
 		lineHeight: 22,
 	},
+	// Tab
 	tabContainer: {
 		flexDirection: 'row',
 		backgroundColor: theme.colors.white,
@@ -671,6 +679,7 @@ const styles = StyleSheet.create({
 		borderRadius: theme.borderRadius.md,
 		marginRight: theme.spacing.md,
 	},
+	// Reviews
 	reviewsContainer: {
 		marginBottom: theme.spacing.md,
 	},
@@ -693,49 +702,7 @@ const styles = StyleSheet.create({
 		color: theme.colors.foregroundMuted,
 		marginTop: 4,
 	},
-	reviewCard: {
-		backgroundColor: theme.colors.white,
-		borderRadius: theme.borderRadius.md,
-		padding: theme.spacing.md,
-		marginBottom: theme.spacing.sm,
-	},
-	reviewHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		marginBottom: theme.spacing.sm,
-	},
-	reviewerInfo: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: 10,
-	},
-	avatar: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		backgroundColor: theme.colors.primary,
-		justifyContent: 'center',
-		alignItems: 'center',
-	},
-	reviewerName: {
-		fontSize: 14,
-		fontWeight: '500',
-		color: theme.colors.foreground,
-	},
-	reviewDate: {
-		fontSize: 12,
-		color: theme.colors.foregroundMuted,
-	},
-	reviewRating: {
-		flexDirection: 'row',
-		gap: 2,
-	},
-	reviewComment: {
-		fontSize: 14,
-		color: theme.colors.foregroundMuted,
-		lineHeight: 20,
-	},
+	// Terms
 	termsContainer: {
 		backgroundColor: theme.colors.primary + '10',
 		borderRadius: theme.borderRadius.md,
@@ -776,6 +743,7 @@ const styles = StyleSheet.create({
 		color: theme.colors.foreground,
 		lineHeight: 20,
 	},
+	// Bottom
 	bottomBar: {
 		flexDirection: 'row',
 		alignItems: 'center',
@@ -798,18 +766,19 @@ const styles = StyleSheet.create({
 	},
 	priceUnit: {
 		fontSize: 14,
-		fontWeight: 'normal',
 		color: theme.colors.foregroundMuted,
+		fontWeight: 'normal',
 	},
 	bookButton: {
 		backgroundColor: theme.colors.primary,
-		paddingHorizontal: theme.spacing.xxl,
-		paddingVertical: theme.spacing.md,
+		paddingVertical: 12,
+		paddingHorizontal: 24,
 		borderRadius: theme.borderRadius.md,
+		alignItems: 'center',
 	},
 	bookButtonText: {
 		color: theme.colors.white,
 		fontWeight: '600',
-		fontSize: 16,
+		fontSize: 14,
 	},
 });

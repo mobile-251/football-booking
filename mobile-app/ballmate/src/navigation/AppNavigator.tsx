@@ -24,12 +24,14 @@ import PersonalInfoScreen from '../screens/PersonalInfoScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import VenueDetailScreen from '../screens/VenueDetailScreen';
 
 export type RootStackParamList = {
 	Welcome: undefined;
 	Login: undefined;
 	Register: undefined;
 	MainTabs: undefined;
+	VenueDetail: { venueId: number };
 	FieldDetail: { fieldId: number };
 	Booking: { fieldId: number };
 	Chat: { conversationId: number; fieldName: string; fieldImage: string };
@@ -360,6 +362,18 @@ export default function AppNavigator() {
 				<Stack.Screen
 					name='FieldDetail'
 					component={FieldDetailScreen}
+					options={{
+						headerShown: true,
+						headerTitle: 'Chi tiết sân',
+						headerTintColor: theme.colors.primary,
+						headerStyle: {
+							backgroundColor: theme.colors.white,
+						},
+					}}
+				/>
+				<Stack.Screen
+					name='VenueDetail'
+					component={VenueDetailScreen}
 					options={{
 						headerShown: true,
 						headerTitle: 'Chi tiết sân',
