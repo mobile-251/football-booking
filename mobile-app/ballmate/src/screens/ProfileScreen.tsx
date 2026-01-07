@@ -171,10 +171,10 @@ export default function ProfileScreen() {
 
     if (!isAuthenticated || !user) {
         return (
-            <SafeAreaView style={styles.container} edges={['top']}>
-                <View style={styles.header}>
+            <View style={styles.container}>
+                <SafeAreaView style={styles.header} edges={['top']}>
                     <Text style={styles.title}>Tài khoản</Text>
-                </View>
+                </SafeAreaView>
                 <View style={styles.loginPrompt}>
                     <Ionicons name="person-circle-outline" size={80} color={theme.colors.secondary} />
                     <Text style={styles.loginTitle}>Chưa đăng nhập</Text>
@@ -186,15 +186,15 @@ export default function ProfileScreen() {
                         <Text style={styles.loginBtnText}>Đăng nhập</Text>
                     </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.container}>
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Header */}
-                <View style={styles.header}>
+                <SafeAreaView style={styles.header} edges={['top']}>
                     <View style={styles.headerTop}>
                         <Text style={styles.title}>Tài khoản</Text>
                         <TouchableOpacity style={styles.notificationBtn} onPress={() => navigation.navigate('Notifications')}>
@@ -240,7 +240,7 @@ export default function ProfileScreen() {
                             </View>
                         </View>
                     </View>
-                </View>
+                </SafeAreaView>
 
                 {/* Stats Cards */}
                 <View style={styles.statsContainer}>
@@ -303,7 +303,7 @@ export default function ProfileScreen() {
                     <Text style={styles.versionText}>© 2025 BallMate</Text>
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
