@@ -72,6 +72,8 @@ const BookingSchedule: React.FC = () => {
     const [viewDate, setViewDate] = useState(new Date())
     // State: Selected booking to show detailed modal
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+    // State: Filter field type
+    const [filterType, setFilterType] = useState('All')
 
     // Update viewDate when selectedDate changes to ensure we see the selected date
     // (Optional: depending on UX preference. Let's keep them synced for simplicity first)
@@ -216,9 +218,22 @@ const BookingSchedule: React.FC = () => {
                 {/* SCHEDULE */}
                 <section className="schedule">
                     <div className="schedule-header">
-                        <button onClick={handlePrevDay}>‹</button>
-                        <span style={{ textTransform: 'capitalize' }}>{formatMainDate(selectedDate)}</span>
-                        <button onClick={handleNextDay}>›</button>
+                        <div className="date-nav">
+                            <button onClick={handlePrevDay}>‹</button>
+                            <span style={{ textTransform: 'capitalize' }}>{formatMainDate(selectedDate)}</span>
+                            <button onClick={handleNextDay}>›</button>
+                        </div>
+
+                        <select
+                            className="field-filter"
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value)}
+                        >
+                            <option value="All">Tất cả sân</option>
+                            <option value="Sân 5">Sân 5</option>
+                            <option value="Sân 7">Sân 7</option>
+                            <option value="Sân 11">Sân 11</option>
+                        </select>
                     </div>
 
                     <div className="schedule-grid">
@@ -231,7 +246,7 @@ const BookingSchedule: React.FC = () => {
                         </div>
 
                         {/* FIELD COLUMNS */}
-                        {FIELDS.map(field => (
+                        {FIELDS.filter(f => filterType === 'All' || f.type === filterType).map(field => (
                             <div key={field.id} className="field-column">
                                 <div className="field-header">
                                     <div className="field-name">{field.name}</div>
