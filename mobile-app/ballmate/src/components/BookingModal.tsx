@@ -19,6 +19,9 @@ import {
 	SelectedSlot,
 	PAYMENT_METHOD_LABELS,
 	FIELD_TYPE_LABELS,
+	FieldTypePricingSummary,
+	FieldSlotInfo,
+	TimeSlotInfo,
 } from '../types/types';
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
@@ -51,11 +54,14 @@ interface TimeSlotData {
 export default function BookingModal({ visible, onClose, field, onBookingSuccess }: BookingModalProps) {
 	const [currentStep, setCurrentStep] = useState<BookingStep>('date');
 	const [selectedDates, setSelectedDates] = useState<string[]>([]);
-	const [venueFields, setVenueFields] = useState<Field[]>([]);
+	// Step 2: Field type summaries with minPrice per date
+	const [fieldTypeSummaries, setFieldTypeSummaries] = useState<FieldTypePricingSummary[]>([]);
 	const [selectedFields, setSelectedFields] = useState<Record<string, number>>({});
 	const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
 	const [currentDateIndex, setCurrentDateIndex] = useState(0);
-	const [timeSlots, setTimeSlots] = useState<TimeSlotData[]>([]);
+	// Step 3: Field slots grouped by field
+	const [fieldSlots, setFieldSlots] = useState<FieldSlotInfo[]>([]);
+	const [loadingFields, setLoadingFields] = useState(false);
 	const [loadingSlots, setLoadingSlots] = useState(false);
 
 	const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -76,23 +82,31 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 
 	const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
-	const getCurrentField = () => {
+	// Helper: Get current field type from selected field
+	const getCurrentFieldType = useCallback((): FieldType => {
 		const currentDate = selectedDates[currentDateIndex];
-		const fieldId = (currentDate && selectedFields[currentDate]) || field.id;
-		return venueFields.find((f) => f.id === fieldId) ?? field;
-	};
+		const fieldId = selectedFields[currentDate];
+		if (!fieldId) return field.fieldType;
+		
+		const summary = fieldTypeSummaries.find(s => 
+			s.availableFieldIds.includes(fieldId)
+		);
+		return (summary?.fieldType as FieldType) || field.fieldType;
+	}, [selectedDates, currentDateIndex, selectedFields, fieldTypeSummaries, field.fieldType]);
 
-	const currentField = getCurrentField();
-
-	const loadVenueFields = useCallback(async () => {
+	// Step 2: Load field type pricing for current date
+	const loadFieldTypePricing = useCallback(async (date: string) => {
+		setLoadingFields(true);
 		try {
-			const allFields = await api.getFields();
-			const related = allFields.filter((f) => f.venueId === field.venueId && f.isActive);
-			setVenueFields(related.length > 0 ? related : [field]);
-		} catch {
-			setVenueFields([field]);
+			const summaries = await api.getFieldTypePricing(field.venueId, date);
+			setFieldTypeSummaries(summaries);
+		} catch (error) {
+			console.error('Failed to load field type pricing:', error);
+			setFieldTypeSummaries([]);
+		} finally {
+			setLoadingFields(false);
 		}
-	}, [field]);
+	}, [field.venueId]);
 
 	useEffect(() => {
 		if (!visible) return;
@@ -109,75 +123,47 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setPhoneNumber('');
 		setNote('');
 		setSelectedFields({});
-		void loadVenueFields();
-	}, [visible, field.id, loadVenueFields]);
+		setFieldTypeSummaries([]);
+		setFieldSlots([]);
+	}, [visible, field.id]);
 
-	const loadTimeSlots = async (fieldId: number, date: string) => {
+	// Step 3: Load field slots for field type and date
+	const loadFieldSlots = useCallback(async (fieldType: FieldType, date: string) => {
 		setLoadingSlots(true);
 		try {
-			// Fetch pricing from backend
-			const pricingData = await api.getFieldPricing(fieldId, date);
-			// Fetch availability (booked slots)
-			const availability = await api.getFieldAvailability(fieldId, date);
-			
-			// Build booked hours set
-			const bookedHours = new Set<number>();
-			if (Array.isArray(availability)) {
-				availability.forEach((booking: { startTime: string; endTime: string }) => {
-					const startHour = new Date(booking.startTime).getHours();
-					const endHour = new Date(booking.endTime).getHours();
-					for (let h = startHour; h < endHour; h++) {
-						bookedHours.add(h);
-					}
-				});
-			}
-
-			// Convert pricing slots to TimeSlotData format
-			const slots: TimeSlotData[] = pricingData.slots.map((slot) => {
-				const hour = parseInt(slot.startTime.split(':')[0]);
-				return {
-					time: slot.startTime,
-					price: slot.price,
-					isAvailable: !bookedHours.has(hour),
-					isPeakHour: slot.isPeakHour,
-				};
-			});
-			setTimeSlots(slots);
+			const slots = await api.getFieldTypeSlots(field.venueId, fieldType, date);
+			setFieldSlots(slots);
 		} catch (error) {
-			console.error('Failed to load pricing/availability:', error);
-			// Fallback: generate default slots if API fails
-			const slots: TimeSlotData[] = [];
-			for (let hour = 6; hour < 23; hour++) {
-				const time = `${hour.toString().padStart(2, '0')}:00`;
-				const isPeakHour = hour >= 17 && hour < 21;
-				slots.push({
-					time,
-					price: isPeakHour ? 500000 : 300000,
-					isAvailable: true,
-					isPeakHour,
-				});
-			}
-			setTimeSlots(slots);
+			console.error('Failed to load field slots:', error);
+			setFieldSlots([]);
 		} finally {
 			setLoadingSlots(false);
 		}
-	};
+	}, [field.venueId]);
 
+	// Effect: Load field type pricing when entering Step 2
+	useEffect(() => {
+		if (currentStep !== 'fieldType') return;
+		const currentDate = selectedDates[currentDateIndex];
+		if (!currentDate) return;
+		void loadFieldTypePricing(currentDate);
+	}, [currentStep, currentDateIndex, selectedDates, loadFieldTypePricing]);
+
+	// Effect: Load field slots when entering Step 3
 	useEffect(() => {
 		if (currentStep !== 'timeSlot') return;
 		const currentDate = selectedDates[currentDateIndex];
-		if (!currentDate) return;
-		void loadTimeSlots(currentField.id, currentDate);
-	}, [currentStep, currentDateIndex, currentField, selectedDates]);
+		const selectedFieldId = selectedFields[currentDate];
+		if (!currentDate || !selectedFieldId) return;
+		
+		const fieldType = getCurrentFieldType();
+		void loadFieldSlots(fieldType, currentDate);
+	}, [currentStep, currentDateIndex, selectedDates, selectedFields, loadFieldSlots, getCurrentFieldType]);
 
 	const handleNext = () => {
 		const nextIndex = currentStepIndex + 1;
 		if (nextIndex < STEPS.length) {
-			const nextStep = STEPS[nextIndex].key;
-			setCurrentStep(nextStep);
-			if (nextStep === 'timeSlot' && selectedDates.length > 0) {
-				void loadTimeSlots(currentField.id, selectedDates[currentDateIndex]);
-			}
+			setCurrentStep(STEPS[nextIndex].key);
 		}
 	};
 
@@ -255,30 +241,6 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 
 	const toggleDateSelection = (date: string) => {
 		setSelectedDates((prev) => (prev.includes(date) ? prev.filter((d) => d !== date) : [...prev, date]));
-	};
-
-	const toggleSlotSelection = (slot: TimeSlotData, date: string) => {
-		if (!slot.isAvailable) return;
-
-		const existingIndex = selectedSlots.findIndex((s) => s.date === date && s.startTime === slot.time);
-
-		if (existingIndex >= 0) {
-			setSelectedSlots((prev) => prev.filter((_, i) => i !== existingIndex));
-		} else {
-			const dateFieldId = selectedFields[date] || field.id;
-			const dateField = venueFields.find((f) => f.id === dateFieldId) ?? field;
-
-			const endHour = parseInt(slot.time.split(':')[0]) + 1;
-			const newSlot: SelectedSlot = {
-				date,
-				fieldId: dateField.id,
-				fieldName: dateField.name,
-				startTime: slot.time,
-				endTime: `${endHour.toString().padStart(2, '0')}:00`,
-				price: slot.price,
-			};
-			setSelectedSlots((prev) => [...prev, newSlot]);
-		}
 	};
 
 	const getTotalPrice = () => {
@@ -516,42 +478,53 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					</View>
 				)}
 
-				<View style={styles.fieldTypeList}>
-					{(venueFields.length > 0 ? venueFields : [field]).map((item) => (
-						<TouchableOpacity
-							key={item.id}
-							style={[
-								styles.fieldTypeCard,
-								(selectedFields[currentDate] || field.id) === item.id && styles.fieldTypeCardSelected,
-							]}
-							onPress={() =>
-								setSelectedFields((prev) => ({
-									...prev,
-									[currentDate]: item.id,
-								}))
-							}
-						>
-							<View style={styles.fieldTypeInfo}>
-								<Text
-									style={[
-										styles.fieldTypeLabel,
-										(selectedFields[currentDate] || field.id) === item.id && styles.fieldTypeTextSelected,
-									]}
-								>
-									{FIELD_TYPE_LABELS[item.fieldType]}
-								</Text>
-								<Text style={styles.fieldTypeDescription}>{capacityByType[item.fieldType]}</Text>
-							</View>
+				{loadingFields ? (
+					<ActivityIndicator size='large' color={theme.colors.primary} style={{ marginTop: 40 }} />
+				) : (
+					<View style={styles.fieldTypeList}>
+						{fieldTypeSummaries.map((summary) => {
+							const selectedFieldId = selectedFields[currentDate];
+							const isSelected = selectedFieldId && summary.availableFieldIds.includes(selectedFieldId);
 
-							<View style={styles.fieldTypePriceBlock}>
-								<Text style={styles.fieldTypePriceLabel}>Chỉ từ</Text>
-								<Text style={styles.fieldTypePriceValue}>
-									{formatPrice(item.pricePerHour)}đ<Text style={styles.fieldTypePriceUnit}> / giờ</Text>
-								</Text>
-							</View>
-						</TouchableOpacity>
-					))}
-				</View>
+							return (
+								<TouchableOpacity
+									key={summary.fieldType}
+									style={[
+										styles.fieldTypeCard,
+										isSelected ? styles.fieldTypeCardSelected : undefined,
+									]}
+									onPress={() => {
+										// Select first available field of this type
+										const firstFieldId = summary.availableFieldIds[0];
+										setSelectedFields((prev) => ({
+											...prev,
+											[currentDate]: firstFieldId,
+										}));
+									}}
+								>
+									<View style={styles.fieldTypeInfo}>
+										<Text
+											style={[
+												styles.fieldTypeLabel,
+												isSelected ? styles.fieldTypeTextSelected : undefined,
+											]}
+										>
+											{FIELD_TYPE_LABELS[summary.fieldType as FieldType]}
+										</Text>
+										<Text style={styles.fieldTypeDescription}>{capacityByType[summary.fieldType as FieldType]}</Text>
+									</View>
+
+									<View style={styles.fieldTypePriceBlock}>
+										<Text style={styles.fieldTypePriceLabel}>Chỉ từ</Text>
+										<Text style={styles.fieldTypePriceValue}>
+											{formatPrice(summary.minPrice)}đ<Text style={styles.fieldTypePriceUnit}> / giờ</Text>
+										</Text>
+									</View>
+								</TouchableOpacity>
+							);
+						})}
+					</View>
+				)}
 			</View>
 		);
 	};
@@ -588,7 +561,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 							{formatted?.dayName}, {formatted?.day} tháng {formatted?.month}
 						</Text>
 						<Text style={styles.dateNavSubtitle}>
-							Ngày {currentDateIndex + 1} / {selectedDates.length} • {FIELD_TYPE_LABELS[currentField.fieldType]}
+							Ngày {currentDateIndex + 1} / {selectedDates.length} • {FIELD_TYPE_LABELS[getCurrentFieldType()]}
 						</Text>
 					</View>
 
@@ -604,53 +577,84 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					</TouchableOpacity>
 				</View>
 
-				{/* Time Slots Grid */}
+				{/* Time Slots Grid - Grouped by Field */}
 				{loadingSlots ? (
 					<ActivityIndicator size='large' color={theme.colors.primary} style={{ marginTop: 40 }} />
 				) : (
 					<ScrollView style={styles.timeSlotsContainer} showsVerticalScrollIndicator={false}>
-						<Text style={styles.slotSectionLabel}>
-							<Ionicons name='time-outline' size={14} /> Giờ bắt đầu
-						</Text>
-						<View style={styles.timeSlotsGrid}>
-							{timeSlots.map((slot) => {
-								const isSelected = selectedSlots.some((s) => s.date === currentDate && s.startTime === slot.time);
-								return (
-									<TouchableOpacity
-										key={slot.time}
-										style={[
-											styles.timeSlot,
-											!slot.isAvailable && styles.timeSlotBooked,
-											isSelected && styles.timeSlotSelected,
-											slot.isPeakHour && slot.isAvailable && !isSelected && styles.timeSlotPeak,
-										]}
-										onPress={() => toggleSlotSelection(slot, currentDate)}
-										disabled={!slot.isAvailable}
-									>
-										<Text
-											style={[
-												styles.timeSlotTime,
-												isSelected && styles.timeSlotTextSelected,
-												!slot.isAvailable && styles.timeSlotTextBooked,
-											]}
-										>
-											{slot.time}
-										</Text>
-										{!slot.isAvailable && <Ionicons name='close' size={12} color={theme.colors.foregroundMuted} />}
-										{slot.isPeakHour && slot.isAvailable && <Text style={styles.peakIcon}>🔥</Text>}
-										<Text
-											style={[
-												styles.timeSlotPrice,
-												isSelected && styles.timeSlotTextSelected,
-												!slot.isAvailable && styles.timeSlotTextBooked,
-											]}
-										>
-											{slot.price / 1000}k
-										</Text>
-									</TouchableOpacity>
-								);
-							})}
-						</View>
+						{fieldSlots.map((fieldSlot) => (
+							<View key={fieldSlot.fieldId} style={{ marginBottom: 24 }}>
+								{/* Field Name Header */}
+								<Text style={[styles.slotSectionLabel, { marginBottom: 12 }]}>
+									<Ionicons name='football-outline' size={14} /> {fieldSlot.fieldName}
+								</Text>
+
+								{/* Slots Grid for this field */}
+								<View style={styles.timeSlotsGrid}>
+									{fieldSlot.slots.map((slot) => {
+										const isSelected = selectedSlots.some(
+											(s) => s.date === currentDate && s.startTime === slot.startTime && s.fieldId === fieldSlot.fieldId
+										);
+										return (
+											<TouchableOpacity
+												key={slot.startTime}
+												style={[
+													styles.timeSlot,
+													!slot.isAvailable && styles.timeSlotBooked,
+													isSelected && styles.timeSlotSelected,
+													slot.isPeakHour && slot.isAvailable && !isSelected && styles.timeSlotPeak,
+												]}
+												onPress={() => {
+													if (!slot.isAvailable) return;
+
+													const existingIndex = selectedSlots.findIndex(
+														(s) => s.date === currentDate && s.startTime === slot.startTime && s.fieldId === fieldSlot.fieldId
+													);
+
+													if (existingIndex >= 0) {
+														// Deselect
+														setSelectedSlots((prev) => prev.filter((_, i) => i !== existingIndex));
+													} else {
+														// Select
+														const newSlot: SelectedSlot = {
+															date: currentDate,
+															fieldId: fieldSlot.fieldId,
+															fieldName: fieldSlot.fieldName,
+															startTime: slot.startTime,
+															endTime: slot.endTime,
+															price: slot.price,
+														};
+														setSelectedSlots((prev) => [...prev, newSlot]);
+													}
+												}}
+												disabled={!slot.isAvailable}
+											>
+												<Text
+													style={[
+														styles.timeSlotTime,
+														isSelected && styles.timeSlotTextSelected,
+														!slot.isAvailable && styles.timeSlotTextBooked,
+													]}
+												>
+													{slot.startTime}
+												</Text>
+												{!slot.isAvailable && <Ionicons name='close' size={12} color={theme.colors.foregroundMuted} />}
+												{slot.isPeakHour && slot.isAvailable && <Text style={styles.peakIcon}>🔥</Text>}
+												<Text
+													style={[
+														styles.timeSlotPrice,
+														isSelected && styles.timeSlotTextSelected,
+														!slot.isAvailable && styles.timeSlotTextBooked,
+													]}
+												>
+													{slot.price / 1000}k
+												</Text>
+											</TouchableOpacity>
+										);
+									})}
+								</View>
+							</View>
+						))}
 
 						{/* Legend */}
 						<View style={styles.legend}>

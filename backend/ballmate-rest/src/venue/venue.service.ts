@@ -293,4 +293,222 @@ export class VenueService {
       where: { id },
     });
   }
+
+  /**
+   * Helper: Determine if date is weekend
+   */
+  private isDayTypeWeekend(date: string): boolean {
+    const dateObj = new Date(date);
+    const dayOfWeek = dateObj.getDay();
+    return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+  }
+
+  /**
+   * Helper: Extract booked hours from bookings array
+   */
+  private extractBookedHours(bookings: any[]): Set<number> {
+    const bookedHours = new Set<number>();
+    bookings.forEach(booking => {
+      const startHour = new Date(booking.startTime).getHours();
+      const endHour = new Date(booking.endTime).getHours();
+      for (let h = startHour; h < endHour; h++) {
+        bookedHours.add(h);
+      }
+    });
+    return bookedHours;
+  }
+
+  /**
+   * Get field type pricing summary for a specific date
+   * Returns array of field types with minPrice and availableFieldIds
+   */
+  async getFieldTypePricingSummary(venueId: number, date: string) {
+    // Verify venue exists
+    const venue = await this.prisma.venue.findUnique({
+      where: { id: venueId },
+    });
+
+    if (!venue) {
+      throw new NotFoundException(`Venue with ID ${venueId} not found`);
+    }
+
+    // Get all active fields with pricings
+    const fields = await this.prisma.field.findMany({
+      where: {
+        venueId,
+        isActive: true,
+      },
+      include: {
+        pricings: true,
+      },
+    });
+
+    if (fields.length === 0) {
+      return [];
+    }
+
+    // Determine dayType
+    const isWeekend = this.isDayTypeWeekend(date);
+    const dayType = isWeekend ? 'WEEKEND' : 'WEEKDAY';
+
+    // Group fields by fieldType
+    const grouped: Record<string, typeof fields> = {};
+    fields.forEach(field => {
+      const type = field.fieldType;
+      if (!grouped[type]) {
+        grouped[type] = [];
+      }
+      grouped[type].push(field);
+    });
+
+    // Calculate minPrice for each fieldType
+    const result = Object.entries(grouped).map(([fieldType, fieldsOfType]) => {
+      const allPrices: number[] = [];
+
+      fieldsOfType.forEach(field => {
+        field.pricings
+          .filter(pricing => pricing.dayType === dayType)
+          .forEach(pricing => {
+            allPrices.push(pricing.price);
+          });
+      });
+
+      const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
+      const availableFieldIds = fieldsOfType.map(f => f.id);
+
+      return {
+        fieldType,
+        minPrice,
+        availableFieldIds,
+      };
+    });
+
+    return result;
+  }
+
+  /**
+   * Get field type slots for a specific date
+   * Returns array of fields with their time slots (pricing + availability)
+   */
+  async getFieldTypeSlots(venueId: number, fieldType: string, date: string) {
+    // Verify venue exists
+    const venue = await this.prisma.venue.findUnique({
+      where: { id: venueId },
+      select: {
+        id: true,
+        openTime: true,
+        closeTime: true,
+      },
+    });
+
+    if (!venue) {
+      throw new NotFoundException(`Venue with ID ${venueId} not found`);
+    }
+
+    // Get all active fields matching fieldType
+    const fields = await this.prisma.field.findMany({
+      where: {
+        venueId,
+        fieldType: fieldType as any,
+        isActive: true,
+      },
+      include: {
+        pricings: true,
+      },
+    });
+
+    if (fields.length === 0) {
+      return [];
+    }
+
+    // Determine dayType
+    const isWeekend = this.isDayTypeWeekend(date);
+    const dayType = isWeekend ? 'WEEKEND' : 'WEEKDAY';
+
+    // Parse venue hours
+    const openHour = venue.openTime ? parseInt(venue.openTime.split(':')[0]) : 6;
+    const closeHour = venue.closeTime ? parseInt(venue.closeTime.split(':')[0]) : 23;
+
+    // For each field, generate slots
+    const result = await Promise.all(
+      fields.map(async (field) => {
+        // Get pricings for this dayType
+        const pricings = field.pricings.filter(p => p.dayType === dayType);
+
+        // Get bookings for this field on this date
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const bookings = await this.prisma.booking.findMany({
+          where: {
+            fieldId: field.id,
+            status: {
+              in: ['PENDING', 'CONFIRMED'],
+            },
+            startTime: {
+              gte: startOfDay,
+              lte: endOfDay,
+            },
+          },
+          select: {
+            startTime: true,
+            endTime: true,
+          },
+        });
+
+        const bookedHours = this.extractBookedHours(bookings);
+
+        // Generate hourly slots
+        const slots: {
+          startTime: string;
+          endTime: string;
+          price: number;
+          isPeakHour: boolean;
+          isAvailable: boolean;
+        }[] = [];
+
+        for (let hour = openHour; hour < closeHour; hour++) {
+          const startTime = `${hour.toString().padStart(2, '0')}:00`;
+          const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
+          const isPeakHour = hour >= 17 && hour < 21;
+
+          // Find matching pricing
+          let price = 0;
+          for (const pricing of pricings) {
+            const pStart = parseInt(pricing.startTime.split(':')[0]);
+            const pEnd = parseInt(pricing.endTime.split(':')[0]);
+            if (hour >= pStart && hour < pEnd) {
+              price = pricing.price;
+              break;
+            }
+          }
+
+          // Fallback price if no pricing found
+          if (price === 0) {
+            price = isPeakHour ? 500000 : 300000;
+          }
+
+          const isAvailable = !bookedHours.has(hour);
+
+          slots.push({
+            startTime,
+            endTime,
+            price,
+            isPeakHour,
+            isAvailable,
+          });
+        }
+
+        return {
+          fieldId: field.id,
+          fieldName: field.name,
+          slots,
+        };
+      })
+    );
+
+    return result;
+  }
 }

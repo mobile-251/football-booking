@@ -40,6 +40,31 @@ export class VenueController {
     return this.venueService.update(id, updateVenueDto);
   }
 
+  /**
+   * Get field type pricing summary for a specific date
+   * Returns array of field types with minPrice and availableFieldIds
+   */
+  @Get(':id/field-types')
+  getFieldTypePricingSummary(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('date') date: string,
+  ) {
+    return this.venueService.getFieldTypePricingSummary(id, date);
+  }
+
+  /**
+   * Get field slots for a specific field type and date
+   * Returns array of fields with time slots (pricing + availability)
+   */
+  @Get(':id/field-types/:fieldType/slots')
+  getFieldTypeSlots(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('fieldType') fieldType: string,
+    @Query('date') date: string,
+  ) {
+    return this.venueService.getFieldTypeSlots(id, fieldType, date);
+  }
+
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.venueService.remove(id);

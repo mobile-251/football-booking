@@ -56,6 +56,28 @@ export interface Field {
     reviews?: Review[];
 }
 
+// Booking flow - Step 2: Field Type Pricing Summary
+export interface FieldTypePricingSummary {
+    fieldType: FieldType;
+    minPrice: number;
+    availableFieldIds: number[];
+}
+
+// Booking flow - Step 3: Field Slot Info  
+export interface TimeSlotInfo {
+    startTime: string;
+    endTime: string;
+    price: number;
+    isPeakHour: boolean;
+    isAvailable: boolean;
+}
+
+export interface FieldSlotInfo {
+    fieldId: number;
+    fieldName: string;
+    slots: TimeSlotInfo[];
+}
+
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
 
 export interface Booking {

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { AuthResponse, Field, Venue, VenueDetail, Booking, Review, FieldFilter, ApiError, User } from '../types/types';
+import { AuthResponse, Field, Venue, VenueDetail, Booking, Review, FieldFilter, ApiError, User, FieldType, FieldTypePricingSummary, FieldSlotInfo } from '../types/types';
 import { Config } from '../config/environment';
 
 const API_BASE_URL = Config.API_URL;
@@ -160,6 +160,28 @@ class ApiService {
 
 	async getVenue(id: number): Promise<VenueDetail> {
 		const response = await this.client.get<VenueDetail>(`/venues/${id}`);
+		return response.data;
+	}
+
+	/**
+	 * Get field type pricing summary for a specific date
+	 * Returns array of field types with minPrice and availableFieldIds
+	 */
+	async getFieldTypePricing(venueId: number, date: string): Promise<FieldTypePricingSummary[]> {
+		const response = await this.client.get(`/venues/${venueId}/field-types`, {
+			params: { date },
+		});
+		return response.data;
+	}
+
+	/**
+	 * Get field slots for a specific field type and date
+	 * Returns array of fields with time slots (pricing + availability)
+	 */
+	async getFieldTypeSlots(venueId: number, fieldType: FieldType, date: string): Promise<FieldSlotInfo[]> {
+		const response = await this.client.get(`/venues/${venueId}/field-types/${fieldType}/slots`, {
+			params: { date },
+		});
 		return response.data;
 	}
 
