@@ -7,6 +7,7 @@ import DevelopmentModal from './components/DevelopmentModal/DevelopmentModal'
 import FieldRegister from './components/FieldRegister/FieldRegister'
 import LoginPage from './components/Login/LoginPage'
 import RegisterPage from './components/Register/RegisterPage'
+import BookingSchedule from './components/BookingSchedule/BookingSchedule'
 import { Toaster } from 'react-hot-toast'
 
 const Dashboard = () => {
@@ -38,7 +39,7 @@ const Dashboard = () => {
   }, [])
 
   const handleMenuItemClick = (menuItem: string) => {
-    if (menuItem === 'Đăng ký sân') {
+    if (menuItem === 'Đăng ký sân' || menuItem === 'Lịch đặt sân') {
       setActiveMenuItem(menuItem)
       setShowModal(false)
     } else if (menuItem !== 'Tổng quan') {
@@ -93,6 +94,7 @@ const Dashboard = () => {
         <Header onToggleSidebar={toggleSidebar} isMobile={isMobile} />
         <div className="content-area">
           {activeMenuItem === 'Đăng ký sân' && <FieldRegister />}
+          {activeMenuItem === 'Lịch đặt sân' && <BookingSchedule />}
           {activeMenuItem === 'Tổng quan' && (
             <div style={{ padding: '20px', textAlign: 'center', color: '#6B7280' }}>
               <h2>Tổng quan Dashboard</h2>
