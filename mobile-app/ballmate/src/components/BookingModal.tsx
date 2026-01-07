@@ -910,7 +910,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	};
 
 	return (
-		<Modal visible={visible} transparent animationType='fade' onRequestClose={onClose} statusBarTranslucent>
+		<Modal visible={visible} transparent animationType='fade' onRequestClose={onClose} statusBarTranslucent presentationStyle="overFullScreen">
 			<View style={styles.backdrop}>
 				<View style={styles.sheet}>
 					<View style={styles.container}>
@@ -918,7 +918,6 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 						<View style={styles.header}>
 							<View>
 								<Text style={styles.headerTitle}>Đặt lịch sân</Text>
-								<Text style={styles.headerSubtitle}>{field.name}</Text>
 							</View>
 							<TouchableOpacity style={styles.closeBtn} onPress={onClose}>
 								<Ionicons name='close' size={22} color={theme.colors.primary} />
@@ -984,7 +983,8 @@ const styles = StyleSheet.create({
 	},
 	sheet: {
 		width: '100%',
-		maxHeight: height * 0.92,
+		// maxHeight: height * 0.92,
+		height: height * 0.9,
 		backgroundColor: theme.colors.cardSolid,
 		borderTopLeftRadius: theme.borderRadius.xl,
 		borderTopRightRadius: theme.borderRadius.xl,
