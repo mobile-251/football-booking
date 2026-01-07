@@ -7,68 +7,72 @@ import StepProgress from './StepProgress'
 import FormActions from './FormActions'
 import ContactStep from './ContactStep'
 import PreviewModal from './PreviewModal'
-import AxiosClient from '../../api/AxiosClient'
+import venueApi from '../../api/venueApi'
 import toast from 'react-hot-toast'
 import type { FieldFormData, PricingData } from './types'
 
-// Mẫu giá gợi ý cho các loại sân
 const pricingSuggestions = {
   field5: {
     weekdays: [
-      { startTime: '05:00', endTime: '16:00', price: 200000 },
+      { startTime: '06:00', endTime: '16:00', price: 200000 },
       { startTime: '16:00', endTime: '22:00', price: 350000 },
-      { startTime: '22:00', endTime: '05:00', price: 150000 },
+      { startTime: '22:00', endTime: '23:00', price: 150000 },
     ],
     weekends: [
-      { startTime: '05:00', endTime: '22:00', price: 400000 },
-      { startTime: '22:00', endTime: '05:00', price: 200000 },
+      { startTime: '06:00', endTime: '16:00', price: 250000 },
+      { startTime: '16:00', endTime: '22:00', price: 400000 },
+      { startTime: '22:00', endTime: '23:00', price: 150000 },
     ]
   },
   field7: {
     weekdays: [
-      { startTime: '05:00', endTime: '16:00', price: 300000 },
+      { startTime: '06:00', endTime: '16:00', price: 300000 },
       { startTime: '16:00', endTime: '22:00', price: 500000 },
-      { startTime: '22:00', endTime: '05:00', price: 250000 },
+      { startTime: '22:00', endTime: '23:00', price: 250000 },
     ],
     weekends: [
-      { startTime: '05:00', endTime: '22:00', price: 600000 },
-      { startTime: '22:00', endTime: '05:00', price: 300000 },
+      { startTime: '06:00', endTime: '16:00', price: 350000 },
+      { startTime: '16:00', endTime: '22:00', price: 550000 },
+      { startTime: '22:00', endTime: '23:00', price: 250000 },
     ]
   },
   field11: {
     weekdays: [
-      { startTime: '05:00', endTime: '16:00', price: 500000 },
-      { startTime: '16:00', endTime: '22:00', price: 800000 },
-      { startTime: '22:00', endTime: '05:00', price: 400000 },
+      { startTime: '06:00', endTime: '16:00', price: 900000 },
+      { startTime: '16:00', endTime: '22:00', price: 1000000 },
+      { startTime: '22:00', endTime: '23:00', price: 800000 },
     ],
     weekends: [
-      { startTime: '05:00', endTime: '22:00', price: 1000000 },
-      { startTime: '22:00', endTime: '05:00', price: 500000 },
+      { startTime: '06:00', endTime: '16:00', price: 950000 },
+      { startTime: '16:00', endTime: '22:00', price: 1100000 },
+      { startTime: '22:00', endTime: '23:00', price: 800000 },
     ]
   }
+}
+
+const INITIAL_FORM_DATA = {
+  fieldName: '',
+  fieldTypes: {
+    field5: { selected: false, count: 0 },
+    field7: { selected: false, count: 0 },
+    field11: { selected: false, count: 0 },
+  },
+  description: '',
+  address: '',
+  city: '',
+  district: '',
+  latitude: 10.762622,
+  longitude: 106.660172,
+  phoneNumber: '',
+  email: '',
+  pricing: {} as PricingData,
+  images: [] as File[],
 }
 
 function FieldRegister() {
   const [currentStep, setCurrentStep] = useState(1)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    fieldName: '',
-    fieldTypes: {
-      field5: { selected: false, count: 0 },
-      field7: { selected: false, count: 0 },
-      field11: { selected: false, count: 0 },
-    },
-    description: '',
-    address: '',
-    city: '',
-    district: '',
-    latitude: 10.762622,
-    longitude: 106.660172,
-    phoneNumber: '',
-    email: '',
-    pricing: {} as PricingData,
-    images: [] as File[],
-  })
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA)
 
   // Cấu hình các bước đăng ký
   const steps = [
@@ -204,10 +208,14 @@ function FieldRegister() {
           pricing: formData.pricing,
         };
 
-        const response = await AxiosClient.post('/venues', payload);
+        const response = await venueApi.create(payload);
         console.log('API Response:', response);
         toast.success('Đăng ký sân thành công!');
-        // Chuyển hướng hoặc reset form
+
+        // Reset form về trạng thái ban đầu
+        setFormData(INITIAL_FORM_DATA);
+        setCurrentStep(1);
+
       } catch (error: any) {
         console.error('API Error:', error);
         const msg = error.response?.data?.message || 'Có lỗi xảy ra khi đăng ký!';

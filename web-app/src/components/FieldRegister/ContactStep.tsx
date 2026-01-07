@@ -18,7 +18,7 @@ const ContactStep: React.FC<ContactStepProps> = ({ formData, onChange }) => {
 
             <div className="contact-form">
                 <div className="contact-input-group">
-                    <label htmlFor="phone">Số điện thoại liên hệ</label>
+                    <label htmlFor="phone">Số điện thoại liên hệ <span className="required-mark">*</span></label>
                     <div className="input-with-icon">
                         <img src={PhoneIcon} alt="Phone" className="input-icon" />
                         <input
@@ -32,7 +32,7 @@ const ContactStep: React.FC<ContactStepProps> = ({ formData, onChange }) => {
                 </div>
 
                 <div className="contact-input-group">
-                    <label htmlFor="email">Địa chỉ Email</label>
+                    <label htmlFor="email">Địa chỉ Email <span className="required-mark">*</span></label>
                     <div className="input-with-icon">
                         <img src={MailIcon} alt="Email" className="input-icon" />
                         <input
@@ -81,6 +81,11 @@ const ContactStep: React.FC<ContactStepProps> = ({ formData, onChange }) => {
                     color: #334155;
                     font-size: 0.9rem;
                     padding-left: 4px;
+                }
+                .required-mark {
+                    color: #ef4444;
+                    margin-left: 4px;
+                    font-weight: bold;
                 }
                 .input-with-icon {
                     position: relative;
