@@ -14,36 +14,36 @@ import type { FieldFormData, PricingData } from './types'
 const pricingSuggestions = {
   field5: {
     weekdays: [
-      { startTime: '05:00', endTime: '16:00', price: 200000 },
+      { startTime: '06:00', endTime: '16:00', price: 200000 },
       { startTime: '16:00', endTime: '22:00', price: 350000 },
       { startTime: '22:00', endTime: '23:00', price: 150000 },
     ],
     weekends: [
-      { startTime: '05:00', endTime: '16:00', price: 250000 },
+      { startTime: '06:00', endTime: '16:00', price: 250000 },
       { startTime: '16:00', endTime: '22:00', price: 400000 },
       { startTime: '22:00', endTime: '23:00', price: 150000 },
     ]
   },
   field7: {
     weekdays: [
-      { startTime: '05:00', endTime: '16:00', price: 300000 },
+      { startTime: '06:00', endTime: '16:00', price: 300000 },
       { startTime: '16:00', endTime: '22:00', price: 500000 },
       { startTime: '22:00', endTime: '23:00', price: 250000 },
     ],
     weekends: [
-      { startTime: '05:00', endTime: '16:00', price: 350000 },
+      { startTime: '06:00', endTime: '16:00', price: 350000 },
       { startTime: '16:00', endTime: '22:00', price: 550000 },
       { startTime: '22:00', endTime: '23:00', price: 250000 },
     ]
   },
   field11: {
     weekdays: [
-      { startTime: '05:00', endTime: '16:00', price: 900000 },
+      { startTime: '06:00', endTime: '16:00', price: 900000 },
       { startTime: '16:00', endTime: '22:00', price: 1000000 },
       { startTime: '22:00', endTime: '23:00', price: 800000 },
     ],
     weekends: [
-      { startTime: '05:00', endTime: '16:00', price: 950000 },
+      { startTime: '06:00', endTime: '16:00', price: 950000 },
       { startTime: '16:00', endTime: '22:00', price: 1100000 },
       { startTime: '22:00', endTime: '23:00', price: 800000 },
     ]
