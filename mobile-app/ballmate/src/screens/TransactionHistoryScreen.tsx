@@ -36,13 +36,22 @@ export default function TransactionHistoryScreen() {
 				return {
 					id: payment.id,
 					fieldName: payment.booking?.field?.name || 'Sân bóng',
-					fieldType: payment.booking?.field?.fieldType === 'FIELD_5VS5' ? 'Sân 5 người' :
-						payment.booking?.field?.fieldType === 'FIELD_7VS7' ? 'Sân 7 người' : 'Sân 11 người',
+					fieldType:
+						payment.booking?.field?.fieldType === 'FIELD_5VS5'
+							? 'Sân 5 người'
+							: payment.booking?.field?.fieldType === 'FIELD_7VS7'
+							? 'Sân 7 người'
+							: 'Sân 11 người',
 					date: createdAt.toLocaleDateString('vi-VN'),
 					time: createdAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-					paymentMethod: payment.method === 'CASH' ? 'Tiền mặt' :
-						payment.method === 'MOMO' ? 'MoMo' :
-							payment.method === 'BANK_TRANSFER' ? 'Chuyển khoản' : payment.method,
+					paymentMethod:
+						payment.method === 'CASH'
+							? 'Tiền mặt'
+							: payment.method === 'MOMO'
+							? 'MoMo'
+							: payment.method === 'BANK_TRANSFER'
+							? 'Chuyển khoản'
+							: payment.method,
 					amount: payment.amount,
 					transactionId: `TXN${payment.id.toString().padStart(3, '0')}`,
 				};
@@ -96,8 +105,8 @@ export default function TransactionHistoryScreen() {
 
 	if (loading) {
 		return (
-			<SafeAreaView style={styles.container} edges={['top']}>
-				<View style={styles.header}>
+			<View style={styles.container}>
+				<SafeAreaView style={styles.header} edges={['top']}>
 					<View style={styles.headerTop}>
 						<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
 							<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
@@ -105,18 +114,18 @@ export default function TransactionHistoryScreen() {
 						<Text style={styles.title}>Lịch sử giao dịch</Text>
 						<View style={{ width: 40 }} />
 					</View>
-				</View>
+				</SafeAreaView>
 				<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-					<ActivityIndicator size="large" color={theme.colors.primary} />
+					<ActivityIndicator size='large' color={theme.colors.primary} />
 				</View>
-			</SafeAreaView>
+			</View>
 		);
 	}
 
 	return (
-		<SafeAreaView style={styles.container} edges={['top']}>
+		<View style={styles.container}>
 			{/* Header */}
-			<View style={styles.header}>
+			<SafeAreaView style={styles.header} edges={['top']}>
 				<View style={styles.headerTop}>
 					<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
 						<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
@@ -144,7 +153,7 @@ export default function TransactionHistoryScreen() {
 						<Text style={styles.statSub}>{transactionCount} giao dịch</Text>
 					</View>
 				</View>
-			</View>
+			</SafeAreaView>
 
 			{/* Transactions List */}
 			<FlatList
@@ -162,7 +171,7 @@ export default function TransactionHistoryScreen() {
 					</View>
 				}
 			/>
-		</SafeAreaView>
+		</View>
 	);
 }
 

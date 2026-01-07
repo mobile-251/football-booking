@@ -93,8 +93,8 @@ export default function ChatScreen() {
 	);
 
 	return (
-		<SafeAreaView style={styles.container} edges={['top']}>
-			<View style={styles.header}>
+		<View style={styles.container}>
+			<SafeAreaView style={styles.header} edges={['top']}>
 				<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
 					<Ionicons name='arrow-back' size={24} color={theme.colors.white} />
 				</TouchableOpacity>
@@ -122,7 +122,7 @@ export default function ChatScreen() {
 						<Ionicons name='ellipsis-vertical' size={22} color={theme.colors.white} />
 					</TouchableOpacity>
 				</View>
-			</View>
+			</SafeAreaView>
 
 			<KeyboardAvoidingView
 				style={styles.content}
@@ -165,7 +165,7 @@ export default function ChatScreen() {
 					</TouchableOpacity>
 				</View>
 			</KeyboardAvoidingView>
-		</SafeAreaView>
+		</View>
 	);
 }
 

@@ -139,8 +139,8 @@ export default function PersonalInfoScreen() {
 
 	if (!isAuthenticated || !user) {
 		return (
-			<SafeAreaView style={styles.container} edges={['top']}>
-				<View style={styles.header}>
+			<View style={styles.container}>
+				<SafeAreaView style={styles.header} edges={['top']}>
 					<View style={styles.headerTop}>
 						<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
 							<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
@@ -148,7 +148,7 @@ export default function PersonalInfoScreen() {
 						<Text style={styles.title}>Thông tin cá nhân</Text>
 						<View style={{ width: 40 }} />
 					</View>
-				</View>
+				</SafeAreaView>
 				<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
 					<Ionicons name='lock-closed-outline' size={64} color={theme.colors.secondary} />
 					<Text style={styles.loginPromptTitle}>Chưa đăng nhập</Text>
@@ -157,14 +157,14 @@ export default function PersonalInfoScreen() {
 						<Text style={styles.loginBtnText}>Đăng nhập</Text>
 					</TouchableOpacity>
 				</View>
-			</SafeAreaView>
+			</View>
 		);
 	}
 
 	return (
-		<SafeAreaView style={styles.container} edges={['top']}>
+		<View style={styles.container}>
 			{/* Header */}
-			<View style={styles.header}>
+			<SafeAreaView style={styles.header} edges={['top']}>
 				<View style={styles.headerTop}>
 					<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
 						<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
@@ -191,7 +191,7 @@ export default function PersonalInfoScreen() {
 						<Text style={styles.verifiedText}>Tài khoản đã xác thực</Text>
 					</View>
 				</View>
-			</View>
+			</SafeAreaView>
 
 			<ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 				{/* Gender Selection */}
@@ -303,7 +303,7 @@ export default function PersonalInfoScreen() {
 
 				<View style={{ height: 40 }} />
 			</ScrollView>
-		</SafeAreaView>
+		</View>
 	);
 }
 

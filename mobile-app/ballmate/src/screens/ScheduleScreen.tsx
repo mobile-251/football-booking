@@ -374,7 +374,7 @@ export default function ScheduleScreen() {
 									<Text style={styles.detailValue}>
 										{selectedBooking.payment?.method
 											? PAYMENT_METHOD_LABELS[selectedBooking.payment.method as PaymentMethod] ||
-											selectedBooking.payment.method
+											  selectedBooking.payment.method
 											: 'Chưa thanh toán'}
 									</Text>
 								</View>
@@ -405,12 +405,12 @@ export default function ScheduleScreen() {
 	};
 
 	return (
-		<SafeAreaView style={styles.container} edges={['top']}>
+		<View style={styles.container}>
 			{/* Header */}
-			<View style={styles.header}>
+			<SafeAreaView style={styles.header} edges={['top']}>
 				<Text style={styles.title}>Lịch đặt sân</Text>
 				<Text style={styles.subtitle}>Quản lý các lượt đặt của bạn</Text>
-			</View>
+			</SafeAreaView>
 
 			{/* Tabs */}
 			<View style={styles.tabsContainer}>
@@ -458,7 +458,7 @@ export default function ScheduleScreen() {
 
 			{/* Detail Modal */}
 			{renderDetailModal()}
-		</SafeAreaView>
+		</View>
 	);
 }
 

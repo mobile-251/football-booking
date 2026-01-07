@@ -62,7 +62,7 @@ export default function FavoritesScreen() {
 	const handleRemoveFavorite = async (fieldId: number) => {
 		try {
 			await api.removeFavorite(fieldId);
-			setFavorites(favorites.filter(f => f.id !== fieldId));
+			setFavorites(favorites.filter((f) => f.id !== fieldId));
 		} catch (error) {
 			console.error('Failed to remove favorite:', error);
 		}
@@ -133,9 +133,7 @@ export default function FavoritesScreen() {
 		<View style={styles.loginContainer}>
 			<Ionicons name='lock-closed-outline' size={64} color={theme.colors.secondary} />
 			<Text style={styles.loginTitle}>Chưa đăng nhập</Text>
-			<Text style={styles.loginText}>
-				Vui lòng đăng nhập để xem danh sách sân yêu thích của bạn
-			</Text>
+			<Text style={styles.loginText}>Vui lòng đăng nhập để xem danh sách sân yêu thích của bạn</Text>
 			<TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
 				<Text style={styles.loginBtnText}>Đăng nhập</Text>
 			</TouchableOpacity>
@@ -144,8 +142,8 @@ export default function FavoritesScreen() {
 
 	if (loading || authLoading) {
 		return (
-			<SafeAreaView style={styles.container} edges={['top']}>
-				<View style={styles.header}>
+			<View style={styles.container}>
+				<SafeAreaView style={styles.header} edges={['top']}>
 					<View style={styles.headerTop}>
 						<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
 							<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
@@ -153,17 +151,17 @@ export default function FavoritesScreen() {
 						<Text style={styles.title}>Sân yêu thích</Text>
 						<View style={{ width: 40 }} />
 					</View>
-				</View>
+				</SafeAreaView>
 				<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-					<ActivityIndicator size="large" color={theme.colors.primary} />
+					<ActivityIndicator size='large' color={theme.colors.primary} />
 				</View>
-			</SafeAreaView>
+			</View>
 		);
 	}
 
 	return (
-		<SafeAreaView style={styles.container} edges={['top']}>
-			<View style={styles.header}>
+		<View style={styles.container}>
+			<SafeAreaView style={styles.header} edges={['top']}>
 				<View style={styles.headerTop}>
 					<TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
 						<Ionicons name='chevron-back' size={24} color={theme.colors.white} />
@@ -184,7 +182,7 @@ export default function FavoritesScreen() {
 						</View>
 					</View>
 				)}
-			</View>
+			</SafeAreaView>
 
 			{!isAuthenticated ? (
 				renderLoginPrompt()
@@ -207,7 +205,7 @@ export default function FavoritesScreen() {
 					}
 				/>
 			)}
-		</SafeAreaView>
+		</View>
 	);
 }
 
