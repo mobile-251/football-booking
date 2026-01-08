@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 import { api } from '../services/api';
 import { User } from '../types/types';
 
@@ -27,9 +28,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const setUserAndPersist = async (nextUser: User | null) => {
 		setUser(nextUser);
 		api.currentUser = nextUser;
+
+		// Cập nhật Sentry user context để track error theo user
 		if (nextUser) {
+			Sentry.setUser({
+				id: nextUser.id.toString(),
+				email: nextUser.email,
+				username: nextUser.fullName,
+				// Extra data cho debug
+				data: {
+					role: nextUser.role,
+					phoneNumber: nextUser.phoneNumber,
+				}
+			});
 			await AsyncStorage.setItem(USER_KEY, JSON.stringify(nextUser));
 		} else {
+			Sentry.setUser(null);
 			await AsyncStorage.removeItem(USER_KEY);
 		}
 	};

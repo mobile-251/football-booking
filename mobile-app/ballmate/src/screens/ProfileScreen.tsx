@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Image,
     ActivityIndicator,
+    Button
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import * as Sentry from '@sentry/react-native';
 
 interface MenuItem {
     icon: keyof typeof Ionicons.glyphMap;
@@ -295,6 +297,10 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                     <Ionicons name="log-out-outline" size={20} color={theme.colors.white} />
                     <Text style={styles.logoutText}>Đăng xuất</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.logoutBtn} onPress={ () => { Sentry.captureException(new Error('Test sentry error' + new Date().toISOString())) }}>
+                    <Ionicons name="log-out-outline" size={20} color={theme.colors.white} />
+                    <Text style={styles.logoutText}>Test sentry</Text>
                 </TouchableOpacity>
 
                 {/* Version Info */}

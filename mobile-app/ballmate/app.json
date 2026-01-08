@@ -40,6 +40,16 @@
     },
     "updates": {
       "url": "https://u.expo.dev/a2ff0a88-40cf-43b6-b9ff-12c29d45c463"
-    }
+    },
+    "plugins": [
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "hcmut-mobile"
+        }
+      ]
+    ]
   }
 }
