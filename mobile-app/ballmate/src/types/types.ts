@@ -82,6 +82,7 @@ export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
 
 export interface Booking {
     id: number;
+    bookingCode: string; // BM + 6 chars (ví dụ: BM1A2B3C)
     fieldId: number;
     playerId: number;
     startTime: string;

@@ -25,6 +25,7 @@ interface BookingWithDetails extends Booking {
 	fieldImage?: string;
 	venueName?: string;
 	venueAddress?: string;
+	displayName?: string; // <Venue name> (Sân <Field name>)
 	dates?: string[];
 	timeSlots?: string[];
 }
@@ -117,6 +118,9 @@ export default function ScheduleScreen() {
 				fieldImage: booking.field?.images?.[0] || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=400',
 				venueName: booking.field?.venue?.name || '',
 				venueAddress: booking.field?.venue?.address || 'Đường 410, Phước Long A, Quận 9, TP.HCM',
+				displayName: booking.field?.venue?.name && booking.field?.name
+					? `${booking.field.venue.name} (Sân ${booking.field.name})`
+					: booking.field?.name || 'Sân chưa xác định',
 				dates: [formatDateShort(booking.startTime)],
 				timeSlots: [formatTimeRange(booking.startTime, booking.endTime)],
 			}));
@@ -221,13 +225,13 @@ export default function ScheduleScreen() {
 				</View>
 				{/* Booking ID */}
 				<View style={styles.bookingIdBadge}>
-					<Text style={styles.bookingIdText}>#B{String(item.id).padStart(3, '0')}</Text>
+					<Text style={styles.bookingIdText}>{item.bookingCode}</Text>
 				</View>
 			</View>
 
 			{/* Content */}
 			<View style={styles.cardContent}>
-				<Text style={styles.fieldName}>{item.fieldName}</Text>
+				<Text style={styles.fieldName}>{item.displayName}</Text>
 
 				<View style={styles.infoRow}>
 					<Ionicons name='location-outline' size={14} color={theme.colors.foregroundMuted} />
@@ -321,7 +325,7 @@ export default function ScheduleScreen() {
 								</View>
 								<View style={styles.detailInfo}>
 									<Text style={styles.detailLabel}>Mã đặt sân</Text>
-									<Text style={styles.detailValue}>#B{String(selectedBooking.id).padStart(3, '0')}</Text>
+									<Text style={styles.detailValue}>{selectedBooking.bookingCode}</Text>
 								</View>
 							</View>
 
@@ -332,7 +336,7 @@ export default function ScheduleScreen() {
 								</View>
 								<View style={styles.detailInfo}>
 									<Text style={styles.detailLabel}>Sân bóng</Text>
-									<Text style={styles.detailValue}>{selectedBooking.fieldName}</Text>
+									<Text style={styles.detailValue}>{selectedBooking.displayName}</Text>
 									<Text style={styles.detailSubvalue}>{selectedBooking.venueAddress}</Text>
 								</View>
 							</View>
