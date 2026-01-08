@@ -135,6 +135,162 @@ async function main() {
   }
 
   console.log(`Created users: 1 admin, 3 owners, ${players.length} players`);
+
+  // CREATE VENUES FOR OWNER 1
+  console.log('Creating venues for owner1...');
+
+  const venueNames = [
+    { name: 'Sân Bóng Thủ Đức', address: '123 Võ Văn Ngân, Thủ Đức, TP.HCM', city: 'Hồ Chí Minh', district: 'Thủ Đức' },
+    { name: 'Sân Bóng Quận 9', address: '456 Lê Văn Việt, Quận 9, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 9' },
+    { name: 'Sân Bóng Bình Thạnh', address: '789 Điện Biên Phủ, Bình Thạnh, TP.HCM', city: 'Hồ Chí Minh', district: 'Bình Thạnh' },
+    { name: 'Sân Bóng Gò Vấp', address: '321 Quang Trung, Gò Vấp, TP.HCM', city: 'Hồ Chí Minh', district: 'Gò Vấp' },
+    { name: 'Sân Bóng Tân Bình', address: '654 Cộng Hòa, Tân Bình, TP.HCM', city: 'Hồ Chí Minh', district: 'Tân Bình' },
+    { name: 'Sân Bóng Phú Nhuận', address: '987 Phan Xích Long, Phú Nhuận, TP.HCM', city: 'Hồ Chí Minh', district: 'Phú Nhuận' },
+    { name: 'Sân Bóng Quận 7', address: '147 Nguyễn Văn Linh, Quận 7, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 7' },
+    { name: 'Sân Bóng Quận 2', address: '258 Trần Não, Quận 2, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 2' },
+    { name: 'Sân Bóng Quận 1', address: '369 Nguyễn Thị Minh Khai, Quận 1, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 1' },
+    { name: 'Sân Bóng Quận 3', address: '741 Võ Thị Sáu, Quận 3, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 3' },
+  ];
+
+  // Field configurations: each venue has different number of fields per type
+  const fieldConfigs = [
+    { field5: 2, field7: 2, field11: 1 },
+    { field5: 3, field7: 1, field11: 1 },
+    { field5: 1, field7: 2, field11: 2 },
+    { field5: 2, field7: 3, field11: 1 },
+    { field5: 1, field7: 1, field11: 1 },
+    { field5: 3, field7: 2, field11: 1 },
+    { field5: 2, field7: 1, field11: 2 },
+    { field5: 1, field7: 3, field11: 1 },
+    { field5: 2, field7: 2, field11: 2 },
+    { field5: 3, field7: 1, field11: 2 },
+  ];
+
+  // Pricing structure - base prices that will be adjusted per field type
+  const basePricing = {
+    weekday: {
+      morning: 200000,   // 06:00-16:00
+      evening: 350000,   // 16:00-22:00
+      night: 150000,     // 22:00-23:00
+    },
+    weekend: {
+      morning: 250000,   // 06:00-16:00
+      evening: 400000,   // 16:00-22:00
+      night: 150000,     // 22:00-23:00
+    }
+  };
+
+  // Price multipliers per field type
+  const priceMultipliers = {
+    FIELD_5VS5: 1,
+    FIELD_7VS7: 1.3,
+    FIELD_11VS11: 1.8,
+  };
+
+  for (let i = 0; i < venueNames.length; i++) {
+    const venueInfo = venueNames[i];
+    const config = fieldConfigs[i];
+
+    // Create venue
+    const venue = await prisma.venue.create({
+      data: {
+        name: venueInfo.name,
+        address: venueInfo.address,
+        city: venueInfo.city,
+        district: venueInfo.district,
+        latitude: 10.8 + Math.random() * 0.2,
+        longitude: 106.6 + Math.random() * 0.2,
+        description: `Sân bóng đá chất lượng cao tại ${venueInfo.district}. Trang bị đầy đủ tiện nghi, mặt cỏ nhân tạo cao cấp.`,
+        images: [
+          'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800',
+          'https://images.unsplash.com/photo-1556056504-5c7696c4c28d?w=800',
+        ],
+        openTime: '06:00',
+        closeTime: '23:00',
+        ownerId: fieldOwner1.id,
+      },
+    });
+
+    // Create fields for each type
+    const fieldTypes = [
+      { type: FieldType.FIELD_5VS5, count: config.field5, prefix: '5' },
+      { type: FieldType.FIELD_7VS7, count: config.field7, prefix: '7' },
+      { type: FieldType.FIELD_11VS11, count: config.field11, prefix: '11' },
+    ];
+
+    for (const fieldConfig of fieldTypes) {
+      const multiplier = priceMultipliers[fieldConfig.type];
+
+      for (let j = 1; j <= fieldConfig.count; j++) {
+        const field = await prisma.field.create({
+          data: {
+            name: `${fieldConfig.prefix} - ${String.fromCharCode(64 + j)}`,
+            fieldType: fieldConfig.type,
+            isActive: true,
+            venueId: venue.id,
+          },
+        });
+
+        // Create pricing for Weekdays (Mon-Fri)
+        await prisma.fieldPricing.createMany({
+          data: [
+            {
+              fieldId: field.id,
+              dayType: 'WEEKDAY',
+              startTime: '06:00',
+              endTime: '16:00',
+              price: Math.round(basePricing.weekday.morning * multiplier),
+            },
+            {
+              fieldId: field.id,
+              dayType: 'WEEKDAY',
+              startTime: '16:00',
+              endTime: '22:00',
+              price: Math.round(basePricing.weekday.evening * multiplier),
+            },
+            {
+              fieldId: field.id,
+              dayType: 'WEEKDAY',
+              startTime: '22:00',
+              endTime: '23:00',
+              price: Math.round(basePricing.weekday.night * multiplier),
+            },
+          ],
+        });
+
+        // Create pricing for Weekends (Sat-Sun)
+        await prisma.fieldPricing.createMany({
+          data: [
+            {
+              fieldId: field.id,
+              dayType: 'WEEKEND',
+              startTime: '06:00',
+              endTime: '16:00',
+              price: Math.round(basePricing.weekend.morning * multiplier),
+            },
+            {
+              fieldId: field.id,
+              dayType: 'WEEKEND',
+              startTime: '16:00',
+              endTime: '22:00',
+              price: Math.round(basePricing.weekend.evening * multiplier),
+            },
+            {
+              fieldId: field.id,
+              dayType: 'WEEKEND',
+              startTime: '22:00',
+              endTime: '23:00',
+              price: Math.round(basePricing.weekend.night * multiplier),
+            },
+          ],
+        });
+      }
+    }
+
+    console.log(`Created venue: ${venueInfo.name} with ${config.field5 + config.field7 + config.field11} fields`);
+  }
+
+  console.log('Seed completed successfully!');
 }
 
 main()
