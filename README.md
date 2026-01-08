@@ -23,9 +23,11 @@ The app aims to:
 
 ## 🛠️ Tech Stack
 
-- **Frontend (Mobile App):** React Native (Expo)
-- **Backend:** Spring Boot
-- **Database:** MySQL
+- **Language:** TypeScript
+- **Mobile:** React Native, Expo
+- **Backend:** NestJS, Node.js
+- **Database:** PostgreSQL, Prisma
+- **Infrastructure:** AWS
 
 ## 👥 Development Team
 

@@ -50,7 +50,7 @@ const pricingSuggestions = {
   }
 }
 
-const INITIAL_FORM_DATA = {
+const getInitialFormData = () => ({
   fieldName: '',
   fieldTypes: {
     field5: { selected: false, count: 0 },
@@ -67,12 +67,12 @@ const INITIAL_FORM_DATA = {
   email: '',
   pricing: {} as PricingData,
   images: [] as File[],
-}
+})
 
 function FieldRegister() {
   const [currentStep, setCurrentStep] = useState(1)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA)
+  const [formData, setFormData] = useState(getInitialFormData())
 
   // Cấu hình các bước đăng ký
   const steps = [
@@ -213,7 +213,7 @@ function FieldRegister() {
         toast.success('Đăng ký sân thành công!');
 
         // Reset form về trạng thái ban đầu
-        setFormData(INITIAL_FORM_DATA);
+        setFormData(getInitialFormData());
         setCurrentStep(1);
 
       } catch (error: any) {
