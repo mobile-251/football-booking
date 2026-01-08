@@ -227,7 +227,8 @@ function MainTabsContent() {
 	const { width: windowWidth } = useWindowDimensions();
 	const { unreadMessages, upcomingBookings, refreshBadges } = useBadges();
 	// Keep the whole bar (including icons) closer to the bottom on iOS.
-	const tabBarBottom = Platform.OS === 'web' ? theme.spacing.sm : 0;
+	// Use insets.bottom to avoid being covered by system navigation bar (edge-to-edge mode)
+	const tabBarBottom = Platform.OS === 'web' ? theme.spacing.sm : insets.bottom;
 	const tabBarHeight = 74;
 
 	// Responsive, equal width for all 5 tabs; clamp to avoid overflow on small screens.
