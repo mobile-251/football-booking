@@ -142,7 +142,6 @@ function TabIcon({ focused, iconName, label, badge, buttonWidth }: TabIconProps)
 				<Text numberOfLines={1} ellipsizeMode='tail' style={[styles.tabLabel, focused && styles.tabLabelActive]}>
 					{label}
 				</Text>
-				<View style={[styles.dot, !focused && styles.dotHidden]} />
 			</View>
 		</View>
 	);
@@ -227,8 +226,9 @@ function MainTabsContent() {
 	const insets = useSafeAreaInsets();
 	const { width: windowWidth } = useWindowDimensions();
 	const { unreadMessages, upcomingBookings, refreshBadges } = useBadges();
-	const tabBarBottom = Platform.OS === 'web' ? theme.spacing.sm : insets.bottom + theme.spacing.sm;
-	const tabBarHeight = Platform.OS === 'web' ? 74 : 74;
+	// Keep the whole bar (including icons) closer to the bottom on iOS.
+	const tabBarBottom = Platform.OS === 'web' ? theme.spacing.sm : 0;
+	const tabBarHeight = 74;
 
 	// Responsive, equal width for all 5 tabs; clamp to avoid overflow on small screens.
 	const availableWidth = windowWidth - theme.spacing.md * 2 - theme.spacing.sm * 2;
