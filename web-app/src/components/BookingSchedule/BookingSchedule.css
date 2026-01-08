@@ -352,6 +352,17 @@
     border-left: 4px solid #1f6650;
 }
 
+.booking-card.pending {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    color: #92400e;
+}
+
+.booking-card.completed {
+    background: #dbeafe;
+    border-left: 4px solid #3b82f6;
+}
+
 .booking-card.maintenance {
     background: #f9d2d2;
     border-left: 4px solid #e11d48;
