@@ -298,10 +298,10 @@ export default function ProfileScreen() {
                     <Ionicons name="log-out-outline" size={20} color={theme.colors.white} />
                     <Text style={styles.logoutText}>Đăng xuất</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.logoutBtn} onPress={ () => { Sentry.captureException(new Error('Test sentry error' + new Date().toISOString())) }}>
+                {/* <TouchableOpacity style={styles.logoutBtn} onPress={ () => { Sentry.captureException(new Error('Test sentry error' + new Date().toISOString())) }}>
                     <Ionicons name="log-out-outline" size={20} color={theme.colors.white} />
                     <Text style={styles.logoutText}>Test sentry</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
 
                 {/* Version Info */}
                 <View style={styles.versionContainer}>

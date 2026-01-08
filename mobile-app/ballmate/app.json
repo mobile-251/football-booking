@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.jpg",
     "userInterfaceStyle": "light",
-    "scheme": "ballmate",
+    "scheme": "Ballmate",
     "splash": {
       "image": "./assets/splash-icon.jpg",
       "resizeMode": "contain",

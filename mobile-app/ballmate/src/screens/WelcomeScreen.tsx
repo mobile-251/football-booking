@@ -73,9 +73,9 @@ export default function WelcomeScreen() {
             </TouchableOpacity>
 
             {/* Debug Badge - Hiển thị API URL để verify OTA update */}
-            <View style={styles.debugBadge}>
+            {/* <View style={styles.debugBadge}>
                 <Text style={styles.debugText}>ENV: {Config.APP_ENV} | API: {Config.API_URL}</Text>
-            </View>
+            </View> */}
         </SafeAreaView>
     );
 }
