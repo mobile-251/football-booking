@@ -271,7 +271,8 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				alert('Vui lòng đăng nhập lại để thực hiện đặt sân');
 				return;
 			}
-
+			console.log("Select date:", selectedDates)
+			console.log("Select slot:", selectedSlots)
 			for (const slot of selectedSlots) {
 				// startTime and endTime are now in ISO format from API
 				const startDateTime = new Date(slot.startTime);
@@ -906,19 +907,84 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		</View>
 	);
 
-	const canGoNext = () => {
+	// Hàm validation trả về danh sách các lỗi cụ thể
+	const getValidationErrors = (): string[] => {
+		const errors: string[] = [];
+		
 		switch (currentStep) {
 			case 'date':
-				return selectedDates.length > 0;
+				if (selectedDates.length === 0) {
+					errors.push('Vui lòng chọn ít nhất một ngày để đặt sân');
+				}
+				break;
 			case 'fieldType':
-				return true;
+				// Kiểm tra từng ngày xem đã chọn field type chưa
+				const missingDates = selectedDates.filter(date => selectedFields[date] === undefined);
+				if (missingDates.length > 0) {
+					const formattedDates = missingDates.map(date => {
+						const d = new Date(date);
+						return `${d.getDate()}/${d.getMonth() + 1}`;
+					});
+					if (missingDates.length === 1) {
+						errors.push(`Vui lòng chọn loại sân cho ngày ${formattedDates[0]}`);
+					} else {
+						errors.push(`Vui lòng chọn loại sân cho các ngày: ${formattedDates.join(', ')}`);
+					}
+				}
+				break;
 			case 'timeSlot':
-				return selectedSlots.length > 0;
+				if (selectedSlots.length === 0) {
+					errors.push('Vui lòng chọn ít nhất một khung giờ');
+				}
+				// Kiểm tra xem mỗi ngày đã có slot chưa (optional - có thể bỏ nếu không cần)
+				const datesWithoutSlots = selectedDates.filter(
+					date => !selectedSlots.some(slot => slot.date === date)
+				);
+				if (datesWithoutSlots.length > 0 && selectedSlots.length > 0) {
+					const formattedDates = datesWithoutSlots.map(date => {
+						const d = new Date(date);
+						return `${d.getDate()}/${d.getMonth() + 1}`;
+					});
+					errors.push(`Chưa chọn khung giờ cho ngày: ${formattedDates.join(', ')}`);
+				}
+				break;
 			case 'confirm':
-				return fullName && phoneNumber;
-			default:
-				return false;
+				if (!fullName.trim()) {
+					errors.push('Vui lòng nhập họ và tên');
+				}
+				if (!phoneNumber.trim()) {
+					errors.push('Vui lòng nhập số điện thoại');
+				}
+				break;
 		}
+		
+		return errors;
+	};
+
+	// Handler cho nút tiếp tục với validation và alert
+	const handleNextWithValidation = () => {
+		const errors = getValidationErrors();
+		
+		if (errors.length > 0) {
+			// Hiển thị alert với danh sách lỗi
+			alert('⚠️ Thông báo\n\n' + errors.join('\n\n'));
+			return;
+		}
+		
+		// Không có lỗi, tiếp tục bước tiếp theo
+		handleNext();
+	};
+
+	// Handler cho submit booking với validation
+	const handleSubmitWithValidation = () => {
+		const errors = getValidationErrors();
+		
+		if (errors.length > 0) {
+			alert('⚠️ Thông tin chưa đầy đủ\n\n' + errors.join('\n\n'));
+			return;
+		}
+		
+		handleSubmitBooking();
 	};
 
 	return (
@@ -963,11 +1029,10 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 								<TouchableOpacity
 									style={[
 										styles.nextBtn,
-										!canGoNext() && styles.nextBtnDisabled,
 										currentStepIndex === 0 && { flex: 1 },
 									]}
-									onPress={currentStep === 'confirm' ? handleSubmitBooking : handleNext}
-									disabled={!canGoNext() || submitting}
+									onPress={currentStep === 'confirm' ? handleSubmitWithValidation : handleNextWithValidation}
+									disabled={submitting}
 								>
 									{submitting ? (
 										<ActivityIndicator color={theme.colors.white} />
