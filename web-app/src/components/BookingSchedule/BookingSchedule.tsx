@@ -1,89 +1,199 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import './BookingSchedule.css'
 import BookingDetailModal from './BookingDetailModal'
+import venueApi from '../../api/venueApi'
+import bookingApi from '../../api/bookingApi'
+import { Toaster, toast } from 'react-hot-toast'
 
-interface Booking {
-    id: string
-    fieldId: string
-    customerName: string
-    phoneNumber?: string
-    startTime: string
-    endTime: string
-    price?: number
-    type: 'booked' | 'maintenance'
-    note?: string
+// Interface mapping to backend models
+interface Venue {
+    id: number
+    name: string
+    address?: string
 }
 
-const FIELDS = [
-    { id: '5A', name: 'Sân 5A', type: 'Sân 5' },
-    { id: '5B', name: 'Sân 5B', type: 'Sân 5' },
-    { id: '5C', name: 'Sân 5C', type: 'Sân 5' },
-    { id: '7A', name: 'Sân 7A', type: 'Sân 7' },
-    { id: '7B', name: 'Sân 7B', type: 'Sân 7' },
-    { id: '11', name: 'Sân 11', type: 'Sân 11' },
-]
+interface Field {
+    id: number
+    name: string
+    fieldType: string // 'FIELD_5VS5', etc.
+    isActive: boolean
+    venueId: number
+}
 
-const BOOKINGS: Booking[] = [
-    {
-        id: '1', fieldId: '5A', customerName: 'Phạm Thị D', phoneNumber: '0901234567',
-        startTime: '06:00', endTime: '08:00', price: 250000, type: 'booked', note: 'Đã cọc 50k'
-    },
-    {
-        id: '2', fieldId: '5A', customerName: 'Nguyễn Văn A', phoneNumber: '0909888777',
-        startTime: '08:00', endTime: '10:00', price: 250000, type: 'booked', note: 'Đặt hộ bạn'
-    },
-    {
-        id: '3', fieldId: '5B', customerName: 'Trần Văn B', phoneNumber: '0912333444',
-        startTime: '08:00', endTime: '10:00', price: 250000, type: 'booked'
-    },
-    {
-        id: '4', fieldId: '7A', customerName: 'Lê Thị C', phoneNumber: '0987654321',
-        startTime: '08:00', endTime: '10:00', price: 250000, type: 'booked'
-    },
-    {
-        id: '5', fieldId: '5B', customerName: 'Đội bóng X', phoneNumber: '0369852147',
-        startTime: '10:00', endTime: '12:00', price: 250000, type: 'booked', note: 'Cần thuê áo bib'
-    },
-    {
-        id: '6', fieldId: '5A', customerName: 'FC Sài Gòn', phoneNumber: '0933222111',
-        startTime: '12:00', endTime: '14:00', price: 250000, type: 'booked'
-    },
-    {
-        id: '7', fieldId: '7A', customerName: 'Nhóm bạn ĐH', phoneNumber: '0357159357',
-        startTime: '14:00', endTime: '16:00', price: 250000, type: 'booked'
-    },
-    {
-        id: '8', fieldId: '11', customerName: 'Bảo trì định kỳ',
-        startTime: '20:00', endTime: '22:00', type: 'maintenance', note: 'Sửa lưới gôn'
-    },
-]
-
-const HOURS = Array.from({ length: 18 }, (_, i) => `${(i + 6).toString().padStart(2, '0')}:00`)
-
-const hourToPx = (time: string) => {
-    const [h, m] = time.split(':').map(Number)
-    return ((h + m / 60) - 6) * 64
+interface Booking {
+    id: string | number // Frontend handles ID, backend is number
+    fieldId: number
+    fieldName: string // Added fieldName for better display
+    customerName: string
+    phoneNumber?: string
+    startTime: string // HH:mm format for display
+    endTime: string // HH:mm format for display
+    price?: number
+    type: 'booked' | 'maintenance' | 'pending' | 'confirmed' | 'canceled'
+    note?: string
+    status?: string
+    originalData?: any // Store full backend object if needed
 }
 
 const BookingSchedule: React.FC = () => {
     // Stage: Selected date for the schedule (default Today)
     const [selectedDate, setSelectedDate] = useState(new Date())
-    // State: View month for the sidebar calendar (independent of selected date usually, or synced)
+    // State: View month for the sidebar calendar
     const [viewDate, setViewDate] = useState(new Date())
     // State: Selected booking to show detailed modal
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
     // State: Filter field type
     const [filterType, setFilterType] = useState('All')
 
-    // Update viewDate when selectedDate changes to ensure we see the selected date
-    // (Optional: depending on UX preference. Let's keep them synced for simplicity first)
-    // useEffect(() => setViewDate(selectedDate), [selectedDate]);
+    // State: List of venues owned by this user
+    const [venues, setVenues] = useState<Venue[]>([])
+    const [venueId, setVenueId] = useState<number | null>(null)
+    const [fields, setFields] = useState<Field[]>([])
+    const [bookings, setBookings] = useState<Booking[]>([])
+    const [loading, setLoading] = useState(false)
 
+    // Load user and venues on mount
+    useEffect(() => {
+        const loadInitialData = async () => {
+            try {
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                    const user = JSON.parse(userStr);
+
+                    // Fetch all venues and filter by owner
+                    const allVenues: any = await venueApi.getAll();
+
+                    // Handle if response is array or object wrapped
+                    const venuesList = Array.isArray(allVenues) ? allVenues : (allVenues as any).data || [];
+
+                    // Filter venues owned by this user
+                    const myVenues = venuesList.filter((v: any) => v.owner?.user?.id === user.id);
+
+                    if (myVenues.length > 0) {
+                        // Map to Venue interface
+                        const mappedVenues: Venue[] = myVenues.map((v: any) => ({
+                            id: v.id,
+                            name: v.name,
+                            address: v.address
+                        }));
+                        setVenues(mappedVenues);
+
+                        // Auto-select the first venue
+                        setVenueId(mappedVenues[0].id);
+                        fetchFields(mappedVenues[0].id);
+                    } else {
+                        // If no venue found, show empty state
+                        console.log("No venue found for this user");
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading initial data:", error);
+                toast.error("Không thể tải thông tin sân bóng");
+            }
+        };
+        loadInitialData();
+    }, []);
+
+    const fetchFields = async (vId: number) => {
+        try {
+            const venueData: any = await venueApi.getOne(vId);
+            if (venueData && venueData.fieldsPricings) {
+                // venueData.fieldsPricings contains the fields list (based on backend response structure)
+                const sortedFields = sortFields(venueData.fieldsPricings);
+                setFields(sortedFields);
+            } else if (venueData && venueData.fields) { // Fallback if structure changes
+                const sortedFields = sortFields(venueData.fields);
+                setFields(sortedFields);
+            }
+        } catch (error) {
+            console.error("Error fetching fields:", error);
+        }
+    }
+
+    const sortFields = (fieldsList: any[]) => {
+        const priority: { [key: string]: number } = {
+            'FIELD_5VS5': 1,
+            'FIELD_7VS7': 2,
+            'FIELD_11VS11': 3
+        };
+        return [...fieldsList].sort((a, b) => {
+            const pA = priority[a.fieldType] || 99;
+            const pB = priority[b.fieldType] || 99;
+            if (pA !== pB) return pA - pB;
+            return a.name.localeCompare(b.name);
+        });
+    }
+
+    // Load bookings when date or venue changes
+    useEffect(() => {
+        if (venueId) {
+            fetchBookings();
+        }
+    }, [venueId, selectedDate]);
+
+    const fetchBookings = async () => {
+        if (!venueId) return;
+        setLoading(true);
+        try {
+            // Fetch bookings for the select venue
+            // API doesn't support date filtering for "findAll", so we might fetch all confirmed/pending bookings
+            // Or we check if there is a better endpoint. 
+            // Currently using findAll({ venueId }) and filtering by date locally.
+            // Note: Optimally backend should support date range filtering.
+            const res: any = await bookingApi.getAll({ venueId: venueId });
+            const bookingsList = Array.isArray(res) ? res : (res as any).data || [];
+
+            // Filter by date
+            const targetDateStr = selectedDate.toISOString().split('T')[0];
+
+            const dayBookings = bookingsList.filter((b: any) => {
+                if (!b.startTime) return false;
+                const bookingDate = new Date(b.startTime).toISOString().split('T')[0];
+                // Only showing active bookings (not cancelled)
+                const isActive = b.status !== 'CANCELLED' && b.status !== 'REJECTED';
+                return bookingDate === targetDateStr && isActive;
+            });
+
+            // Map to frontend Booking interface
+            const mappedBookings: Booking[] = dayBookings.map((b: any) => {
+                const start = new Date(b.startTime);
+                const end = new Date(b.endTime);
+
+                return {
+                    id: b.id,
+                    fieldId: b.fieldId,
+                    fieldName: b.field?.name || `Sân ${b.fieldId}`,
+                    customerName: b.customerName,
+                    phoneNumber: b.customerPhone,
+                    startTime: formatTime(start),
+                    endTime: formatTime(end),
+                    price: b.totalPrice,
+                    type: b.status === 'CONFIRMED' ? 'booked' : 'pending', // diligent mapping
+                    status: b.status,
+                    note: b.note,
+                    originalData: b
+                };
+            });
+
+            setBookings(mappedBookings);
+
+        } catch (error) {
+            console.error("Error fetching bookings:", error);
+            toast.error("Không thể tải lịch đặt sân");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Helpers
     const handlePrevDay = () => {
         const newDate = new Date(selectedDate)
         newDate.setDate(selectedDate.getDate() - 1)
         setSelectedDate(newDate)
-        // Auto switch month view if we cross boundary
         if (newDate.getMonth() !== viewDate.getMonth()) {
             setViewDate(newDate)
         }
@@ -120,7 +230,6 @@ const BookingSchedule: React.FC = () => {
     const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
     const getFirstDayOfMonth = (date: Date) => {
         const day = new Date(date.getFullYear(), date.getMonth(), 1).getDay()
-        // Convert Sun(0)...Sat(6) to Mon(0)...Sun(6)
         return day === 0 ? 6 : day - 1
     }
 
@@ -138,14 +247,12 @@ const BookingSchedule: React.FC = () => {
         return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date)
     }
 
-    // Check if a day is selected (compare with selectedDate)
     const isSelected = (day: number) => {
         return selectedDate.getDate() === day &&
             selectedDate.getMonth() === viewDate.getMonth() &&
             selectedDate.getFullYear() === viewDate.getFullYear()
     }
 
-    // Check if a day is today
     const isToday = (day: number) => {
         const today = new Date()
         return today.getDate() === day &&
@@ -153,15 +260,70 @@ const BookingSchedule: React.FC = () => {
             today.getFullYear() === viewDate.getFullYear()
     }
 
+    const HOURS = Array.from({ length: 18 }, (_, i) => `${(i + 6).toString().padStart(2, '0')}:00`)
+
+    const hourToPx = (time: string) => {
+        const [h, m] = time.split(':').map(Number)
+        return ((h + m / 60) - 6) * 64
+    }
+
+    // Map field type for display
+    const getFieldTypeDisplay = (type: string) => {
+        switch (type) {
+            case 'FIELD_5VS5': return 'Sân 5';
+            case 'FIELD_7VS7': return 'Sân 7';
+            case 'FIELD_11VS11': return 'Sân 11';
+            default: return type;
+        }
+    }
+
+    // Handle venue change
+    const handleVenueChange = (newVenueId: number) => {
+        setVenueId(newVenueId);
+        setFields([]); // Clear current fields
+        setBookings([]); // Clear current bookings
+        fetchFields(newVenueId);
+    }
+
+    // Filter fields based on dropdown and sort by field type (5VS5 -> 7VS7 -> 11VS11)
+    const filteredFields = sortFields(fields.filter(f => {
+        const displayType = getFieldTypeDisplay(f.fieldType);
+        return filterType === 'All' || displayType === filterType;
+    }));
+
     return (
         <div className="booking-page">
+            <Toaster position="top-right" />
             {/* HEADER */}
             <div className="booking-top">
                 <div>
                     <h2>Quản lý lịch đặt sân</h2>
                     <p>Xem và quản lý tất cả đặt sân của bạn</p>
                 </div>
-                <button className="btn-export">Xuất Excel</button>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {venues.length > 0 && (
+                        <select
+                            value={venueId || ''}
+                            onChange={(e) => handleVenueChange(Number(e.target.value))}
+                            style={{
+                                padding: '10px 16px',
+                                borderRadius: '10px',
+                                border: '1px solid #d1d5db',
+                                fontSize: '0.95rem',
+                                backgroundColor: '#fff',
+                                cursor: 'pointer',
+                                minWidth: '200px'
+                            }}
+                        >
+                            {venues.map(v => (
+                                <option key={v.id} value={v.id}>
+                                    {v.name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    <button className="btn-export">Xuất Excel</button>
+                </div>
             </div>
 
             <div className="booking-body">
@@ -194,7 +356,13 @@ const BookingSchedule: React.FC = () => {
 
                     <div className="legend-card">
                         <div className="legend-item">
-                            <span className="dot booked" /> Đã đặt
+                            <span className="dot" style={{ background: '#dbeafe', borderLeft: 'non' }} /> Hoàn tất
+                        </div>
+                        <div className="legend-item">
+                            <span className="dot booked" /> Đã xác nhận
+                        </div>
+                        <div className="legend-item">
+                            <span className="dot" style={{ background: '#f59e0b' }} /> Chờ xác nhận
                         </div>
                         <div className="legend-item">
                             <span className="dot maintenance" /> Bảo trì
@@ -205,13 +373,13 @@ const BookingSchedule: React.FC = () => {
                     </div>
 
                     <div className="stat-card">
-                        <span>Tổng booking</span>
-                        <strong>10</strong>
+                        <span>Tổng booking trong ngày</span>
+                        <strong>{bookings.length}</strong>
                     </div>
 
                     <div className="stat-card">
-                        <span>Doanh thu hôm nay</span>
-                        <strong>1.000.000đ</strong>
+                        <span>Doanh thu dự kiến</span>
+                        <strong>{bookings.reduce((sum, b) => sum + (b.price || 0), 0).toLocaleString()}đ</strong>
                     </div>
                 </aside>
 
@@ -246,36 +414,57 @@ const BookingSchedule: React.FC = () => {
                         </div>
 
                         {/* FIELD COLUMNS */}
-                        {FIELDS.filter(f => filterType === 'All' || f.type === filterType).map(field => (
-                            <div key={field.id} className="field-column">
-                                <div className="field-header">
-                                    <div className="field-name">{field.name}</div>
-                                    <div className="field-type">{field.type}</div>
-                                </div>
+                        {loading ? (
+                            <div style={{ padding: '20px' }}>Loading...</div>
+                        ) : filteredFields.length === 0 ? (
+                            <div style={{ padding: '20px' }}>Chưa có sân nào được tạo.</div>
+                        ) : (
+                            filteredFields.map(field => (
+                                <div key={field.id} className="field-column">
+                                    <div className="field-header">
+                                        <div className="field-name">{field.name}</div>
+                                        <div className="field-type">{getFieldTypeDisplay(field.fieldType)}</div>
+                                    </div>
 
-                                <div className="field-body">
-                                    {BOOKINGS.filter(b => b.fieldId === field.id).map(b => {
-                                        const top = hourToPx(b.startTime)
-                                        const height = hourToPx(b.endTime) - hourToPx(b.startTime)
+                                    <div className="field-body">
+                                        {bookings.filter(b => b.fieldId === field.id).map(b => {
+                                            const top = hourToPx(b.startTime)
+                                            const height = hourToPx(b.endTime) - hourToPx(b.startTime)
+                                            // Handle case where height is 0 or negative
+                                            if (height <= 0) return null;
 
-                                        return (
-                                            <div
-                                                key={b.id}
-                                                className={`booking-card ${b.type}`}
-                                                style={{ top, height }}
-                                                onClick={() => setSelectedBooking(b)}
-                                            >
-                                                <div className="booking-name">{b.customerName}</div>
-                                                <div className="booking-time">
-                                                    {b.startTime} - {b.endTime}
+                                            const getStatusClass = (status?: string) => {
+                                                switch (status) {
+                                                    case 'CONFIRMED': return 'booked';
+                                                    case 'PENDING': return 'pending';
+                                                    case 'COMPLETED': return 'completed';
+                                                    case 'MAINTENANCE': return 'maintenance';
+                                                    default: return 'maintenance';
+                                                }
+                                            }
+
+                                            return (
+                                                <div
+                                                    key={b.id}
+                                                    className={`booking-card ${getStatusClass(b.status)}`}
+                                                    style={{
+                                                        top,
+                                                        height
+                                                    }}
+                                                    onClick={() => setSelectedBooking(b)}
+                                                >
+                                                    <div className="booking-name">{b.customerName}</div>
+                                                    <div className="booking-time">
+                                                        {b.startTime} - {b.endTime}
+                                                    </div>
+                                                    {b.price && <div className="booking-price">{(b.price / 1000).toLocaleString()}k</div>}
                                                 </div>
-                                                {b.price && <div className="booking-price">{b.price / 1000}k</div>}
-                                            </div>
-                                        )
-                                    })}
+                                            )
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))
+                        )}
                     </div>
                 </section>
             </div>
@@ -284,6 +473,10 @@ const BookingSchedule: React.FC = () => {
                 <BookingDetailModal
                     booking={selectedBooking}
                     onClose={() => setSelectedBooking(null)}
+                    onUpdate={() => {
+                        setSelectedBooking(null);
+                        fetchBookings();
+                    }}
                 />
             )}
         </div>

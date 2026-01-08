@@ -1,26 +1,94 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
+import bookingApi from '../../api/bookingApi';
 
 interface Booking {
-    id: string;
-    fieldId: string;
+    id: string | number;
+    fieldId: number;
+    fieldName?: string;
     customerName: string;
     phoneNumber?: string;
     startTime: string;
     endTime: string;
     price?: number;
-    type: 'booked' | 'maintenance';
+    type: 'booked' | 'maintenance' | 'pending' | 'confirmed' | 'canceled';
     note?: string;
+    status?: string;
 }
 
 interface BookingDetailModalProps {
     booking: Booking;
     onClose: () => void;
+    onUpdate?: () => void;
 }
 
-const BookingDetailModal: React.FC<BookingDetailModalProps> = ({ booking, onClose }) => {
+const BookingDetailModal: React.FC<BookingDetailModalProps> = ({ booking, onClose, onUpdate }) => {
+    const [loading, setLoading] = useState(false);
+    const [bookingCode, setBookingCode] = useState('');
+    const [showCompleteInput, setShowCompleteInput] = useState(false);
+
+    // Prevent background scrolling
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, []);
+
     // Prevent click from closing when clicking inside content
     const handleContentClick = (e: React.MouseEvent) => {
         e.stopPropagation();
+    };
+
+    const handleConfirm = async () => {
+        if (!window.confirm('Bạn có chắc chắn muốn duyệt booking này?')) return;
+
+        setLoading(true);
+        try {
+            await bookingApi.confirm(Number(booking.id));
+            toast.success('Đã duyệt booking thành công!');
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error(error);
+            toast.error('Có lỗi xảy ra khi duyệt booking');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!window.confirm('Bạn có chắc chắn muốn hủy booking này?')) return;
+
+        setLoading(true);
+        try {
+            await bookingApi.cancel(Number(booking.id));
+            toast.success('Đã hủy booking thành công!');
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error(error);
+            toast.error('Có lỗi xảy ra khi hủy booking');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleComplete = async () => {
+        if (!bookingCode) {
+            toast.error('Vui lòng nhập mã booking');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await bookingApi.complete(Number(booking.id), { bookingCode });
+            toast.success('Check-in thành công!');
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error(error);
+            toast.error('Mã booking không đúng hoặc có lỗi xảy ra');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -37,6 +105,20 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({ booking, onClos
                 </div>
 
                 <div className="modal-body">
+                    {/* Status Badge */}
+                    <div style={{ marginBottom: '15px' }}>
+                        <span className={`status-badge ${booking.status?.toLowerCase()}`} style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            backgroundColor: booking.status === 'PENDING' ? '#f59e0b' : booking.status === 'CONFIRMED' ? '#1F6650' : '#3b82f6',
+                            color: '#fff'
+                        }}>
+                            {booking.status === 'PENDING' ? 'Chờ duyệt' : booking.status === 'CONFIRMED' ? 'Đã duyệt' : booking.status}
+                        </span>
+                    </div>
+
                     {/* Customer */}
                     <div className="detail-row">
                         <div className="detail-icon">
@@ -74,7 +156,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({ booking, onClos
                         </div>
                         <div className="detail-info">
                             <label>Sân bóng</label>
-                            <div className="detail-value">Sân {booking.fieldId}</div>
+                            <div className="detail-value">{booking.fieldName || `Sân ${booking.fieldId}`}</div>
                         </div>
                     </div>
 
@@ -126,8 +208,55 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({ booking, onClos
                     </div>
                 </div>
 
-                <div className="modal-footer">
-                    {/* Can add actions later if needed */}
+                <div className="modal-footer" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {booking.status === 'PENDING' && (
+                        <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                            <button
+                                onClick={handleCancel}
+                                disabled={loading}
+                                style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #ef4444', color: '#ef4444', backgroundColor: 'transparent', cursor: 'pointer' }}
+                            >
+                                Hủy đơn
+                            </button>
+                            <button
+                                onClick={handleConfirm}
+                                disabled={loading}
+                                style={{ flex: 1, padding: '10px', borderRadius: '6px', border: 'none', backgroundColor: '#1f6650', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+                            >
+                                Duyệt ngay
+                            </button>
+                        </div>
+                    )}
+
+                    {booking.status === 'CONFIRMED' && (
+                        <div style={{ width: '100%' }}>
+                            {!showCompleteInput ? (
+                                <button
+                                    onClick={() => setShowCompleteInput(true)}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: 'none', backgroundColor: '#1f6650', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+                                >
+                                    Check-in (Hoàn tất)
+                                </button>
+                            ) : (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Nhập mã booking..."
+                                        value={bookingCode}
+                                        onChange={(e) => setBookingCode(e.target.value.toUpperCase())}
+                                        style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                                    />
+                                    <button
+                                        onClick={handleComplete}
+                                        disabled={loading}
+                                        style={{ padding: '8px 16px', borderRadius: '4px', border: 'none', backgroundColor: '#1f6650', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+                                    >
+                                        OK
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
