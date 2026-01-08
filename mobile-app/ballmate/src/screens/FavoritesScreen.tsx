@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -22,6 +22,7 @@ interface FavoriteField {
 
 export default function FavoritesScreen() {
 	const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+	const insets = useSafeAreaInsets();
 	const { isAuthenticated, isLoading: authLoading } = useAuth();
 	const [favorites, setFavorites] = useState<FavoriteField[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -192,7 +193,7 @@ export default function FavoritesScreen() {
 					renderItem={renderField}
 					keyExtractor={(item) => item.id.toString()}
 					style={styles.list}
-					contentContainerStyle={styles.listContent}
+					contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
 					showsVerticalScrollIndicator={false}
 					ListEmptyComponent={
 						<View style={styles.emptyContainer}>

@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AuthResponse, Field, Venue, VenueDetail, Booking, Review, FieldFilter, ApiError, User, FieldType, FieldTypePricingSummary, FieldSlotInfo } from '../types/types';
 import { Config } from '../config/environment';
 
@@ -8,11 +8,24 @@ const API_BASE_URL = Config.API_URL;
 console.log('🔗 API Base URL:', API_BASE_URL);
 console.log('📱 App Environment:', Config.APP_ENV);
 
+// Type for queued requests waiting for token refresh
+interface QueuedRequest {
+	resolve: (token: string) => void;
+	reject: (error: any) => void;
+}
+
 class ApiService {
 	private client: AxiosInstance;
 	private accessToken: string | null = null;
 	private refreshToken: string | null = null;
 	public currentUser: User | null = null;
+
+	// Token refresh state
+	private isRefreshing = false;
+	private refreshQueue: QueuedRequest[] = [];
+
+	// Callback when refresh fails (set by AuthContext)
+	private onRefreshFailedCallback: (() => void) | null = null;
 
 	constructor() {
 		console.log('🚀 Initializing API Service with URL:', API_BASE_URL);
@@ -24,7 +37,7 @@ class ApiService {
 			},
 		});
 
-		// Add auth interceptor
+		// Add auth interceptor (request)
 		this.client.interceptors.request.use((config) => {
 			console.log('[API] Request to:', config.url, 'Token exists:', !!this.accessToken);
 
@@ -39,14 +52,101 @@ class ApiService {
 			return config;
 		});
 
-		// Add error interceptor
+		// Add response interceptor for 401 handling and auto refresh
 		this.client.interceptors.response.use(
 			(response) => response,
-			(error: AxiosError<ApiError>) => {
+			async (error: AxiosError<ApiError>) => {
+				const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+				// Check if it's a 401 error and we haven't retried yet
+				if (error.response?.status === 401 && !originalRequest._retry) {
+					// Don't try to refresh for auth endpoints
+					const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
+						originalRequest.url?.includes('/auth/register') ||
+						originalRequest.url?.includes('/auth/refresh');
+
+					if (isAuthEndpoint) {
+						return Promise.reject(error);
+					}
+
+					// If we don't have a refresh token, reject immediately
+					if (!this.refreshToken) {
+						console.log('[API] No refresh token available, calling onRefreshFailed');
+						this.onRefreshFailedCallback?.();
+						return Promise.reject(error);
+					}
+
+					// If already refreshing, queue this request
+					if (this.isRefreshing) {
+						console.log('[API] Token refresh in progress, queueing request');
+						return new Promise((resolve, reject) => {
+							this.refreshQueue.push({
+								resolve: (token: string) => {
+									originalRequest.headers.Authorization = `Bearer ${token}`;
+									resolve(this.client(originalRequest));
+								},
+								reject: (err: any) => {
+									reject(err);
+								},
+							});
+						});
+					}
+
+					// Start refresh process
+					originalRequest._retry = true;
+					this.isRefreshing = true;
+					console.log('[API] Starting token refresh');
+
+					try {
+						const response = await this.client.post<any>(
+							'/auth/refresh',
+							{},
+							{
+								headers: { Authorization: `Bearer ${this.refreshToken}` },
+							}
+						);
+
+						const newAccessToken = response.data.accessToken || response.data.access_token;
+						const newRefreshToken = response.data.refreshToken || response.data.refresh_token;
+
+						console.log('[API] Token refresh successful');
+						this.accessToken = newAccessToken;
+						if (newRefreshToken) {
+							this.refreshToken = newRefreshToken;
+						}
+
+						// Process queued requests
+						this.refreshQueue.forEach(({ resolve }) => resolve(newAccessToken));
+						this.refreshQueue = [];
+
+						// Retry original request
+						originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+						return this.client(originalRequest);
+					} catch (refreshError) {
+						console.error('[API] Token refresh failed:', refreshError);
+
+						// Reject all queued requests
+						this.refreshQueue.forEach(({ reject }) => reject(refreshError));
+						this.refreshQueue = [];
+
+						// Notify AuthContext that refresh failed
+						this.onRefreshFailedCallback?.();
+
+						return Promise.reject(refreshError);
+					} finally {
+						this.isRefreshing = false;
+					}
+				}
+
 				console.error('API Error:', error.response?.data || error.message);
 				return Promise.reject(error);
 			}
 		);
+	}
+
+	// Set callback for when token refresh fails
+	setOnRefreshFailed(callback: () => void) {
+		this.onRefreshFailedCallback = callback;
 	}
 
 	setAccessToken(token: string | null) {
@@ -56,6 +156,10 @@ class ApiService {
 
 	setRefreshToken(token: string | null) {
 		this.refreshToken = token;
+	}
+
+	getRefreshToken(): string | null {
+		return this.refreshToken;
 	}
 
 	// Check if user is authenticated
@@ -98,7 +202,7 @@ class ApiService {
 		password: string;
 		fullName: string;
 		phoneNumber?: string;
-		role?: 'PLAYER' | 'FIELD_OWNER';
+		role?: string;
 	}): Promise<AuthResponse> {
 		const response = await this.client.post<AuthResponse>('/auth/register', data);
 		this.accessToken = response.data.access_token;

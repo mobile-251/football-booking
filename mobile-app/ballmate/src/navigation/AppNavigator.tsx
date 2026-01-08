@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
-import { View, Text, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -220,6 +220,17 @@ const styles = StyleSheet.create({
 		fontWeight: 'bold',
 		color: theme.colors.white,
 	},
+	loadingContainer: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+		backgroundColor: theme.colors.background,
+	},
+	loadingText: {
+		marginTop: 16,
+		fontSize: 16,
+		color: theme.colors.foregroundMuted,
+	},
 });
 
 function MainTabsContent() {
@@ -349,78 +360,118 @@ function MainTabs() {
 	);
 }
 
-export default function AppNavigator() {
+// Loading screen component
+function LoadingScreen() {
 	return (
-		<NavigationContainer>
-			<Stack.Navigator
-				screenOptions={{
+		<View style={styles.loadingContainer}>
+			<ActivityIndicator size="large" color={theme.colors.primary} />
+			<Text style={styles.loadingText}>Đang tải...</Text>
+		</View>
+	);
+}
+
+// Authenticated Stack - screens available after login
+function AuthenticatedStack() {
+	return (
+		<Stack.Navigator
+			screenOptions={{
+				headerShown: false,
+			}}
+		>
+			<Stack.Screen name='MainTabs' component={MainTabs} />
+			<Stack.Screen
+				name='FieldDetail'
+				component={FieldDetailScreen}
+				options={{
+					headerShown: true,
+					headerTitle: 'Chi tiết sân',
+					headerTintColor: theme.colors.primary,
+					headerStyle: {
+						backgroundColor: theme.colors.white,
+					},
+				}}
+			/>
+			<Stack.Screen
+				name='VenueDetail'
+				component={VenueDetailScreen}
+				options={{
+					headerShown: true,
+					headerTitle: 'Chi tiết sân',
+					headerTintColor: theme.colors.primary,
+					headerStyle: {
+						backgroundColor: theme.colors.white,
+					},
+				}}
+			/>
+			<Stack.Screen
+				name='Chat'
+				component={ChatScreen}
+				options={{
 					headerShown: false,
 				}}
-			>
-				<Stack.Screen name='Welcome' component={WelcomeScreen} />
-				<Stack.Screen name='Login' component={LoginScreen} />
-				<Stack.Screen name='Register' component={RegisterScreen} />
-				<Stack.Screen name='MainTabs' component={MainTabs} />
-				<Stack.Screen
-					name='FieldDetail'
-					component={FieldDetailScreen}
-					options={{
-						headerShown: true,
-						headerTitle: 'Chi tiết sân',
-						headerTintColor: theme.colors.primary,
-						headerStyle: {
-							backgroundColor: theme.colors.white,
-						},
-					}}
-				/>
-				<Stack.Screen
-					name='VenueDetail'
-					component={VenueDetailScreen}
-					options={{
-						headerShown: true,
-						headerTitle: 'Chi tiết sân',
-						headerTintColor: theme.colors.primary,
-						headerStyle: {
-							backgroundColor: theme.colors.white,
-						},
-					}}
-				/>
-				<Stack.Screen
-					name='Chat'
-					component={ChatScreen}
-					options={{
-						headerShown: false,
-					}}
-				/>
-				<Stack.Screen
-					name='Notifications'
-					component={NotificationsScreen}
-					options={{
-						headerShown: false,
-					}}
-				/>
-				<Stack.Screen
-					name='TransactionHistory'
-					component={TransactionHistoryScreen}
-					options={{
-						headerShown: false,
-					}}
-				/>
-				<Stack.Screen
-					name='Favorites'
-					component={FavoritesScreen}
-					options={{
-						headerShown: false,
-					}}
-				/>
-				<Stack.Screen
-					name='PersonalInfo'
-					component={PersonalInfoScreen}
-					options={{
-						headerShown: false,
-					}}
-				/>
-			</Stack.Navigator>
+			/>
+			<Stack.Screen
+				name='Notifications'
+				component={NotificationsScreen}
+				options={{
+					headerShown: false,
+				}}
+			/>
+			<Stack.Screen
+				name='TransactionHistory'
+				component={TransactionHistoryScreen}
+				options={{
+					headerShown: false,
+				}}
+			/>
+			<Stack.Screen
+				name='Favorites'
+				component={FavoritesScreen}
+				options={{
+					headerShown: false,
+				}}
+			/>
+			<Stack.Screen
+				name='PersonalInfo'
+				component={PersonalInfoScreen}
+				options={{
+					headerShown: false,
+				}}
+			/>
+		</Stack.Navigator>
+	);
+}
+
+// Unauthenticated Stack - screens for login/register
+function UnauthenticatedStack() {
+	return (
+		<Stack.Navigator
+			screenOptions={{
+				headerShown: false,
+			}}
+		>
+			<Stack.Screen name='Welcome' component={WelcomeScreen} />
+			<Stack.Screen name='Login' component={LoginScreen} />
+			<Stack.Screen name='Register' component={RegisterScreen} />
+		</Stack.Navigator>
+	);
+}
+
+export default function AppNavigator() {
+	const { isLoading, isAuthenticated, user } = useAuth();
+
+	// Show loading screen while checking auth state
+	if (isLoading) {
+		return (
+			<NavigationContainer>
+				<LoadingScreen />
+			</NavigationContainer>
+		);
+	}
+
+	return (
+		<NavigationContainer>
+			{isAuthenticated && user ? <AuthenticatedStack /> : <UnauthenticatedStack />}
 		</NavigationContainer>
 	);
 }

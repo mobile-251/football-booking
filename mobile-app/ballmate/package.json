@@ -4,8 +4,8 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -23,6 +23,7 @@
     "axios": "^1.13.2",
     "expo": "~54.0.30",
     "expo-location": "^19.0.8",
+    "expo-navigation-bar": "~5.0.10",
     "expo-status-bar": "~3.0.9",
     "expo-updates": "~29.0.15",
     "leaflet": "^1.9.4",

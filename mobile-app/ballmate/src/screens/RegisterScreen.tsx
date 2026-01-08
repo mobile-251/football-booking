@@ -16,9 +16,20 @@ import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+
+// Error state interface
+interface FormErrors {
+    fullName?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+    terms?: string;
+}
 
 export default function RegisterScreen() {
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+    const { loginWithRememberMe } = useAuth();
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -27,36 +38,89 @@ export default function RegisterScreen() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [agreeTerms, setAgreeTerms] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState<FormErrors>({});
+
+    // Validate registration form fields
+    const validateForm = (): boolean => {
+        const newErrors: FormErrors = {};
+
+        // Validate full name (min 2 characters)
+        if (!fullName.trim()) {
+            newErrors.fullName = 'Vui lòng nhập họ tên';
+        } else if (fullName.trim().length < 2) {
+            newErrors.fullName = 'Họ tên phải có ít nhất 2 ký tự';
+        }
+
+        // Validate email format (stricter regex - TLD must be letters only)
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!email.trim()) {
+            newErrors.email = 'Vui lòng nhập email';
+        } else if (!emailRegex.test(email.trim())) {
+            newErrors.email = 'Email không hợp lệ';
+        }
+
+        // Validate password length (min 6 characters)
+        if (!password) {
+            newErrors.password = 'Vui lòng nhập mật khẩu';
+        } else if (password.length < 6) {
+            newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
+        }
+
+        // Validate password match
+        if (!confirmPassword) {
+            newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu';
+        } else if (password !== confirmPassword) {
+            newErrors.confirmPassword = 'Mật khẩu xác nhận không khớp';
+        }
+
+        // Check terms agreement
+        if (!agreeTerms) {
+            newErrors.terms = 'Vui lòng đồng ý với điều khoản sử dụng';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const handleRegister = async () => {
-        if (!fullName || !email || !password || !confirmPassword) {
-            Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin');
-            return;
-        }
-
-        if (password !== confirmPassword) {
-            Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
-            return;
-        }
-
-        if (!agreeTerms) {
-            Alert.alert('Lỗi', 'Vui lòng đồng ý với điều khoản sử dụng');
+        // Validate form before submitting
+        if (!validateForm()) {
             return;
         }
 
         setLoading(true);
         try {
-            await api.register({ email, password, fullName, role: 'PLAYER' });
-            // Navigate to main app after successful registration
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'MainTabs' }],
-            });
+            // Register the user
+            await api.register({ email: email.trim(), password, fullName: fullName.trim(), role: 'PLAYER' });
+            
+            // After successful registration, automatically login with rememberMe=true
+            await loginWithRememberMe(email.trim(), password, true);
+            
+            // Navigation will happen automatically via AppNavigator
+            // when isAuthenticated becomes true
         } catch (error: any) {
-            Alert.alert(
-                'Đăng ký thất bại',
-                error.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại'
-            );
+            console.log('Register error:', error);
+            
+            // Extract error message from various possible response structures
+            let errorMessage = 'Có lỗi xảy ra, vui lòng thử lại';
+            
+            const responseData = error?.response?.data;
+            if (responseData) {
+                if (Array.isArray(responseData.message)) {
+                    // class-validator returns array of error messages
+                    errorMessage = responseData.message.join('\n');
+                } else if (typeof responseData.message === 'string') {
+                    errorMessage = responseData.message;
+                } else if (responseData.error) {
+                    errorMessage = responseData.error;
+                }
+            } else if (error?.message && error.message !== 'Network Error') {
+                errorMessage = error.message;
+            } else if (error?.message === 'Network Error') {
+                errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.';
+            }
+            
+            Alert.alert('Đăng ký thất bại', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -64,6 +128,42 @@ export default function RegisterScreen() {
 
     const handleLogin = () => {
         navigation.navigate('Login' as any);
+    };
+
+    // Clear error when user starts typing
+    const handleFullNameChange = (text: string) => {
+        setFullName(text);
+        if (errors.fullName) {
+            setErrors(prev => ({ ...prev, fullName: undefined }));
+        }
+    };
+
+    const handleEmailChange = (text: string) => {
+        setEmail(text);
+        if (errors.email) {
+            setErrors(prev => ({ ...prev, email: undefined }));
+        }
+    };
+
+    const handlePasswordChange = (text: string) => {
+        setPassword(text);
+        if (errors.password) {
+            setErrors(prev => ({ ...prev, password: undefined }));
+        }
+    };
+
+    const handleConfirmPasswordChange = (text: string) => {
+        setConfirmPassword(text);
+        if (errors.confirmPassword) {
+            setErrors(prev => ({ ...prev, confirmPassword: undefined }));
+        }
+    };
+
+    const handleTermsChange = () => {
+        setAgreeTerms(!agreeTerms);
+        if (errors.terms) {
+            setErrors(prev => ({ ...prev, terms: undefined }));
+        }
     };
 
     return (
@@ -88,46 +188,58 @@ export default function RegisterScreen() {
                         {/* Full Name Input */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Họ và tên</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.fullName && styles.inputWrapperError]}>
                                 <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.6)" />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Nguyễn Văn A"
                                     placeholderTextColor="rgba(255,255,255,0.5)"
                                     value={fullName}
-                                    onChangeText={setFullName}
+                                    onChangeText={handleFullNameChange}
                                 />
                             </View>
+                            {errors.fullName && (
+                                <View style={styles.errorContainer}>
+                                    <Ionicons name="alert-circle" size={14} color="#ff6b6b" />
+                                    <Text style={styles.errorText}>{errors.fullName}</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* Email Input */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Email</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.email && styles.inputWrapperError]}>
                                 <Ionicons name="mail-outline" size={20} color="rgba(255,255,255,0.6)" />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="nguyenvana@email.com"
                                     placeholderTextColor="rgba(255,255,255,0.5)"
                                     value={email}
-                                    onChangeText={setEmail}
+                                    onChangeText={handleEmailChange}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                 />
                             </View>
+                            {errors.email && (
+                                <View style={styles.errorContainer}>
+                                    <Ionicons name="alert-circle" size={14} color="#ff6b6b" />
+                                    <Text style={styles.errorText}>{errors.email}</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* Password Input */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Mật khẩu</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.password && styles.inputWrapperError]}>
                                 <Ionicons name="lock-closed-outline" size={20} color="rgba(255,255,255,0.6)" />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="••••••••"
                                     placeholderTextColor="rgba(255,255,255,0.5)"
                                     value={password}
-                                    onChangeText={setPassword}
+                                    onChangeText={handlePasswordChange}
                                     secureTextEntry={!showPassword}
                                 />
                                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
@@ -138,19 +250,25 @@ export default function RegisterScreen() {
                                     />
                                 </TouchableOpacity>
                             </View>
+                            {errors.password && (
+                                <View style={styles.errorContainer}>
+                                    <Ionicons name="alert-circle" size={14} color="#ff6b6b" />
+                                    <Text style={styles.errorText}>{errors.password}</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* Confirm Password Input */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.inputLabel}>Xác nhận mật khẩu</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.confirmPassword && styles.inputWrapperError]}>
                                 <Ionicons name="lock-closed-outline" size={20} color="rgba(255,255,255,0.6)" />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="••••••••"
                                     placeholderTextColor="rgba(255,255,255,0.5)"
                                     value={confirmPassword}
-                                    onChangeText={setConfirmPassword}
+                                    onChangeText={handleConfirmPasswordChange}
                                     secureTextEntry={!showConfirmPassword}
                                 />
                                 <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
@@ -161,20 +279,32 @@ export default function RegisterScreen() {
                                     />
                                 </TouchableOpacity>
                             </View>
+                            {errors.confirmPassword && (
+                                <View style={styles.errorContainer}>
+                                    <Ionicons name="alert-circle" size={14} color="#ff6b6b" />
+                                    <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* Terms Checkbox */}
                         <TouchableOpacity
                             style={styles.termsRow}
-                            onPress={() => setAgreeTerms(!agreeTerms)}
+                            onPress={handleTermsChange}
                         >
-                            <View style={[styles.checkbox, agreeTerms && styles.checkboxChecked]}>
+                            <View style={[styles.checkbox, agreeTerms && styles.checkboxChecked, errors.terms && styles.checkboxError]}>
                                 {agreeTerms && <Ionicons name="checkmark" size={14} color={theme.colors.primary} />}
                             </View>
                             <Text style={styles.termsText}>
                                 Tôi đồng ý với <Text style={styles.termsLink}>Điều khoản sử dụng của app</Text>
                             </Text>
                         </TouchableOpacity>
+                        {errors.terms && (
+                            <View style={[styles.errorContainer, { marginTop: -8, marginBottom: 12 }]}>
+                                <Ionicons name="alert-circle" size={14} color="#ff6b6b" />
+                                <Text style={styles.errorText}>{errors.terms}</Text>
+                            </View>
+                        )}
 
                         {/* Register Button */}
                         <TouchableOpacity
@@ -270,11 +400,27 @@ const styles = StyleSheet.create({
         paddingHorizontal: theme.spacing.md,
         paddingVertical: 14,
         gap: 12,
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    inputWrapperError: {
+        borderColor: '#ff6b6b',
     },
     input: {
         flex: 1,
         fontSize: 15,
         color: theme.colors.white,
+    },
+    errorContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 6,
+        paddingHorizontal: 4,
+    },
+    errorText: {
+        fontSize: 12,
+        color: '#ff6b6b',
     },
     termsRow: {
         flexDirection: 'row',
@@ -294,6 +440,9 @@ const styles = StyleSheet.create({
     checkboxChecked: {
         backgroundColor: theme.colors.white,
         borderColor: theme.colors.white,
+    },
+    checkboxError: {
+        borderColor: '#ff6b6b',
     },
     termsText: {
         flex: 1,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -42,6 +42,7 @@ const getIconForType = (type: Notification['type']) => {
 
 export default function NotificationsScreen() {
 	const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+	const insets = useSafeAreaInsets();
 	const { isAuthenticated, isLoading: authLoading } = useAuth();
 	const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 	const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -271,7 +272,7 @@ export default function NotificationsScreen() {
 						renderItem={renderNotification}
 						keyExtractor={(item) => item.id.toString()}
 						style={styles.list}
-						contentContainerStyle={styles.listContent}
+						contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
 						showsVerticalScrollIndicator={false}
 						ListEmptyComponent={
 							<View style={styles.emptyContainer}>
@@ -284,7 +285,7 @@ export default function NotificationsScreen() {
 
 					{/* Mark All as Read Button */}
 					{notifications.length > 0 && (
-						<View style={styles.bottomAction}>
+						<View style={[styles.bottomAction, { paddingBottom: insets.bottom + theme.spacing.md }]}>
 							<TouchableOpacity style={styles.markAllBtn} onPress={handleMarkAllAsRead}>
 								<Ionicons name='checkmark' size={20} color={theme.colors.white} />
 								<Text style={styles.markAllText}>Đánh dấu tất cả đã đọc</Text>
@@ -413,6 +414,7 @@ const styles = StyleSheet.create({
 	},
 	listContent: {
 		paddingHorizontal: theme.spacing.lg,
+		// paddingBottom will be set dynamically
 	},
 	notificationItem: {
 		flexDirection: 'row',

@@ -10,7 +10,7 @@ import {
 	ActivityIndicator,
 	Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -64,6 +64,7 @@ function EditableField({
 
 export default function PersonalInfoScreen() {
 	const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+	const insets = useSafeAreaInsets();
 	const { user, isAuthenticated, isLoading: authLoading, setUserData } = useAuth();
 
 	const [isEditing, setIsEditing] = useState(false);
@@ -193,7 +194,7 @@ export default function PersonalInfoScreen() {
 				</View>
 			</SafeAreaView>
 
-			<ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+			<ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }} showsVerticalScrollIndicator={false}>
 				{/* Gender Selection */}
 				<View style={styles.section}>
 					<Text style={styles.sectionLabel}>Giới tính</Text>
@@ -301,7 +302,6 @@ export default function PersonalInfoScreen() {
 					</TouchableOpacity>
 				)}
 
-				<View style={{ height: 40 }} />
 			</ScrollView>
 		</View>
 	);

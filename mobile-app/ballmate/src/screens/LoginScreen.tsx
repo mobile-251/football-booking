@@ -19,11 +19,11 @@ import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-    const { login } = useAuth();
+    const { loginWithRememberMe } = useAuth();
     const [email, setEmail] = useState('player1@ballmate.com');
     const [password, setPassword] = useState('password123');
     const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const [loading, setLoading] = useState(false);
 
     const handleLogin = async () => {
@@ -32,19 +32,36 @@ export default function LoginScreen() {
             return;
         }
 
+        // Validate email format (stricter regex - TLD must be letters only)
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(email.trim())) {
+            Alert.alert('Lỗi', 'Email không hợp lệ');
+            return;
+        }
+
         setLoading(true);
         try {
-            await login(email, password);
-            // Navigate to main app after successful login
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'MainTabs' }],
-            });
+            // Use loginWithRememberMe with the checkbox value
+            await loginWithRememberMe(email, password, rememberMe);
+            // Navigation will happen automatically via AppNavigator
+            // when isAuthenticated becomes true
         } catch (error: any) {
-            Alert.alert(
-                'Đăng nhập thất bại',
-                error.response?.data?.message || 'Email hoặc mật khẩu không đúng'
-            );
+            console.log('Login error:', error);
+            
+            // Extract error message from various possible response structures
+            let errorMessage = 'Email hoặc mật khẩu không đúng';
+            
+            if (error?.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error?.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error?.message && error.message !== 'Network Error') {
+                errorMessage = error.message;
+            } else if (error?.message === 'Network Error') {
+                errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.';
+            }
+            
+            Alert.alert('Đăng nhập thất bại', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -131,6 +148,16 @@ export default function LoginScreen() {
                                 <Text style={styles.forgotPassword}>Quên mật khẩu?</Text>
                             </TouchableOpacity>
                         </View>
+
+                        {/* Remember Me Info */}
+                        {!rememberMe && (
+                            <View style={styles.sessionInfo}>
+                                <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.6)" />
+                                <Text style={styles.sessionInfoText}>
+                                    Bạn sẽ cần đăng nhập lại khi mở ứng dụng lần sau
+                                </Text>
+                            </View>
+                        )}
 
                         {/* Login Button */}
                         <TouchableOpacity
@@ -245,7 +272,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: theme.spacing.lg,
+        marginBottom: theme.spacing.md,
     },
     checkboxRow: {
         flexDirection: 'row',
@@ -273,6 +300,18 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: theme.colors.white,
         fontWeight: '600',
+    },
+    sessionInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: theme.spacing.lg,
+        paddingHorizontal: 4,
+    },
+    sessionInfoText: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.6)',
+        flex: 1,
     },
     loginBtn: {
         flexDirection: 'row',

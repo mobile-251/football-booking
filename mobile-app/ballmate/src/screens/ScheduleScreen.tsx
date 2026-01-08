@@ -292,7 +292,7 @@ export default function ScheduleScreen() {
 							<Ionicons name='eye-outline' size={14} color={theme.colors.primary} />
 							<Text style={styles.detailBtnText}>Chi tiết</Text>
 						</TouchableOpacity>
-						{item.status !== 'CANCELLED' && item.status !== 'COMPLETED' && (
+						{item.status === 'PENDING' && (
 							<TouchableOpacity style={styles.cancelBtn} onPress={() => handleCancelBooking(item.id)}>
 								<Ionicons name='close' size={14} color={theme.colors.accent} />
 								<Text style={styles.cancelBtnText}>Hủy</Text>
@@ -403,7 +403,7 @@ export default function ScheduleScreen() {
 							<TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowDetailModal(false)}>
 								<Text style={styles.modalCloseBtnText}>Đóng</Text>
 							</TouchableOpacity>
-							{selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'COMPLETED' && (
+							{selectedBooking.status === 'PENDING' && (
 								<TouchableOpacity style={styles.modalCancelBtn} onPress={() => handleCancelBooking(selectedBooking.id)}>
 									<Text style={styles.modalCancelBtnText}>Hủy đặt sân</Text>
 								</TouchableOpacity>

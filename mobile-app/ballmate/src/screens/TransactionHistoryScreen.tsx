@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -20,6 +20,7 @@ interface Transaction {
 
 export default function TransactionHistoryScreen() {
 	const navigation = useNavigation();
+	const insets = useSafeAreaInsets();
 	const [transactions, setTransactions] = useState<Transaction[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -161,7 +162,7 @@ export default function TransactionHistoryScreen() {
 				renderItem={renderTransaction}
 				keyExtractor={(item) => item.id.toString()}
 				style={styles.list}
-				contentContainerStyle={styles.listContent}
+				contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
 				showsVerticalScrollIndicator={false}
 				ListEmptyComponent={
 					<View style={styles.emptyContainer}>
