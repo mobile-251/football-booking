@@ -240,6 +240,7 @@ function MainTabsContent() {
 		<Tab.Navigator
 			screenOptions={{
 				headerShown: false,
+				sceneStyle: { backgroundColor: theme.colors.background },
 				tabBarStyle: {
 					position: 'absolute',
 					left: theme.spacing.md,
