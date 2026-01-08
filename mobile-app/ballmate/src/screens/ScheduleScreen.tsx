@@ -32,8 +32,9 @@ interface BookingWithDetails extends Booking {
 
 const TABS: { key: TabType; label: string }[] = [
 	{ key: 'all', label: 'Tất cả' },
-	{ key: 'upcoming', label: 'Sắp tới' },
+	{ key: 'upcoming', label: 'Chờ xác nhận' },
 	{ key: 'completed', label: 'Đã hoàn thành' },
+	{ key: 'cancelled', label: 'Đã hủy' },
 ];
 
 const getStatusColor = (status: BookingStatus) => {
@@ -54,7 +55,7 @@ const getStatusColor = (status: BookingStatus) => {
 const getStatusLabel = (status: BookingStatus) => {
 	switch (status) {
 		case 'CONFIRMED':
-			return 'Sắp tới';
+			return 'Đã xác nhận';
 		case 'PENDING':
 			return 'Chờ xác nhận';
 		case 'CANCELLED':
@@ -378,7 +379,7 @@ export default function ScheduleScreen() {
 									<Text style={styles.detailValue}>
 										{selectedBooking.payment?.method
 											? PAYMENT_METHOD_LABELS[selectedBooking.payment.method as PaymentMethod] ||
-											  selectedBooking.payment.method
+											selectedBooking.payment.method
 											: 'Chưa thanh toán'}
 									</Text>
 								</View>
