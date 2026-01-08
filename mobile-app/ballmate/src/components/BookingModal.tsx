@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
 	View,
 	Text,
@@ -10,6 +10,7 @@ import {
 	ActivityIndicator,
 	Dimensions,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import {
@@ -79,6 +80,8 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const [showSuccess, setShowSuccess] = useState(false);
 	const [showBankTransfer, setShowBankTransfer] = useState(false);
 	const [bookingId, setBookingId] = useState<number | null>(null);
+	const phoneInputRef = useRef<TextInput>(null);
+	const noteInputRef = useRef<TextInput>(null);
 
 	const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
@@ -718,7 +721,14 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	};
 
 	const renderConfirmStep = () => (
-		<ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
+		<KeyboardAwareScrollView
+			style={styles.stepContent}
+			showsVerticalScrollIndicator={false}
+			enableOnAndroid
+			keyboardShouldPersistTaps="handled"
+			extraScrollHeight={300}
+			contentContainerStyle={{ paddingBottom: 140 }}
+		>
 			<View style={styles.stepHeader}>
 				<View style={styles.stepIconContainer}>
 					<Ionicons name='checkmark-circle' size={32} color={theme.colors.white} />
@@ -768,6 +778,9 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 						placeholder='Nhập họ và tên của bạn'
 						value={fullName}
 						onChangeText={setFullName}
+						returnKeyType='next'
+						onSubmitEditing={() => phoneInputRef.current?.focus()}
+						blurOnSubmit={false}
 					/>
 				</View>
 			</View>
@@ -776,11 +789,15 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				<View style={styles.inputContainer}>
 					<Ionicons name='call-outline' size={20} color={theme.colors.foregroundMuted} />
 					<TextInput
+						ref={phoneInputRef}
 						style={styles.input}
 						placeholder='Nhập số điện thoại'
 						value={phoneNumber}
 						onChangeText={setPhoneNumber}
 						keyboardType='phone-pad'
+						returnKeyType='next'
+						onSubmitEditing={() => noteInputRef.current?.focus()}
+						blurOnSubmit={false}
 					/>
 				</View>
 			</View>
@@ -788,11 +805,14 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				<Text style={styles.inputLabel}>Ghi chú cho chủ sân</Text>
 				<View style={styles.inputContainer}>
 					<TextInput
+						ref={noteInputRef}
 						style={[styles.input, { flex: 1 }]}
 						placeholder='Nhập ghi chú'
 						value={note}
 						onChangeText={setNote}
 						multiline
+						returnKeyType='done'
+						blurOnSubmit={true}
 					/>
 				</View>
 			</View>
@@ -836,7 +856,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 			))}
 
 			<View style={{ height: 100 }} />
-		</ScrollView>
+			</KeyboardAwareScrollView>
 	);
 
 	const renderBankTransfer = () => (
@@ -1060,8 +1080,8 @@ const styles = StyleSheet.create({
 	},
 	sheet: {
 		width: '100%',
-		// maxHeight: height * 0.92,
 		height: height * 0.9,
+		maxHeight: height * 0.9,
 		backgroundColor: theme.colors.cardSolid,
 		borderTopLeftRadius: theme.borderRadius.xl,
 		borderTopRightRadius: theme.borderRadius.xl,

@@ -6,11 +6,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     slug: 'ballmate-mobile',
     version: '1.0.1',
     orientation: 'portrait',
-    icon: './assets/icon.png',
+    icon: './assets/icon.jpg',
     userInterfaceStyle: 'light',
     scheme: 'ballmate',
     splash: {
-        image: './assets/splash-icon.png',
+        image: './assets/splash-icon.jpg',
         resizeMode: 'contain',
         backgroundColor: '#ffffff',
     },
@@ -20,15 +20,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     android: {
         adaptiveIcon: {
-            foregroundImage: './assets/adaptive-icon.png',
+            foregroundImage: './assets/adaptive-icon.jpg',
             backgroundColor: '#ffffff',
         },
         edgeToEdgeEnabled: true,
         predictiveBackGestureEnabled: false,
         package: 'com.ballmate.app',
+        softwareKeyboardLayoutMode: 'resize',
     },
     web: {
-        favicon: './assets/favicon.png',
+        favicon: './assets/favicon.jpg',
     },
     extra: {
         ...config.extra,
