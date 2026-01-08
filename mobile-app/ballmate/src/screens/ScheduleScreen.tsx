@@ -18,7 +18,7 @@ import { Booking, BookingStatus, PAYMENT_METHOD_LABELS, PaymentMethod } from '..
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
 
-type TabType = 'all' | 'upcoming' | 'completed' | 'cancelled';
+type TabType = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 interface BookingWithDetails extends Booking {
 	fieldName?: string;
@@ -32,7 +32,8 @@ interface BookingWithDetails extends Booking {
 
 const TABS: { key: TabType; label: string }[] = [
 	{ key: 'all', label: 'Tất cả' },
-	{ key: 'upcoming', label: 'Chờ xác nhận' },
+	{ key: 'pending', label: 'Chờ xác nhận' },
+	{ key: 'confirmed', label: 'Đã xác nhận' },
 	{ key: 'completed', label: 'Đã hoàn thành' },
 	{ key: 'cancelled', label: 'Đã hủy' },
 ];
@@ -140,8 +141,11 @@ export default function ScheduleScreen() {
 		let result = [...bookings];
 
 		switch (activeTab) {
-			case 'upcoming':
-				result = result.filter((b) => b.status === 'CONFIRMED' || b.status === 'PENDING');
+			case 'pending':
+				result = result.filter((b) => b.status === 'PENDING');
+				break;
+			case 'confirmed':
+				result = result.filter((b) => b.status === 'CONFIRMED');
 				break;
 			case 'completed':
 				result = result.filter((b) => b.status === 'COMPLETED');
@@ -178,8 +182,10 @@ export default function ScheduleScreen() {
 		switch (tab) {
 			case 'all':
 				return bookings.length;
-			case 'upcoming':
-				return bookings.filter((b) => b.status === 'CONFIRMED' || b.status === 'PENDING').length;
+			case 'pending':
+				return bookings.filter((b) => b.status === 'PENDING').length;
+			case 'confirmed':
+				return bookings.filter((b) => b.status === 'CONFIRMED').length;
 			case 'completed':
 				return bookings.filter((b) => b.status === 'COMPLETED').length;
 			case 'cancelled':
