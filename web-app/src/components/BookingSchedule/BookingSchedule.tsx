@@ -6,6 +6,12 @@ import bookingApi from '../../api/bookingApi'
 import { Toaster, toast } from 'react-hot-toast'
 
 // Interface mapping to backend models
+interface Venue {
+    id: number
+    name: string
+    address?: string
+}
+
 interface Field {
     id: number
     name: string
@@ -39,12 +45,14 @@ const BookingSchedule: React.FC = () => {
     // State: Filter field type
     const [filterType, setFilterType] = useState('All')
 
+    // State: List of venues owned by this user
+    const [venues, setVenues] = useState<Venue[]>([])
     const [venueId, setVenueId] = useState<number | null>(null)
     const [fields, setFields] = useState<Field[]>([])
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(false)
 
-    // Load user and venue on mount
+    // Load user and venues on mount
     useEffect(() => {
         const loadInitialData = async () => {
             try {
@@ -52,23 +60,29 @@ const BookingSchedule: React.FC = () => {
                 if (userStr) {
                     const user = JSON.parse(userStr);
 
-                    // Fetch all venues and find the one owned by this user
-                    // Since there is no specific endpoint for "my venues", we fetch all and filter
-                    // This is a temporary solution until backend provides /venues/me or similar
+                    // Fetch all venues and filter by owner
                     const allVenues: any = await venueApi.getAll();
 
                     // Handle if response is array or object wrapped
                     const venuesList = Array.isArray(allVenues) ? allVenues : (allVenues as any).data || [];
 
-                    const myVenue = venuesList.find((v: any) => v.owner?.user?.id === user.id);
+                    // Filter venues owned by this user
+                    const myVenues = venuesList.filter((v: any) => v.owner?.user?.id === user.id);
 
-                    if (myVenue) {
-                        setVenueId(myVenue.id);
-                        // Fetch fields for this venue
-                        fetchFields(myVenue.id);
+                    if (myVenues.length > 0) {
+                        // Map to Venue interface
+                        const mappedVenues: Venue[] = myVenues.map((v: any) => ({
+                            id: v.id,
+                            name: v.name,
+                            address: v.address
+                        }));
+                        setVenues(mappedVenues);
+
+                        // Auto-select the first venue
+                        setVenueId(mappedVenues[0].id);
+                        fetchFields(mappedVenues[0].id);
                     } else {
-                        // If no venue found, maybe prompt user to create one?
-                        // For now just log or show empty state
+                        // If no venue found, show empty state
                         console.log("No venue found for this user");
                     }
                 }
@@ -263,6 +277,14 @@ const BookingSchedule: React.FC = () => {
         }
     }
 
+    // Handle venue change
+    const handleVenueChange = (newVenueId: number) => {
+        setVenueId(newVenueId);
+        setFields([]); // Clear current fields
+        setBookings([]); // Clear current bookings
+        fetchFields(newVenueId);
+    }
+
     // Filter fields based on dropdown and sort by field type (5VS5 -> 7VS7 -> 11VS11)
     const filteredFields = sortFields(fields.filter(f => {
         const displayType = getFieldTypeDisplay(f.fieldType);
@@ -278,7 +300,30 @@ const BookingSchedule: React.FC = () => {
                     <h2>Quản lý lịch đặt sân</h2>
                     <p>Xem và quản lý tất cả đặt sân của bạn</p>
                 </div>
-                <button className="btn-export">Xuất Excel</button>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {venues.length > 0 && (
+                        <select
+                            value={venueId || ''}
+                            onChange={(e) => handleVenueChange(Number(e.target.value))}
+                            style={{
+                                padding: '10px 16px',
+                                borderRadius: '10px',
+                                border: '1px solid #d1d5db',
+                                fontSize: '0.95rem',
+                                backgroundColor: '#fff',
+                                cursor: 'pointer',
+                                minWidth: '200px'
+                            }}
+                        >
+                            {venues.map(v => (
+                                <option key={v.id} value={v.id}>
+                                    {v.name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    <button className="btn-export">Xuất Excel</button>
+                </div>
             </div>
 
             <div className="booking-body">
