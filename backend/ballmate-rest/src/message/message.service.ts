@@ -77,8 +77,8 @@ export class MessageService {
         const owner = await this.prisma.fieldOwner.findFirst({ where: { userId } });
 
         if (
-            (player && conversation.playerId !== player.id) &&
-            (owner && conversation.ownerId !== owner.id)
+            (!player || conversation.playerId !== player.id) &&
+            (!owner || conversation.ownerId !== owner.id)
         ) {
             throw new ForbiddenException('Access denied');
         }
@@ -131,8 +131,8 @@ export class MessageService {
         const owner = await this.prisma.fieldOwner.findFirst({ where: { userId } });
 
         if (
-            (player && conversation.playerId !== player.id) &&
-            (owner && conversation.ownerId !== owner.id)
+            (!player || conversation.playerId !== player.id) &&
+            (!owner || conversation.ownerId !== owner.id)
         ) {
             throw new ForbiddenException('Access denied');
         }
