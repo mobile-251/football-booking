@@ -194,6 +194,13 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		return `${year}-${month}-${day}`;
 	};
 
+	// Helper: Convert ISO timestamp to local time string (HH:mm)
+	// Same pattern as ScheduleScreen - new Date() auto-converts to device local timezone
+	const formatSlotTime = (isoString: string): string => {
+		const date = new Date(isoString);
+		return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+	};
+
 	const isPastDay = (iso: string) => {
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
@@ -266,8 +273,9 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 			}
 
 			for (const slot of selectedSlots) {
-				const startDateTime = new Date(`${slot.date}T${slot.startTime}:00`);
-				const endDateTime = new Date(`${slot.date}T${slot.endTime}:00`);
+				// startTime and endTime are now in ISO format from API
+				const startDateTime = new Date(slot.startTime);
+				const endDateTime = new Date(slot.endTime);
 
 				const booking = await api.createBooking({
 					fieldId: slot.fieldId,
@@ -636,7 +644,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 														!slot.isAvailable && styles.timeSlotTextBooked,
 													]}
 												>
-													{slot.startTime}
+													{formatSlotTime(slot.startTime)}
 												</Text>
 												{!slot.isAvailable && <Ionicons name='close' size={12} color={theme.colors.foregroundMuted} />}
 												{slot.isPeakHour && slot.isAvailable && <Text style={styles.peakIcon}>🔥</Text>}
@@ -692,7 +700,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 											{formatDate(slot.date).day} thg {formatDate(slot.date).month} • {slot.fieldName}
 										</Text>
 										<Text style={styles.selectedSlotTime}>
-											{slot.startTime} - {slot.endTime}
+											{formatSlotTime(slot.startTime)} - {formatSlotTime(slot.endTime)}
 										</Text>
 										<Text style={styles.selectedSlotPrice}>{formatPrice(slot.price)}đ</Text>
 										<TouchableOpacity onPress={() => setSelectedSlots((prev) => prev.filter((_, i) => i !== index))}>
@@ -733,7 +741,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 									{formatDate(slot.date).dayName}, {formatDate(slot.date).day}/{formatDate(slot.date).month}
 								</Text>
 								<Text style={styles.summaryTime}>
-									{slot.startTime} - {slot.endTime}
+									{formatSlotTime(slot.startTime)} - {formatSlotTime(slot.endTime)}
 								</Text>
 							</View>
 						</View>

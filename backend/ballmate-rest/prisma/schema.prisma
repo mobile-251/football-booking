@@ -8,10 +8,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
-
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // url      = env("DATABASE_`URL")
 }
 
 // ============================================
@@ -25,27 +24,29 @@ enum UserRole {
 }
 
 model User {
-  id            Int           @id @default(autoincrement())
-  email         String        @unique
-  password      String
-  fullName      String
-  phoneNumber   String?
-  role          UserRole      @default(PLAYER)
-  avatarUrl     String?
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  password    String
+  fullName    String
+  phoneNumber String?
+  role        UserRole @default(PLAYER)
+  avatarUrl   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  player    Player?
-  owner     FieldOwner?
-  admin     Admin?
+  player        Player?
+  owner         FieldOwner?
+  admin         Admin?
   notifications Notification[]
-  messages  Message[]
+  messages      Message[]
+
   @@map("users")
 }
+
 model Player {
-  id        Int      @id @default(autoincrement())
-  userId    Int     @unique
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -54,62 +55,63 @@ model Player {
   reviews       Review[]
   favorites     Favorite[]
   conversations Conversation[]
-  user      User     @relation(fields: [userId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
 
   @@map("players")
 }
 
 model FieldOwner {
-  id        Int      @id @default(autoincrement())
-  userId    Int     @unique
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   venues        Venue[]
   conversations Conversation[]
-  user      User     @relation(fields: [userId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
 
   @@map("field_owners")
 }
 
 model Admin {
-  id        Int      @id @default(autoincrement())
-  userId    Int     @unique
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
-  user      User     @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
 
   @@map("admins")
 }
+
 // ============================================
 // VENUE & FIELD
 // ============================================
 
 model Venue {
-  id            Int           @id @default(autoincrement())
-  name          String
-  description   String?
-  address       String
-  city          String
-  district      String?
-  latitude      Float?
-  longitude     Float?
-  openTime      String?       // "06:00"
-  closeTime     String?       // "23:00"
-  images        String[]      // URLs to images
-  ownerId       Int
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  phoneNumber   String?
-  email         String?
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  address     String
+  city        String
+  district    String?
+  latitude    Float?
+  longitude   Float?
+  openTime    String? // "06:00"
+  closeTime   String? // "23:00"
+  images      String[] // URLs to images
+  ownerId     Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  phoneNumber String?
+  email       String?
 
   // Relations
-  owner         FieldOwner          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  fields        Field[]
-  
+  owner  FieldOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  fields Field[]
+
   @@map("venues")
 }
 
@@ -133,14 +135,14 @@ model Field {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  venue     Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  pricings  FieldPricing[]
-  bookings  Booking[]
-  reviews   Review[]
-  
+  venue    Venue          @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  pricings FieldPricing[]
+  bookings Booking[]
+  reviews  Review[]
+
   favorites     Favorite[]
   conversations Conversation[]
-  
+
   @@map("fields")
 }
 
@@ -148,12 +150,12 @@ model FieldPricing {
   id        Int      @id @default(autoincrement())
   fieldId   Int
   dayType   DayType
-  startTime String   // "05:00"
-  endTime   String   // "16:00"
-  price     Int      // 200000
+  startTime String // "05:00"
+  endTime   String // "16:00"
+  price     Int // 200000
   createdAt DateTime @default(now())
 
-  field     Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
   @@map("field_pricings")
 }
@@ -170,28 +172,28 @@ enum BookingStatus {
 }
 
 model Booking {
-  id            Int             @id @default(autoincrement())
-  bookingCode   String          @unique  // Mã đặt sân 8 ký tự (BM + 6 chars)
-  customerName  String                   // Họ tên người đặt
-  customerPhone String                   // SĐT người đặt
+  id            Int           @id @default(autoincrement())
+  bookingCode   String        @unique // Mã đặt sân 8 ký tự (BM + 6 chars)
+  customerName  String // Họ tên người đặt
+  customerPhone String // SĐT người đặt
   fieldId       Int
   playerId      Int
   startTime     DateTime
   endTime       DateTime
   totalPrice    Float
-  status        BookingStatus   @default(PENDING)
+  status        BookingStatus @default(PENDING)
   note          String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
-  field         Field           @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  player        Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  payment       Payment?
-  
-  @@map("bookings")
+  field   Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  player  Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  payment Payment?
+
   @@index([fieldId, startTime, endTime]) // Index để kiểm tra trùng lịch nhanh
-  @@index([bookingCode])                 // Index cho tra cứu mã đặt sân
+  @@index([bookingCode]) // Index cho tra cứu mã đặt sân
+  @@map("bookings")
 }
 
 // ============================================
@@ -212,19 +214,19 @@ enum PaymentMethod {
 }
 
 model Payment {
-  id              Int             @id @default(autoincrement())
-  bookingId       Int             @unique
-  amount          Float
-  method          PaymentMethod   @default(CASH)
-  status          PaymentStatus   @default(PENDING)
-  transactionId   String?
-  paidAt          DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id            Int           @id @default(autoincrement())
+  bookingId     Int           @unique
+  amount        Float
+  method        PaymentMethod @default(CASH)
+  status        PaymentStatus @default(PENDING)
+  transactionId String?
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
-  booking         Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
   @@map("payments")
 }
 
@@ -233,20 +235,20 @@ model Payment {
 // ============================================
 
 model Review {
-  id            Int           @id @default(autoincrement())
-  fieldId       Int
-  playerId      Int
-  rating        Int           // 1-5
-  comment       String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id        Int      @id @default(autoincrement())
+  fieldId   Int
+  playerId  Int
+  rating    Int // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  field         Field         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  player        Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  
-  @@map("reviews")
+  field  Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
   @@unique([fieldId, playerId]) // 1 player chỉ review 1 field 1 lần
+  @@map("reviews")
 }
 
 // ============================================
@@ -254,17 +256,17 @@ model Review {
 // ============================================
 
 model RevenueReport {
-  id            Int           @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   venueId       Int?
   fieldId       Int?
   totalRevenue  Float
   totalBookings Int
   reportDate    DateTime
-  createdAt     DateTime      @default(now())
+  createdAt     DateTime @default(now())
 
-  @@map("revenue_reports")
   @@index([venueId, reportDate])
   @@index([fieldId, reportDate])
+  @@map("revenue_reports")
 }
 
 // ============================================
@@ -278,8 +280,8 @@ model Favorite {
   createdAt DateTime @default(now())
 
   // Relations
-  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  field     Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  field  Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
   @@unique([playerId, fieldId])
   @@map("favorites")
@@ -306,15 +308,15 @@ model Notification {
   type      NotificationType
   title     String
   message   String
-  data      Json?            // Additional data like bookingId, fieldId, etc.
+  data      Json? // Additional data like bookingId, fieldId, etc.
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
 
   // Relations
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("notifications")
   @@index([userId, isRead])
+  @@map("notifications")
 }
 
 // ============================================
@@ -322,38 +324,37 @@ model Notification {
 // ============================================
 
 model Conversation {
-  id          Int       @id @default(autoincrement())
-  playerId    Int
-  ownerId     Int       // FieldOwner id
-  fieldId     Int?      // Optional: conversation about a specific field
-  lastMessage String?
+  id            Int       @id @default(autoincrement())
+  playerId      Int
+  ownerId       Int // FieldOwner id
+  fieldId       Int? // Optional: conversation about a specific field
+  lastMessage   String?
   lastMessageAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relations
-  player      Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  owner       FieldOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  field       Field?    @relation(fields: [fieldId], references: [id], onDelete: SetNull)
-  messages    Message[]
+  player   Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  owner    FieldOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  field    Field?     @relation(fields: [fieldId], references: [id], onDelete: SetNull)
+  messages Message[]
 
   @@unique([playerId, ownerId])
   @@map("conversations")
 }
 
 model Message {
-  id             Int          @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   conversationId Int
-  senderId       Int          // User id
+  senderId       Int // User id
   content        String
-  isRead         Boolean      @default(false)
-  createdAt      DateTime     @default(now())
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   // Relations
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
-  @@map("messages")
   @@index([conversationId, createdAt])
+  @@map("messages")
 }
-

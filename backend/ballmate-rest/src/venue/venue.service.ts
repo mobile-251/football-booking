@@ -309,6 +309,7 @@ export class VenueService {
   private extractBookedHours(bookings: any[]): Set<number> {
     const bookedHours = new Set<number>();
     bookings.forEach(booking => {
+      // TODO: handle timezone
       const startHour = new Date(booking.startTime).getHours();
       const endHour = new Date(booking.endTime).getHours();
       for (let h = startHour; h < endHour; h++) {
@@ -470,8 +471,9 @@ export class VenueService {
         }[] = [];
 
         for (let hour = openHour; hour < closeHour; hour++) {
-          const startTime = `${hour.toString().padStart(2, '0')}:00`;
-          const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
+          // Return ISO format (without timezone) so mobile can convert to local timezone
+          const startTime = `${date}T${hour.toString().padStart(2, '0')}:00:00`;
+          const endTime = `${date}T${(hour + 1).toString().padStart(2, '0')}:00:00`;
           const isPeakHour = hour >= 17 && hour < 21;
 
           // Find matching pricing
