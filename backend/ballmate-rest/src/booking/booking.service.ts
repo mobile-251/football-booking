@@ -176,7 +176,7 @@ export class BookingService {
       };
     }
 
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where,
       include: {
         field: {
@@ -208,6 +208,12 @@ export class BookingService {
         startTime: 'desc',
       },
     });
+
+    // Hide booking code for PENDING bookings
+    return bookings.map(booking => ({
+      ...booking,
+      bookingCode: booking.status === BookingStatus.PENDING ? 'Chờ xác nhận' : booking.bookingCode,
+    }));
   }
 
   async findOne(id: number) {
@@ -226,6 +232,13 @@ export class BookingService {
 
     if (!booking) {
       throw new NotFoundException(`Booking with ID ${id} not found`);
+    }
+
+    if (booking.status === BookingStatus.PENDING) {
+      return {
+        ...booking,
+        bookingCode: 'Chờ xác nhận',
+      };
     }
 
     return booking;
