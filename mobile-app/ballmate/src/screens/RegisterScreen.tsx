@@ -46,7 +46,7 @@ export default function RegisterScreen() {
 
         setLoading(true);
         try {
-            await api.register({ email, password, fullName });
+            await api.register({ email, password, fullName, role: 'PLAYER' });
             // Navigate to main app after successful registration
             navigation.reset({
                 index: 0,

@@ -98,6 +98,7 @@ class ApiService {
 		password: string;
 		fullName: string;
 		phoneNumber?: string;
+		role?: 'PLAYER' | 'FIELD_OWNER';
 	}): Promise<AuthResponse> {
 		const response = await this.client.post<AuthResponse>('/auth/register', data);
 		this.accessToken = response.data.access_token;
