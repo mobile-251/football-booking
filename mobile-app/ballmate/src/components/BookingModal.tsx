@@ -726,7 +726,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 			showsVerticalScrollIndicator={false}
 			enableOnAndroid
 			keyboardShouldPersistTaps="handled"
-			extraScrollHeight={300}
+			extraScrollHeight={Math.round(height * 0.20)}
 			contentContainerStyle={{ paddingBottom: 140 }}
 		>
 			<View style={styles.stepHeader}>
