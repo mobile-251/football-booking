@@ -12,7 +12,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ formData, onChange }) => 
         action: 'toggle' | 'increment' | 'decrement'
     ) => {
         const newFieldTypes = { ...formData.fieldTypes }
-        const currentField = newFieldTypes[type]
+        const currentField = { ...newFieldTypes[type] }
 
         if (action === 'toggle') {
             const newSelected = !currentField.selected
@@ -39,6 +39,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ formData, onChange }) => 
             }
         }
 
+        newFieldTypes[type] = currentField
         onChange({ ...formData, fieldTypes: newFieldTypes })
     }
 
