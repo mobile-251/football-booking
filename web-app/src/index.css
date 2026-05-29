@@ -1,43 +1,172 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap");
+@import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+@theme {
+  --font-sans:
+    "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+
+  --color-primary: #1f6650;
+  --color-primary-dark: #0f5132;
+  --color-primary-muted: #6f9a8d;
+  --color-primary-light: #eafbea;
+  --color-danger: #ea5e5e;
+
+  --radius-card: 16px;
+  --radius-control: 10px;
+
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-card-lg: 0 4px 20px rgba(0, 0, 0, 0.08);
+
+  --animate-bounce-ball: bounce-ball 1s ease-in-out alternate infinite;
+  --animate-squash: squash 1s ease-in-out infinite;
 }
 
-:root {
-  line-height: 1.5;
-  font-weight: 400;
-  color: #334155;
-  background-color: #f8fafc;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply m-0 min-h-screen min-w-[320px] font-sans text-slate-700 antialiased;
+    background-color: #f8fafc;
+  }
+
+  #root {
+    @apply min-h-screen w-full;
+  }
+
+  button {
+    @apply cursor-pointer border-none outline-none;
+  }
+
+  a {
+    @apply no-underline transition-all duration-200;
+  }
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer components {
+  .card-surface {
+    @apply rounded-2xl border border-black/[0.04] bg-white shadow-[var(--shadow-card)];
+  }
+
+  .btn-primary {
+    @apply rounded-[var(--radius-control)] bg-primary px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply rounded-[var(--radius-control)] border border-primary bg-white px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-light;
+  }
+
+  .input-field {
+    @apply h-11 w-full rounded-[var(--radius-control)] border border-gray-200 px-3.5 text-sm transition-[border-color,box-shadow] focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15;
+  }
+
+  .menu-item-base {
+    @apply flex h-11 max-w-[246px] w-full cursor-pointer items-center gap-3 rounded-lg px-4 text-primary transition-colors hover:bg-black/5;
+  }
+
+  .menu-item-active {
+    @apply bg-gradient-to-br from-primary to-primary-dark font-semibold text-white hover:bg-gradient-to-br;
+  }
 }
 
-#root {
-  width: 100%;
-  min-height: 100vh;
+@keyframes bounce-ball {
+  0% {
+    transform: translateY(0) scale(1.05, 0.95);
+  }
+  50% {
+    transform: translateY(-100px) scale(1, 1);
+  }
+  100% {
+    transform: translateY(0) scale(1.05, 0.95);
+  }
 }
 
-button {
-  cursor: pointer;
-  border: none;
-  outline: none;
+@keyframes squash {
+  0% {
+    transform: scaleX(1.3);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleX(0.6);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scaleX(1.3);
+    opacity: 0.5;
+  }
 }
 
-input {
-  outline: none;
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
-a {
-  text-decoration: none;
-  transition: all 0.2s;
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
+@keyframes slide-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(255, 255, 255, 0.9) 50%,
+    rgba(255, 255, 255, 0.6) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+.icon-filter-primary {
+  filter: brightness(0) saturate(100%) invert(28%) sepia(45%) saturate(1200%)
+    hue-rotate(120deg) brightness(0.9);
+}
+
+.icon-filter-white {
+  filter: brightness(0) saturate(100%) invert(100%);
+}
+
+.icon-filter-danger {
+  filter: brightness(0) saturate(100%) invert(47%) sepia(87%) saturate(748%)
+    hue-rotate(331deg);
+}
+
+/* Complex views: Tailwind @layer component classes */
+@import "./styles/booking-schedule.css";
+@import "./styles/field-register.css";

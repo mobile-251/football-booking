@@ -13,8 +13,13 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { VenueService } from './venue.service';
+import { DashboardService } from '../dashboard/dashboard.service';
+import { VenueManagementService } from './venue-management.service';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
+import { UpdateVenueManagementDto } from './dto/update-venue-management.dto';
+import { CreateVenueFieldDto } from './dto/create-venue-field.dto';
+import { UpdateFieldStatusDto } from './dto/update-field-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -24,7 +29,11 @@ import type { JwtUser } from '../auth/types/jwt-user.type';
 
 @Controller('venues')
 export class VenueController {
-  constructor(private readonly venueService: VenueService) {}
+  constructor(
+    private readonly venueService: VenueService,
+    private readonly dashboardService: DashboardService,
+    private readonly venueManagementService: VenueManagementService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -42,6 +51,63 @@ export class VenueController {
   @Get()
   findAll(@Query('city') city?: string) {
     return this.venueService.findAll(city);
+  }
+
+  @Get(':id/dashboard')
+  @UseGuards(JwtAuthGuard, RolesGuard, VenueAccessGuard)
+  @Roles(UserRole.FIELD_OWNER, UserRole.VENUE_MANAGER, UserRole.ADMIN)
+  @VenueScope('id')
+  getDashboard(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: { user: JwtUser },
+  ) {
+    return this.dashboardService.getVenueDashboard(id, req.user.id);
+  }
+
+  @Get(':id/management')
+  @UseGuards(JwtAuthGuard, RolesGuard, VenueAccessGuard)
+  @Roles(UserRole.FIELD_OWNER, UserRole.VENUE_MANAGER, UserRole.ADMIN)
+  @VenueScope('id')
+  getManagement(@Param('id', ParseIntPipe) id: number) {
+    return this.venueManagementService.getManagementDetail(id);
+  }
+
+  @Patch(':id/management')
+  @UseGuards(JwtAuthGuard, RolesGuard, VenueAccessGuard)
+  @Roles(UserRole.FIELD_OWNER, UserRole.VENUE_MANAGER, UserRole.ADMIN)
+  @VenueScope('id')
+  updateManagement(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateVenueManagementDto,
+  ) {
+    return this.venueManagementService.updateManagement(id, dto);
+  }
+
+  @Post(':id/fields')
+  @UseGuards(JwtAuthGuard, RolesGuard, VenueAccessGuard)
+  @Roles(UserRole.FIELD_OWNER, UserRole.VENUE_MANAGER, UserRole.ADMIN)
+  @VenueScope('id')
+  createField(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateVenueFieldDto,
+  ) {
+    return this.venueManagementService.createField(id, dto);
+  }
+
+  @Patch(':id/fields/:fieldId/status')
+  @UseGuards(JwtAuthGuard, RolesGuard, VenueAccessGuard)
+  @Roles(UserRole.FIELD_OWNER, UserRole.VENUE_MANAGER, UserRole.ADMIN)
+  @VenueScope('id')
+  updateFieldStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('fieldId', ParseIntPipe) fieldId: number,
+    @Body() dto: UpdateFieldStatusDto,
+  ) {
+    return this.venueManagementService.updateFieldStatus(
+      id,
+      fieldId,
+      dto.operationalStatus,
+    );
   }
 
   @Get(':id')

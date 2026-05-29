@@ -305,6 +305,7 @@ export class VenueService {
       name: field.name,
       fieldType: field.fieldType,
       isActive: field.isActive,
+      operationalStatus: field.operationalStatus,
       createdAt: field.createdAt,
       updatedAt: field.updatedAt,
       venueId: field.venueId,
