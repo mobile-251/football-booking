@@ -28,6 +28,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         isActive: true,
         player: { select: { id: true } },
         owner: { select: { id: true } },
+        venueManager: {
+          select: { id: true, venueId: true, isActive: true },
+        },
       },
     });
 
@@ -35,10 +38,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
+    if (
+      user.role === 'VENUE_MANAGER' &&
+      (!user.venueManager || !user.venueManager.isActive)
+    ) {
+      throw new UnauthorizedException('Venue manager account is inactive');
+    }
+
     return {
       ...user,
       playerId: user.player?.id,
       ownerId: user.owner?.id,
+      venueManagerId: user.venueManager?.id,
+      venueId: user.venueManager?.venueId,
     };
   }
 }

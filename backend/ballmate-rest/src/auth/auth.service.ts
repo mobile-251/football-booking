@@ -84,15 +84,80 @@ export class AuthService {
       playerInfo = player;
     }
 
+    const baseUser = {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword,
+      player: playerInfo,
+    };
+
+    if (user.role === 'FIELD_OWNER') {
+      const fieldOwner = await this.prisma.fieldOwner.findUnique({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+
+      const venues = fieldOwner
+        ? await this.prisma.venue.findMany({
+            where: { ownerId: fieldOwner.id, isActive: true },
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              city: true,
+              district: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [];
+
+      return {
+        ...tokens,
+        user: {
+          ...baseUser,
+          fieldOwnerId: fieldOwner?.id,
+          venues,
+        },
+      };
+    }
+
+    if (user.role === 'VENUE_MANAGER') {
+      const venueManager = await this.prisma.venueManager.findUnique({
+        where: { userId: user.id },
+        include: {
+          venue: {
+            select: { id: true, name: true, address: true, city: true },
+          },
+        },
+      });
+
+      if (!venueManager || !venueManager.isActive) {
+        throw new UnauthorizedException('Venue manager account is inactive');
+      }
+
+      return {
+        ...tokens,
+        user: {
+          ...baseUser,
+          venueId: venueManager.venueId,
+          venueName: venueManager.venue.name,
+          venues: [
+            {
+              id: venueManager.venue.id,
+              name: venueManager.venue.name,
+              address: venueManager.venue.address,
+              city: venueManager.venue.city,
+            },
+          ],
+        },
+      };
+    }
+
     return {
       ...tokens,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        player: playerInfo,
-      },
+      user: baseUser,
     };
   }
 
@@ -151,6 +216,33 @@ export class AuthService {
       access_token: accessToken,
       refresh_token: refreshToken,
     };
+  }
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: false,
+      },
+    });
+
+    return { success: true };
   }
 
   async getUserFromToken(token: string) {

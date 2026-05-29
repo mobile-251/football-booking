@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
-import { FieldType, DayType } from '@prisma/client';
+import { FieldType, DayType, UserRole } from '@prisma/client';
+import { JwtUser } from '../auth/types/jwt-user.type';
 
 @Injectable()
 export class VenueService {
@@ -120,6 +125,62 @@ export class VenueService {
         },
       });
     });
+  }
+
+  async findMyVenues(user: JwtUser) {
+    if (user.role === UserRole.FIELD_OWNER && user.ownerId) {
+      return this.prisma.venue.findMany({
+        where: { ownerId: user.ownerId, isActive: true },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          city: true,
+          district: true,
+          phoneNumber: true,
+          email: true,
+          images: true,
+          openTime: true,
+          closeTime: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (user.role === UserRole.VENUE_MANAGER && user.venueId) {
+      const venue = await this.prisma.venue.findUnique({
+        where: { id: user.venueId, isActive: true },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          city: true,
+          district: true,
+          phoneNumber: true,
+          email: true,
+          images: true,
+          openTime: true,
+          closeTime: true,
+        },
+      });
+      return venue ? [venue] : [];
+    }
+
+    if (user.role === UserRole.ADMIN) {
+      return this.prisma.venue.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          city: true,
+          district: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    throw new ForbiddenException('No venues available for this account');
   }
 
   async findAll(city?: string) {

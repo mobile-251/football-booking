@@ -22,6 +22,7 @@ async function main() {
   await prisma.payment.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.field.deleteMany();
+  await prisma.venueManager.deleteMany();
   await prisma.venue.deleteMany();
   await prisma.admin.deleteMany();
   await prisma.fieldOwner.deleteMany();
@@ -140,16 +141,66 @@ async function main() {
   console.log('Creating venues for owner1...');
 
   const venueNames = [
-    { name: 'Sân Bóng Thủ Đức', address: '123 Võ Văn Ngân, Thủ Đức, TP.HCM', city: 'Hồ Chí Minh', district: 'Thủ Đức' },
-    { name: 'Sân Bóng Quận 9', address: '456 Lê Văn Việt, Quận 9, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 9' },
-    { name: 'Sân Bóng Bình Thạnh', address: '789 Điện Biên Phủ, Bình Thạnh, TP.HCM', city: 'Hồ Chí Minh', district: 'Bình Thạnh' },
-    { name: 'Sân Bóng Gò Vấp', address: '321 Quang Trung, Gò Vấp, TP.HCM', city: 'Hồ Chí Minh', district: 'Gò Vấp' },
-    { name: 'Sân Bóng Tân Bình', address: '654 Cộng Hòa, Tân Bình, TP.HCM', city: 'Hồ Chí Minh', district: 'Tân Bình' },
-    { name: 'Sân Bóng Phú Nhuận', address: '987 Phan Xích Long, Phú Nhuận, TP.HCM', city: 'Hồ Chí Minh', district: 'Phú Nhuận' },
-    { name: 'Sân Bóng Quận 7', address: '147 Nguyễn Văn Linh, Quận 7, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 7' },
-    { name: 'Sân Bóng Quận 2', address: '258 Trần Não, Quận 2, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 2' },
-    { name: 'Sân Bóng Quận 1', address: '369 Nguyễn Thị Minh Khai, Quận 1, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 1' },
-    { name: 'Sân Bóng Quận 3', address: '741 Võ Thị Sáu, Quận 3, TP.HCM', city: 'Hồ Chí Minh', district: 'Quận 3' },
+    {
+      name: 'Sân Bóng Thủ Đức',
+      address: '123 Võ Văn Ngân, Thủ Đức, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Thủ Đức',
+    },
+    {
+      name: 'Sân Bóng Quận 9',
+      address: '456 Lê Văn Việt, Quận 9, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Quận 9',
+    },
+    {
+      name: 'Sân Bóng Bình Thạnh',
+      address: '789 Điện Biên Phủ, Bình Thạnh, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Bình Thạnh',
+    },
+    {
+      name: 'Sân Bóng Gò Vấp',
+      address: '321 Quang Trung, Gò Vấp, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Gò Vấp',
+    },
+    {
+      name: 'Sân Bóng Tân Bình',
+      address: '654 Cộng Hòa, Tân Bình, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Tân Bình',
+    },
+    {
+      name: 'Sân Bóng Phú Nhuận',
+      address: '987 Phan Xích Long, Phú Nhuận, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Phú Nhuận',
+    },
+    {
+      name: 'Sân Bóng Quận 7',
+      address: '147 Nguyễn Văn Linh, Quận 7, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Quận 7',
+    },
+    {
+      name: 'Sân Bóng Quận 2',
+      address: '258 Trần Não, Quận 2, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Quận 2',
+    },
+    {
+      name: 'Sân Bóng Quận 1',
+      address: '369 Nguyễn Thị Minh Khai, Quận 1, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Quận 1',
+    },
+    {
+      name: 'Sân Bóng Quận 3',
+      address: '741 Võ Thị Sáu, Quận 3, TP.HCM',
+      city: 'Hồ Chí Minh',
+      district: 'Quận 3',
+    },
   ];
 
   // Field configurations: each venue has different number of fields per type
@@ -169,15 +220,15 @@ async function main() {
   // Pricing structure - base prices that will be adjusted per field type
   const basePricing = {
     weekday: {
-      morning: 200000,   // 06:00-16:00
-      evening: 350000,   // 16:00-22:00
-      night: 150000,     // 22:00-23:00
+      morning: 200000, // 06:00-16:00
+      evening: 350000, // 16:00-22:00
+      night: 150000, // 22:00-23:00
     },
     weekend: {
-      morning: 250000,   // 06:00-16:00
-      evening: 400000,   // 16:00-22:00
-      night: 150000,     // 22:00-23:00
-    }
+      morning: 250000, // 06:00-16:00
+      evening: 400000, // 16:00-22:00
+      night: 150000, // 22:00-23:00
+    },
   };
 
   // Price multipliers per field type
@@ -287,7 +338,9 @@ async function main() {
       }
     }
 
-    console.log(`Created venue: ${venueInfo.name} with ${config.field5 + config.field7 + config.field11} fields`);
+    console.log(
+      `Created venue: ${venueInfo.name} with ${config.field5 + config.field7 + config.field11} fields`,
+    );
   }
 
   console.log('Seed completed successfully!');
