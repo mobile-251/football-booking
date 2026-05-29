@@ -20,6 +20,7 @@ datasource db {
 enum UserRole {
   ADMIN
   FIELD_OWNER
+  VENUE_MANAGER
   PLAYER
 }
 
@@ -31,15 +32,18 @@ model User {
   phoneNumber String?
   role        UserRole @default(PLAYER)
   avatarUrl   String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  player        Player?
-  owner         FieldOwner?
-  admin         Admin?
-  notifications Notification[]
-  messages      Message[]
+  player               Player?
+  owner                FieldOwner?
+  admin                Admin?
+  venueManager         VenueManager?
+  venueManagersCreated VenueManager[] @relation("VenueManagerCreatedBy")
+  notifications        Notification[]
+  messages             Message[]
 
   @@map("users")
 }
@@ -107,12 +111,34 @@ model Venue {
   updatedAt   DateTime @updatedAt
   phoneNumber String?
   email       String?
+  amenities   String[] @default([])
+  equipment   Json?
+  canteenItems Json?
+  policies    Json?
 
   // Relations
-  owner  FieldOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  fields Field[]
+  owner         FieldOwner      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  fields        Field[]
+  venueManagers VenueManager[]
 
   @@map("venues")
+}
+
+model VenueManager {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @unique
+  venueId     Int
+  createdById Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue     Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("VenueManagerCreatedBy", fields: [createdById], references: [id])
+
+  @@map("venue_managers")
 }
 
 enum FieldType {
@@ -121,19 +147,26 @@ enum FieldType {
   FIELD_11VS11
 }
 
+enum FieldOperationalStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+
 enum DayType {
   WEEKDAY
   WEEKEND
 }
 
 model Field {
-  id        Int       @id @default(autoincrement())
-  name      String
-  venueId   Int
-  fieldType FieldType
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                Int                    @id @default(autoincrement())
+  name              String
+  venueId           Int
+  fieldType         FieldType
+  isActive          Boolean                @default(true)
+  operationalStatus FieldOperationalStatus @default(ACTIVE)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   venue    Venue          @relation(fields: [venueId], references: [id], onDelete: Cascade)
   pricings FieldPricing[]

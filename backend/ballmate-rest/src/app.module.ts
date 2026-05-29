@@ -15,6 +15,7 @@ import { HealthModule } from './health/health.module';
 import { FavoriteModule } from './favorite/favorite.module';
 import { NotificationModule } from './notification/notification.module';
 import { MessageModule } from './message/message.module';
+import { VenueManagerModule } from './venue-manager/venue-manager.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -37,6 +38,7 @@ import configuration from './config/configuration';
     FavoriteModule,
     NotificationModule,
     MessageModule,
+    VenueManagerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
