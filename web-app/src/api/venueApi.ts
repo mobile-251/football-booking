@@ -9,7 +9,10 @@ const venueApi = {
     },
     getOne: (id: number) => {
         return AxiosClient.get(`/venues/${id}`);
-    }
+    },
+    getMyVenues: () => {
+        return AxiosClient.get('/venues/me');
+    },
 };
 
 export default venueApi;

@@ -8,6 +8,7 @@ import FormActions from './FormActions'
 import ContactStep from './ContactStep'
 import PreviewModal from './PreviewModal'
 import venueApi from '../../api/venueApi'
+import { useCurrentVenue } from '../../hooks/useCurrentVenue'
 import toast from 'react-hot-toast'
 import type { FieldFormData, PricingData } from './types'
 
@@ -70,6 +71,7 @@ const getInitialFormData = () => ({
 })
 
 function FieldRegister() {
+  const { refreshVenues, setCurrentVenueId } = useCurrentVenue()
   const [currentStep, setCurrentStep] = useState(1)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [formData, setFormData] = useState(getInitialFormData())
@@ -208,11 +210,14 @@ function FieldRegister() {
           pricing: formData.pricing,
         };
 
-        const response = await venueApi.create(payload);
-        console.log('API Response:', response);
+        const response = (await venueApi.create(payload)) as { id?: number };
         toast.success('Đăng ký sân thành công!');
 
-        // Reset form về trạng thái ban đầu
+        await refreshVenues();
+        if (response?.id) {
+          setCurrentVenueId(response.id);
+        }
+
         setFormData(getInitialFormData());
         setCurrentStep(1);
 

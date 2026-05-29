@@ -1,4 +1,5 @@
 import './Sidebar.css'
+import VenueSwitcher from '../VenueSwitcher/VenueSwitcher'
 import QLSIcon from '../../assets/QLS.svg'
 import TQIcon from '../../assets/TQ.svg'
 import DKSIcon from '../../assets/DKS.svg'
@@ -18,6 +19,7 @@ interface SidebarProps {
   isMobile: boolean
   onToggle: () => void
   onLogout: () => void
+  hideOwnerOnlyItems?: boolean
 }
 
 function Sidebar({
@@ -26,18 +28,24 @@ function Sidebar({
   collapsed,
   isOpen,
   isMobile,
-  onLogout
+  onLogout,
+  hideOwnerOnlyItems = false,
 }: SidebarProps) {
-  const menuItems = [
-    { id: 'Tổng quan', icon: TQIcon, label: 'Tổng quan' },
-    { id: 'Quản lý sân', icon: QLSIcon, label: 'Quản lý sân' },
-    { id: 'Đăng ký sân', icon: DKSIcon, label: 'Đăng ký sân' },
-    { id: 'Lịch đặt sân', icon: LDSIcon, label: 'Lịch đặt sân' },
-    { id: 'Doanh thu', icon: DTIcon, label: 'Doanh thu' },
-    { id: 'Bảo trì', icon: BTIcon, label: 'Bảo trì' },
-    { id: 'Thông báo', icon: TBIcon, label: 'Thông báo', badge: 5 },
-    { id: 'Báo cáo', icon: BCIcon, label: 'Báo cáo' },
+  const allMenuItems = [
+    { id: 'Tổng quan', icon: TQIcon, label: 'Tổng quan', ownerOnly: false },
+    { id: 'Quản lý sân', icon: QLSIcon, label: 'Quản lý sân', ownerOnly: false },
+    { id: 'Đăng ký sân', icon: DKSIcon, label: 'Đăng ký sân', ownerOnly: true },
+    { id: 'Lịch đặt sân', icon: LDSIcon, label: 'Lịch đặt sân', ownerOnly: false },
+    { id: 'Quản lý nhân viên', icon: TBIcon, label: 'Quản lý nhân viên', ownerOnly: true },
+    { id: 'Doanh thu', icon: DTIcon, label: 'Doanh thu', ownerOnly: false },
+    { id: 'Bảo trì', icon: BTIcon, label: 'Bảo trì', ownerOnly: false },
+    { id: 'Thông báo', icon: TBIcon, label: 'Thông báo', badge: 5, ownerOnly: false },
+    { id: 'Báo cáo', icon: BCIcon, label: 'Báo cáo', ownerOnly: false },
   ]
+
+  const menuItems = hideOwnerOnlyItems
+    ? allMenuItems.filter((item) => !item.ownerOnly)
+    : allMenuItems
 
   const sidebarClasses = [
     'sidebar',
@@ -60,6 +68,7 @@ function Sidebar({
             </div>
           )}
         </div>
+        {(!collapsed || isMobile) && <VenueSwitcher />}
         {/* {!isMobile && (
           <button className="collapse-btn" onClick={onToggle} title={collapsed ? "Mở rộng" : "Thu gọn"}>
             {collapsed ? '›' : '‹'}

@@ -1,5 +1,7 @@
 import './Header.css'
 import TBIcon from '../../assets/TB.svg'
+import { useCurrentVenue } from '../../hooks/useCurrentVenue'
+import { getRoleLabel, getStoredUser, isManager } from '../../types/auth'
 
 interface HeaderProps {
   onToggleSidebar: () => void
@@ -7,14 +9,16 @@ interface HeaderProps {
 }
 
 function Header({ onToggleSidebar, isMobile }: HeaderProps) {
-  // Lấy thông tin user từ localStorage
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const fullName = user.fullName || 'Người dùng';
+  const storedUser = getStoredUser()
+  const fullName = storedUser?.fullName || 'Người dùng'
+  const roleLabel = storedUser ? getRoleLabel(storedUser.role) : 'Người dùng'
+  const { currentVenue } = useCurrentVenue()
+  const venueSubtitle =
+    storedUser && isManager(storedUser) && currentVenue ? currentVenue.name : ''
 
   return (
     <div className="header">
       <div className="header-main header-main--right">
-        {/* Hamburger button for mobile */}
         {isMobile && (
           <button className="hamburger-btn" onClick={onToggleSidebar}>
             <span className="hamburger-line"></span>
@@ -37,7 +41,10 @@ function Header({ onToggleSidebar, isMobile }: HeaderProps) {
             </div>
             <div className="user-details">
               <div className="user-name">{fullName}</div>
-              <div className="user-role">Chủ sân</div>
+              <div className="user-role">
+                {roleLabel}
+                {venueSubtitle ? ` · ${venueSubtitle}` : ''}
+              </div>
             </div>
           </div>
         </div>

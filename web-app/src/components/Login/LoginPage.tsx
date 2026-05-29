@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AxiosClient from '../../api/AxiosClient';
 import toast from 'react-hot-toast';
+import { isPortalUser, normalizeLoginUser, setStoredUser } from '../../types/auth';
 import './Login.css';
 
 const LoginPage: React.FC = () => {
@@ -47,8 +48,9 @@ const LoginPage: React.FC = () => {
 
             console.log('Login success:', response);
 
-            // Kiểm tra role trước khi cho phép vào hệ thống
-            if (response.user?.role !== 'FIELD_OWNER') {
+            const user = normalizeLoginUser(response.user ?? {});
+
+            if (!isPortalUser(user)) {
                 toast.error('Tài khoản của bạn không có quyền truy cập trang quản trị!');
                 setIsLoading(false);
                 return;
@@ -56,14 +58,17 @@ const LoginPage: React.FC = () => {
 
             toast.success('Đăng nhập thành công!');
 
-            // Lưu token và thông tin user theo structure của BE
             if (response.access_token) {
                 localStorage.setItem('access_token', response.access_token);
                 localStorage.setItem('refresh_token', response.refresh_token);
-                localStorage.setItem('user', JSON.stringify(response.user));
+                setStoredUser(user);
             }
 
-            navigate('/app');
+            if (user.mustChangePassword) {
+                navigate('/change-password');
+            } else {
+                navigate('/app');
+            }
         } catch (error: any) {
             console.error('Login error:', error);
             const errorMessage = error.response?.data?.message || 'Sai tài khoản hoặc mật khẩu!';

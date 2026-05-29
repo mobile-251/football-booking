@@ -3,6 +3,8 @@ import './BookingSchedule.css'
 import BookingDetailModal from './BookingDetailModal'
 import venueApi from '../../api/venueApi'
 import bookingApi from '../../api/bookingApi'
+import { useCurrentVenue } from '../../hooks/useCurrentVenue'
+import { isOwner } from '../../types/auth'
 import { Toaster, toast } from 'react-hot-toast'
 
 // Interface mapping to backend models
@@ -45,54 +47,31 @@ const BookingSchedule: React.FC = () => {
     // State: Filter field type
     const [filterType, setFilterType] = useState('All')
 
-    // State: List of venues owned by this user
-    const [venues, setVenues] = useState<Venue[]>([])
-    const [venueId, setVenueId] = useState<number | null>(null)
+    const {
+        venues: contextVenues,
+        currentVenueId,
+        setCurrentVenueId,
+        user,
+    } = useCurrentVenue()
+    const venueId = currentVenueId
     const [fields, setFields] = useState<Field[]>([])
     const [bookings, setBookings] = useState<Booking[]>([])
     const [loading, setLoading] = useState(false)
 
-    // Load user and venues on mount
+    const venues: Venue[] = contextVenues.map((v) => ({
+        id: v.id,
+        name: v.name,
+        address: v.address,
+    }))
+
     useEffect(() => {
-        const loadInitialData = async () => {
-            try {
-                const userStr = localStorage.getItem('user');
-                if (userStr) {
-                    const user = JSON.parse(userStr);
-
-                    // Fetch all venues and filter by owner
-                    const allVenues: any = await venueApi.getAll();
-
-                    // Handle if response is array or object wrapped
-                    const venuesList = Array.isArray(allVenues) ? allVenues : (allVenues as any).data || [];
-
-                    // Filter venues owned by this user
-                    const myVenues = venuesList.filter((v: any) => v.owner?.user?.id === user.id);
-
-                    if (myVenues.length > 0) {
-                        // Map to Venue interface
-                        const mappedVenues: Venue[] = myVenues.map((v: any) => ({
-                            id: v.id,
-                            name: v.name,
-                            address: v.address
-                        }));
-                        setVenues(mappedVenues);
-
-                        // Auto-select the first venue
-                        setVenueId(mappedVenues[0].id);
-                        fetchFields(mappedVenues[0].id);
-                    } else {
-                        // If no venue found, show empty state
-                        console.log("No venue found for this user");
-                    }
-                }
-            } catch (error) {
-                console.error("Error loading initial data:", error);
-                toast.error("Không thể tải thông tin sân bóng");
-            }
-        };
-        loadInitialData();
-    }, []);
+        if (venueId) {
+            fetchFields(venueId)
+        } else {
+            setFields([])
+            setBookings([])
+        }
+    }, [venueId])
 
     const fetchFields = async (vId: number) => {
         try {
@@ -277,13 +256,13 @@ const BookingSchedule: React.FC = () => {
         }
     }
 
-    // Handle venue change
     const handleVenueChange = (newVenueId: number) => {
-        setVenueId(newVenueId);
-        setFields([]); // Clear current fields
-        setBookings([]); // Clear current bookings
-        fetchFields(newVenueId);
+        setCurrentVenueId(newVenueId)
+        setFields([])
+        setBookings([])
     }
+
+    const showVenueDropdown = user && isOwner(user) && venues.length > 1
 
     // Filter fields based on dropdown and sort by field type (5VS5 -> 7VS7 -> 11VS11)
     const filteredFields = sortFields(fields.filter(f => {
@@ -301,7 +280,7 @@ const BookingSchedule: React.FC = () => {
                     <p>Xem và quản lý tất cả đặt sân của bạn</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    {venues.length > 0 && (
+                    {showVenueDropdown && (
                         <select
                             value={venueId || ''}
                             onChange={(e) => handleVenueChange(Number(e.target.value))}

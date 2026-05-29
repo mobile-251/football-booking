@@ -1,0 +1,152 @@
+.venue-manager-page {
+  padding: 24px;
+  max-width: 960px;
+}
+
+.venue-manager-page h2 {
+  margin: 0 0 8px;
+}
+
+.venue-manager-subtitle {
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.venue-manager-form {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 1px solid #e5e7eb;
+}
+
+.venue-manager-form h3 {
+  margin: 0 0 16px;
+  font-size: 1rem;
+}
+
+.venue-manager-form .form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.venue-manager-form input {
+  flex: 1;
+  min-width: 160px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.venue-manager-form button[type='submit'] {
+  padding: 10px 20px;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.venue-manager-table-wrap {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.venue-manager-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.venue-manager-table th,
+.venue-manager-table td {
+  text-align: left;
+  padding: 12px 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.status-active {
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.status-inactive {
+  color: #9ca3af;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.btn-link.danger {
+  color: #dc2626;
+}
+
+.venue-manager-empty {
+  color: #6b7280;
+}
+
+.credentials-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.credentials-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+}
+
+.credentials-box {
+  background: #f9fafb;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.credentials-box code {
+  font-size: 1.1rem;
+  color: #b45309;
+}
+
+.credentials-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.credentials-actions button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  cursor: pointer;
+}
+
+.credentials-actions button.primary {
+  background: #16a34a;
+  color: #fff;
+  border-color: #16a34a;
+}
