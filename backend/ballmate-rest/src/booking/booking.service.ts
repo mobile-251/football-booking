@@ -140,20 +140,21 @@ export class BookingService {
       },
     });
 
-    // Send notification for new booking
-    try {
-      await this.notificationService.createBookingNotification(
-        booking.player.user.id,
-        'confirmed',
-        {
-          fieldName: booking.field.name,
-          date: start.toLocaleDateString('vi-VN'),
-          time: start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          bookingId: booking.id,
-        },
-      );
-    } catch (e) {
-      console.error('Failed to send booking notification:', e);
+    if (booking.player?.user) {
+      try {
+        await this.notificationService.createBookingNotification(
+          booking.player.user.id,
+          'confirmed',
+          {
+            fieldName: booking.field.name,
+            date: start.toLocaleDateString('vi-VN'),
+            time: start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            bookingId: booking.id,
+          },
+        );
+      } catch (e) {
+        console.error('Failed to send booking notification:', e);
+      }
     }
 
     return booking;
@@ -311,20 +312,21 @@ export class BookingService {
       },
     });
 
-    // Send cancellation notification
-    try {
-      await this.notificationService.createBookingNotification(
-        booking.player.user.id,
-        'cancelled',
-        {
-          fieldName: booking.field.name,
-          date: booking.startTime.toLocaleDateString('vi-VN'),
-          time: booking.startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          bookingId: booking.id,
-        },
-      );
-    } catch (e) {
-      console.error('Failed to send cancellation notification:', e);
+    if (booking.player?.user) {
+      try {
+        await this.notificationService.createBookingNotification(
+          booking.player.user.id,
+          'cancelled',
+          {
+            fieldName: booking.field.name,
+            date: booking.startTime.toLocaleDateString('vi-VN'),
+            time: booking.startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            bookingId: booking.id,
+          },
+        );
+      } catch (e) {
+        console.error('Failed to send cancellation notification:', e);
+      }
     }
 
     return updatedBooking;

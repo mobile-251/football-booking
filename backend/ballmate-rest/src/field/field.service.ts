@@ -2,7 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFieldDto } from './dto/create-field.dto';
 import { UpdateFieldDto } from './dto/update-field.dto';
-import { FieldType } from '@prisma/client';
+import { DayType, FieldType } from '@prisma/client';
+import { findPriceForHour, getDayTypeForDate } from './booking-pricing.util';
 
 @Injectable()
 export class FieldService {
@@ -178,14 +179,8 @@ export class FieldService {
       throw new NotFoundException(`Field with ID ${fieldId} not found`);
     }
 
-    // Determine if date is weekday or weekend
     const dateObj = new Date(date);
-    const dayOfWeek = dateObj.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
-    const dayType = isWeekend ? 'WEEKEND' : 'WEEKDAY';
-
-    // Get pricings for the day type
-    const pricings = field.pricings.filter(p => p.dayType === dayType);
+    const dayType = getDayTypeForDate(dateObj);
 
     // Parse venue hours (default 6:00-23:00 if not set)
     const openHour = field.venue?.openTime ? parseInt(field.venue.openTime.split(':')[0]) : 6;
@@ -195,35 +190,22 @@ export class FieldService {
     const slots: {
       startTime: string;
       endTime: string;
-      price: number;
+      price: number | null;
+      isConfigured: boolean;
       isPeakHour: boolean;
     }[] = [];
 
     for (let hour = openHour; hour < closeHour; hour++) {
       const startTime = `${hour.toString().padStart(2, '0')}:00`;
       const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
-      const isPeakHour = hour >= 17 && hour < 21; // 17:00-21:00 is peak
-
-      // Find matching pricing slot
-      let price = 0;
-      for (const pricing of pricings) {
-        const pStart = parseInt(pricing.startTime.split(':')[0]);
-        const pEnd = parseInt(pricing.endTime.split(':')[0]);
-        if (hour >= pStart && hour < pEnd) {
-          price = pricing.price;
-          break;
-        }
-      }
-
-      // If no pricing found, use default based on peak hour
-      if (price === 0) {
-        price = isPeakHour ? 500000 : 300000; // Default prices
-      }
+      const isPeakHour = hour >= 17 && hour < 21;
+      const price = findPriceForHour(field.pricings, dayType as DayType, hour);
 
       slots.push({
         startTime,
         endTime,
         price,
+        isConfigured: price !== null,
         isPeakHour,
       });
     }

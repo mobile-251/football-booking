@@ -42,6 +42,7 @@ model User {
   admin                Admin?
   venueManager         VenueManager?
   venueManagersCreated VenueManager[] @relation("VenueManagerCreatedBy")
+  walkInBookingsCreated Booking[]       @relation("BookingCreatedBy")
   notifications        Notification[]
   messages             Message[]
 
@@ -204,25 +205,34 @@ enum BookingStatus {
   COMPLETED
 }
 
+enum BookingSource {
+  MOBILE_APP
+  WEB_WALK_IN
+}
+
 model Booking {
-  id            Int           @id @default(autoincrement())
-  bookingCode   String        @unique // Mã đặt sân 8 ký tự (BM + 6 chars)
-  customerName  String // Họ tên người đặt
-  customerPhone String // SĐT người đặt
-  fieldId       Int
-  playerId      Int
-  startTime     DateTime
-  endTime       DateTime
-  totalPrice    Float
-  status        BookingStatus @default(PENDING)
-  note          String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id              Int           @id @default(autoincrement())
+  bookingCode     String        @unique // Mã đặt sân 8 ký tự (BM + 6 chars)
+  customerName    String // Họ tên người đặt
+  customerPhone   String // SĐT người đặt
+  customerEmail   String?
+  fieldId         Int
+  playerId        Int?
+  source          BookingSource @default(MOBILE_APP)
+  createdByUserId Int?
+  startTime       DateTime
+  endTime         DateTime
+  totalPrice      Float
+  status          BookingStatus @default(PENDING)
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   // Relations
-  field   Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  player  Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  payment Payment?
+  field     Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  player    Player?  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("BookingCreatedBy", fields: [createdByUserId], references: [id])
+  payment   Payment?
 
   @@index([fieldId, startTime, endTime]) // Index để kiểm tra trùng lịch nhanh
   @@index([bookingCode]) // Index cho tra cứu mã đặt sân

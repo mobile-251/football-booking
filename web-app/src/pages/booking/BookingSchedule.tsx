@@ -1,9 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import BookingDetailModal from "./BookingDetailModal";
+import WalkInBookingModal from "./WalkInBookingModal";
+import type { WalkInSlotContext } from "./WalkInBookingModal";
 import venueApi from "../../api/venueApi";
 import bookingApi from "../../api/bookingApi";
 import { useCurrentVenue } from "../../hooks/useCurrentVenue";
 import { Toaster, toast } from "react-hot-toast";
+import {
+  SCHEDULE_SLOT_COUNT,
+  SCHEDULE_START_HOUR,
+  addDragRangeToSelection,
+  formatSelectionRanges,
+  getDragRange,
+  groupContiguousHours,
+  hourToTimeString,
+  isHourInDragPreview,
+  isHourSelected,
+  selectionSlotCount,
+  toggleHourInSelection,
+  type SlotSelection,
+} from "./slotSelection";
 
 // Interface mapping to backend models
 type FieldOperationalStatus = "ACTIVE" | "MAINTENANCE" | "INACTIVE";
@@ -17,8 +33,6 @@ interface Field {
   venueId: number;
 }
 
-const SCHEDULE_START_HOUR = 6;
-const SCHEDULE_SLOT_COUNT = 18;
 const SCHEDULE_BODY_HEIGHT = SCHEDULE_SLOT_COUNT * 64;
 
 interface Booking {
@@ -33,6 +47,7 @@ interface Booking {
   type: "booked" | "maintenance" | "pending" | "confirmed" | "canceled";
   note?: string;
   status?: string;
+  source?: string;
   originalData?: any; // Store full backend object if needed
 }
 
@@ -43,6 +58,18 @@ const BookingSchedule: React.FC = () => {
   const [viewDate, setViewDate] = useState(new Date());
   // State: Selected booking to show detailed modal
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [walkInSlot, setWalkInSlot] = useState<WalkInSlotContext | null>(null);
+  const [slotSelection, setSlotSelection] = useState<SlotSelection | null>(null);
+  const [dragPreview, setDragPreview] = useState<{
+    fieldId: number;
+    startHour: number;
+    endHour: number;
+  } | null>(null);
+  const dragSessionRef = useRef<{
+    fieldId: number;
+    anchorHour: number;
+    moved: boolean;
+  } | null>(null);
   // State: Filter field type
   const [filterType, setFilterType] = useState("All");
 
@@ -147,6 +174,7 @@ const BookingSchedule: React.FC = () => {
           price: b.totalPrice,
           type: b.status === "CONFIRMED" ? "booked" : "pending", // diligent mapping
           status: b.status,
+          source: b.source,
           note: b.note,
           originalData: b,
         };
@@ -261,6 +289,222 @@ const BookingSchedule: React.FC = () => {
   const hourToPx = (time: string) => {
     const [h, m] = time.split(":").map(Number);
     return (h + m / 60 - 6) * 64;
+  };
+
+  const formatDateYMD = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const timeToMinutes = (time: string) => {
+    const [h, m] = time.split(":").map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  const isSlotOccupied = (
+    fieldId: number,
+    startTime: string,
+    endTime: string,
+  ) => {
+    const slotStart = timeToMinutes(startTime);
+    const slotEnd = timeToMinutes(endTime);
+    return bookings.some((b) => {
+      if (b.fieldId !== fieldId) return false;
+      const bStart = timeToMinutes(b.startTime);
+      const bEnd = timeToMinutes(b.endTime);
+      return slotStart < bEnd && bStart < slotEnd;
+    });
+  };
+
+  const isHourFree = useCallback(
+    (fieldId: number, hour: number) => {
+      const startTime = hourToTimeString(hour);
+      const endTime = hourToTimeString(hour + 1);
+      return !isSlotOccupied(fieldId, startTime, endTime);
+    },
+    [bookings],
+  );
+
+  const clearSlotSelection = () => {
+    setSlotSelection(null);
+    setDragPreview(null);
+    dragSessionRef.current = null;
+  };
+
+  const handleSlotPointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    field: Field,
+    hour: number,
+  ) => {
+    const status =
+      field.operationalStatus ?? (field.isActive ? "ACTIVE" : "INACTIVE");
+    if (status !== "ACTIVE" || !isHourFree(field.id, hour)) return;
+
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragSessionRef.current = {
+      fieldId: field.id,
+      anchorHour: hour,
+      moved: false,
+    };
+    const { startHour, endHour } = getDragRange(hour, hour);
+    setDragPreview({ fieldId: field.id, startHour, endHour });
+  };
+
+  const handleSlotPointerEnter = (
+    field: Field,
+    hour: number,
+  ) => {
+    const session = dragSessionRef.current;
+    if (!session || session.fieldId !== field.id) return;
+
+    if (hour !== session.anchorHour) {
+      session.moved = true;
+    }
+    const { startHour, endHour } = getDragRange(session.anchorHour, hour);
+    setDragPreview({ fieldId: field.id, startHour, endHour });
+  };
+
+  const handleSlotPointerUp = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    _field: Field,
+    hour: number,
+  ) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    finalizePointerSession(hour);
+  };
+
+  const openWalkInFromSelection = () => {
+    if (!slotSelection || !venueId || slotSelection.selectedHours.length === 0)
+      return;
+    const ranges = groupContiguousHours(slotSelection.selectedHours);
+    setWalkInSlot({
+      fieldId: slotSelection.fieldId,
+      fieldName: slotSelection.fieldName,
+      date: formatDateYMD(selectedDate),
+      ranges: ranges.map((r) => ({
+        startTime: r.startTime,
+        endTime: r.endTime,
+      })),
+    });
+    setSlotSelection(null);
+    setDragPreview(null);
+  };
+
+  const finalizePointerSession = useCallback(
+    (releaseHour?: number) => {
+      const session = dragSessionRef.current;
+      if (!session) return;
+
+      const field = fields.find((f) => f.id === session.fieldId);
+      dragSessionRef.current = null;
+      setDragPreview(null);
+
+      if (!field) return;
+
+      if (session.moved) {
+        const hour =
+          releaseHour ??
+          (dragPreview && dragPreview.fieldId === field.id
+            ? dragPreview.endHour - 1
+            : session.anchorHour);
+        const { startHour, endHour } = getDragRange(session.anchorHour, hour);
+        const result = addDragRangeToSelection(
+          slotSelection,
+          field,
+          startHour,
+          endHour,
+          (h) => isHourFree(field.id, h),
+        );
+        if ("error" in result) {
+          toast.error(result.error);
+          return;
+        }
+        setSlotSelection(
+          result.selectedHours.length === 0 ? null : result,
+        );
+        return;
+      }
+
+      const hour = releaseHour ?? session.anchorHour;
+      if (!isHourFree(field.id, hour)) return;
+      const next = toggleHourInSelection(slotSelection, field, hour);
+      setSlotSelection(next.selectedHours.length === 0 ? null : next);
+    },
+    [fields, slotSelection, dragPreview, isHourFree],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearSlotSelection();
+    };
+    const onPointerUp = () => finalizePointerSession();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [finalizePointerSession]);
+
+  useEffect(() => {
+    clearSlotSelection();
+  }, [selectedDate, venueId]);
+
+  const renderHourSlots = (field: Field) => {
+    const status =
+      field.operationalStatus ?? (field.isActive ? "ACTIVE" : "INACTIVE");
+    const fieldActive = status === "ACTIVE";
+
+    return Array.from({ length: SCHEDULE_SLOT_COUNT }, (_, i) => {
+      const hour = SCHEDULE_START_HOUR + i;
+      const startTime = hourToTimeString(hour);
+      const endTime = hourToTimeString(hour + 1);
+      const occupied = !isHourFree(field.id, hour);
+      const selected = isHourSelected(slotSelection, field.id, hour);
+      const dragHighlight =
+        isHourInDragPreview(dragPreview, field.id, hour) && !selected;
+
+      return (
+        <button
+          key={`${field.id}-${hour}`}
+          type="button"
+          className={[
+            "schedule-hour-slot",
+            occupied ? "schedule-hour-slot--occupied" : "schedule-hour-slot--available",
+            selected ? "schedule-hour-slot--selected" : "",
+            dragHighlight ? "schedule-hour-slot--drag-preview" : "",
+            fieldActive && !occupied ? "schedule-hour-slot--interactive" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={{ top: i * 64, height: 64 }}
+          disabled={!fieldActive || occupied}
+          onPointerDown={(e) => handleSlotPointerDown(e, field, hour)}
+          onPointerEnter={() => handleSlotPointerEnter(field, hour)}
+          onPointerUp={(e) => handleSlotPointerUp(e, field, hour)}
+          aria-label={
+            occupied
+              ? `${startTime} đã đặt`
+              : selected
+                ? `Đã chọn ${startTime} – ${endTime}`
+                : `Chọn ${startTime} – ${endTime}`
+          }
+          aria-pressed={selected}
+        >
+          {(selected || dragHighlight) && (
+            <span className="schedule-hour-slot__label">{startTime}</span>
+          )}
+          {!occupied && !selected && !dragHighlight && fieldActive && (
+            <span className="schedule-hour-slot__hint">{startTime}</span>
+          )}
+        </button>
+      );
+    });
   };
 
   // Map field type for display
@@ -402,7 +646,22 @@ const BookingSchedule: React.FC = () => {
             <div className="legend-item">
               <span className="dot empty" /> Còn trống
             </div>
+            <div className="legend-item">
+              <span
+                className="dot"
+                style={{
+                  background: "rgba(31, 102, 80, 0.2)",
+                  border: "2px solid #1f6650",
+                }}
+              />{" "}
+              Đang chọn / kéo chọn
+            </div>
           </div>
+
+          <p className="schedule-hint">
+            <strong>Click</strong> từng ô để bật/tắt (có thể chọn rời, vd 10h và
+            17h). <strong>Kéo</strong> trên lịch để chọn dải giờ liền kề.
+          </p>
 
           <div className="stat-card">
             <span>Tổng booking trong ngày</span>
@@ -496,6 +755,9 @@ const BookingSchedule: React.FC = () => {
                     </div>
 
                     <div className="field-body">
+                      <div className="schedule-hour-slots" aria-hidden={false}>
+                        {renderHourSlots(field)}
+                      </div>
                       {bookings
                         .filter((b) => b.fieldId === field.id)
                         .map((b) => {
@@ -536,6 +798,14 @@ const BookingSchedule: React.FC = () => {
                               <div className="booking-time">
                                 {b.startTime} - {b.endTime}
                               </div>
+                              {b.source === "WEB_WALK_IN" && (
+                                <div
+                                  className="booking-walkin-tag"
+                                  style={{ fontSize: "0.7rem", opacity: 0.9 }}
+                                >
+                                  Tại quầy
+                                </div>
+                              )}
                               {b.price && (
                                 <div className="booking-price">
                                   {(b.price / 1000).toLocaleString()}k
@@ -551,15 +821,65 @@ const BookingSchedule: React.FC = () => {
               })
             )}
           </div>
+
+          {slotSelection && slotSelection.selectedHours.length > 0 && (
+            <div className="slot-selection-bar" role="status">
+              <div className="slot-selection-bar__info">
+                <span className="slot-selection-bar__title">Đang chọn</span>
+                <strong>
+                  {slotSelection.fieldName} ·{" "}
+                  {formatSelectionRanges(slotSelection)}
+                </strong>
+                <span className="slot-selection-bar__meta">
+                  {selectionSlotCount(slotSelection)} giờ ·{" "}
+                  {groupContiguousHours(slotSelection.selectedHours).length}{" "}
+                  khung · {formatDateYMD(selectedDate)}
+                </span>
+              </div>
+              <div className="slot-selection-bar__actions">
+                <button
+                  type="button"
+                  className="btn-secondary !py-2 !px-4 text-sm"
+                  onClick={clearSlotSelection}
+                >
+                  Hủy chọn
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary !py-2 !px-5 text-sm"
+                  onClick={openWalkInFromSelection}
+                >
+                  Đặt sân hộ
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
       {selectedBooking && (
         <BookingDetailModal
-          booking={selectedBooking}
+          booking={{
+            ...selectedBooking,
+            source:
+              selectedBooking.source ??
+              selectedBooking.originalData?.source,
+          }}
           onClose={() => setSelectedBooking(null)}
           onUpdate={() => {
             setSelectedBooking(null);
+            fetchBookings();
+          }}
+        />
+      )}
+
+      {walkInSlot && venueId && (
+        <WalkInBookingModal
+          venueId={venueId}
+          slot={walkInSlot}
+          onClose={() => setWalkInSlot(null)}
+          onSuccess={() => {
+            setWalkInSlot(null);
             fetchBookings();
           }}
         />

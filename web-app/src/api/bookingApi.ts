@@ -20,6 +20,17 @@ export interface UpdateBookingDto {
     note?: string;
 }
 
+export interface CreateWalkInBookingDto {
+    fieldId: number;
+    date: string;
+    startTime: string;
+    endTime: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    note?: string;
+}
+
 const bookingApi = {
     create: (data: CreateBookingDto) => {
         return AxiosClient.post('/bookings', data);
@@ -44,7 +55,10 @@ const bookingApi = {
     },
     remove: (id: number) => {
         return AxiosClient.delete(`/bookings/${id}`);
-    }
+    },
+    createWalkIn: (venueId: number, data: CreateWalkInBookingDto) => {
+        return AxiosClient.post(`/venues/${venueId}/walk-in-bookings`, data);
+    },
 };
 
 export default bookingApi;
