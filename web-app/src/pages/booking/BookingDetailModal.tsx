@@ -93,10 +93,15 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     setLoading(true);
     try {
       const data = await bookingApi.getPaymentStatus(Number(booking.id));
+      if (data.paymentStatus === "PAID") {
+        setPaymentStatus("PAID");
+        toast.success("SePay đã ghi nhận thanh toán");
+        onRefresh?.();
+        return;
+      }
       if (
         !data.qrImageUrl ||
-        !data.sepayPaymentCode ||
-        data.paymentStatus === "PAID"
+        !data.sepayPaymentCode
       ) {
         toast.error("Không mở được QR — kiểm tra lại trạng thái thanh toán");
         return;
@@ -113,6 +118,47 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
       });
     } catch {
       toast.error("Không tải được thông tin thanh toán");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkPaymentAgain = async () => {
+    setLoading(true);
+    try {
+      const data = await bookingApi.getPaymentStatus(Number(booking.id));
+      setPaymentStatus(data.paymentStatus);
+      if (data.paymentStatus === "PAID") {
+        toast.success("Đã nhận chuyển khoản — có thể duyệt booking");
+        onRefresh?.();
+      } else {
+        toast.error(
+          "SePay chưa ghi nhận thanh toán. Kiểm tra nội dung CK hoặc webhook.",
+        );
+      }
+    } catch {
+      toast.error("Không kiểm tra được trạng thái thanh toán");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const markPaidManually = async () => {
+    if (
+      !window.confirm(
+        "Xác nhận bạn đã kiểm tra sao kê và thấy tiền vào tài khoản?",
+      )
+    ) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await bookingApi.markBankTransferPaid(Number(booking.id));
+      setPaymentStatus("PAID");
+      toast.success("Đã ghi nhận thanh toán — có thể duyệt booking");
+      onRefresh?.();
+    } catch {
+      toast.error("Không cập nhật được trạng thái thanh toán");
     } finally {
       setLoading(false);
     }
@@ -354,8 +400,9 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
                 Chưa nhận chuyển khoản
               </p>
               <p className="m-0 mt-1 text-xs text-violet-800/90">
-                Khách cần quét QR và chuyển khoản xong. Sau đó bạn mới có thể
-                duyệt booking này.
+                Khách cần quét QR và chuyển khoản đúng nội dung mã BM… Nếu đã
+                chuyển mà chưa đổi trạng thái, bấm &quot;Kiểm tra lại SePay&quot;
+                hoặc xác nhận thủ công sau khi đối sao kê.
               </p>
             </div>
           )}
@@ -421,14 +468,16 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
                   Hủy đơn
                 </button>
                 {awaitingPayment ? (
-                  <button
-                    type="button"
-                    className="btn-primary flex-1"
-                    onClick={openPaymentQr}
-                    disabled={loading}
-                  >
-                    Xem QR thanh toán
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="btn-primary flex-1"
+                      onClick={openPaymentQr}
+                      disabled={loading}
+                    >
+                      Xem QR thanh toán
+                    </button>
+                  </>
                 ) : (
                   canConfirm && (
                     <button
@@ -442,6 +491,26 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
                   )
                 )}
               </div>
+              {awaitingPayment && (
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary w-full"
+                    onClick={checkPaymentAgain}
+                    disabled={loading}
+                  >
+                    Kiểm tra lại SePay
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full text-sm font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60"
+                    onClick={markPaidManually}
+                    disabled={loading}
+                  >
+                    Xác nhận đã nhận tiền (đối sao kê)
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

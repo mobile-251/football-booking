@@ -38,6 +38,10 @@ export default () => ({
             10,
         ),
         appPublicUrl: process.env.APP_PUBLIC_URL || 'http://localhost:3001',
+        userApiToken:
+            process.env.SEPAY_USER_API_TOKEN ||
+            process.env.SEPAY_API_TOKEN ||
+            '',
     },
 });
 
@@ -66,5 +70,6 @@ export interface AppConfiguration {
         env: string;
         paymentTtlMinutes: number;
         appPublicUrl: string;
+        userApiToken: string;
     };
 }

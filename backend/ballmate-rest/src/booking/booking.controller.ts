@@ -63,6 +63,13 @@ export class BookingController {
     return this.walkInBookingService.getPaymentStatus(id);
   }
 
+  @Patch(':id/mark-bank-paid')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.FIELD_OWNER, UserRole.VENUE_MANAGER, UserRole.ADMIN)
+  markBankTransferPaid(@Param('id', ParseIntPipe) id: number) {
+    return this.walkInBookingService.markBankTransferPaidManually(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.bookingService.findOne(id);

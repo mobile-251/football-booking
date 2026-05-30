@@ -63,6 +63,7 @@ export interface BookingPaymentStatus {
     sepayPaymentCode?: string;
     amount?: number;
     expiresAt?: string;
+    sepaySyncAvailable?: boolean;
 }
 
 const bookingApi = {
@@ -95,6 +96,13 @@ const bookingApi = {
     },
     getPaymentStatus: (bookingId: number) => {
         return AxiosClient.get(`/bookings/${bookingId}/payment-status`) as Promise<BookingPaymentStatus>;
+    },
+    markBankTransferPaid: (bookingId: number) => {
+        return AxiosClient.patch(`/bookings/${bookingId}/mark-bank-paid`) as Promise<{
+            bookingId: number;
+            paymentStatus: string;
+            alreadyPaid?: boolean;
+        }>;
     },
 };
 

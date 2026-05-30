@@ -20,12 +20,14 @@ import {
   calculateBookingPriceVnd,
 } from '../field/booking-pricing.util';
 import { SepayService } from '../sepay/sepay.service';
+import { SepayWebhookService } from '../sepay/sepay-webhook.service';
 
 @Injectable()
 export class WalkInBookingService {
   constructor(
     private prisma: PrismaService,
     private sepayService: SepayService,
+    private sepayWebhookService: SepayWebhookService,
   ) {}
 
   private generateBookingCode(): string {
@@ -208,6 +210,20 @@ export class WalkInBookingService {
 
     if (
       payment.status === PaymentStatus.PENDING &&
+      payment.method === PaymentMethod.BANK_TRANSFER
+    ) {
+      await this.sepayWebhookService.tryReconcilePendingPayment(payment);
+      const refreshed = await this.prisma.payment.findUnique({
+        where: { id: payment.id },
+      });
+      if (refreshed) {
+        payment.status = refreshed.status;
+        payment.paidAt = refreshed.paidAt;
+      }
+    }
+
+    if (
+      payment.status === PaymentStatus.PENDING &&
       payment.expiresAt &&
       payment.expiresAt < new Date()
     ) {
@@ -240,6 +256,41 @@ export class WalkInBookingService {
       sepayPaymentCode: payment.sepayPaymentCode,
       amount: payment.amount,
       expiresAt: payment.expiresAt,
+      sepaySyncAvailable: this.sepayService.hasUserApiToken(),
+    };
+  }
+
+  /** Chủ sân xác nhận đã nhận CK (fallback khi webhook/API sync chưa chạy). */
+  async markBankTransferPaidManually(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { payment: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    }
+    if (booking.source !== BookingSource.WEB_WALK_IN) {
+      throw new BadRequestException('Not a walk-in booking');
+    }
+    const payment = booking.payment;
+    if (!payment || payment.method !== PaymentMethod.BANK_TRANSFER) {
+      throw new BadRequestException('Not a bank transfer booking');
+    }
+    if (payment.status === PaymentStatus.PAID) {
+      return { bookingId, paymentStatus: PaymentStatus.PAID, alreadyPaid: true };
+    }
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestException('Booking already cancelled');
+    }
+
+    await this.sepayWebhookService.markPaymentAsPaid(payment.id, 'manual');
+
+    return {
+      bookingId,
+      bookingStatus: booking.status,
+      paymentStatus: PaymentStatus.PAID,
+      alreadyPaid: false,
     };
   }
 }
