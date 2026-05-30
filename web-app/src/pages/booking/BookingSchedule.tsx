@@ -1,14 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import BookingDetailModal from "./BookingDetailModal";
 import WalkInBookingModal from "./WalkInBookingModal";
+import WalkInPaymentQrModal from "./WalkInPaymentQrModal";
+import type { WalkInQrQueueItem } from "./WalkInPaymentQrModal";
 import type { WalkInSlotContext } from "./WalkInBookingModal";
 import venueApi from "../../api/venueApi";
 import bookingApi from "../../api/bookingApi";
 import { useCurrentVenue } from "../../hooks/useCurrentVenue";
+import { getVenueScheduleConfig } from "../../utils/venueHours";
 import { Toaster, toast } from "react-hot-toast";
 import {
-  SCHEDULE_SLOT_COUNT,
-  SCHEDULE_START_HOUR,
+  getBookingCardVariant,
+  getBookingStatusLabel,
+} from "./bookingDisplay";
+import {
   addDragRangeToSelection,
   formatSelectionRanges,
   getDragRange,
@@ -33,7 +38,7 @@ interface Field {
   venueId: number;
 }
 
-const SCHEDULE_BODY_HEIGHT = SCHEDULE_SLOT_COUNT * 64;
+const SLOT_HEIGHT_PX = 64;
 
 interface Booking {
   id: string | number; // Frontend handles ID, backend is number
@@ -48,6 +53,8 @@ interface Booking {
   note?: string;
   status?: string;
   source?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
   originalData?: any; // Store full backend object if needed
 }
 
@@ -59,6 +66,7 @@ const BookingSchedule: React.FC = () => {
   // State: Selected booking to show detailed modal
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [walkInSlot, setWalkInSlot] = useState<WalkInSlotContext | null>(null);
+  const [qrQueue, setQrQueue] = useState<WalkInQrQueueItem[] | null>(null);
   const [slotSelection, setSlotSelection] = useState<SlotSelection | null>(null);
   const [dragPreview, setDragPreview] = useState<{
     fieldId: number;
@@ -78,6 +86,14 @@ const BookingSchedule: React.FC = () => {
   const [fields, setFields] = useState<Field[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
+  const [venueOpenTime, setVenueOpenTime] = useState("06:00");
+  const [venueCloseTime, setVenueCloseTime] = useState("23:00");
+
+  const scheduleConfig = useMemo(
+    () => getVenueScheduleConfig(venueOpenTime, venueCloseTime),
+    [venueOpenTime, venueCloseTime],
+  );
+  const scheduleBodyHeight = scheduleConfig.slotCount * SLOT_HEIGHT_PX;
 
   useEffect(() => {
     if (venueId) {
@@ -100,6 +116,10 @@ const BookingSchedule: React.FC = () => {
   const fetchFields = async (vId: number) => {
     try {
       const venueData: any = await venueApi.getOne(vId);
+      if (venueData) {
+        setVenueOpenTime(venueData.openTime ?? "06:00");
+        setVenueCloseTime(venueData.closeTime ?? "23:00");
+      }
       if (venueData && venueData.fieldsPricings) {
         // venueData.fieldsPricings contains the fields list (based on backend response structure)
         const sortedFields = sortFields(venueData.fieldsPricings);
@@ -128,12 +148,40 @@ const BookingSchedule: React.FC = () => {
     });
   };
 
+  const formatDateYMD = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
   // Load bookings when date or venue changes
   useEffect(() => {
     if (venueId) {
       fetchBookings();
     }
   }, [venueId, selectedDate]);
+
+  const hasAwaitingPayment = useMemo(
+    () =>
+      bookings.some(
+        (b) =>
+          getBookingCardVariant(
+            b.status,
+            b.paymentMethod,
+            b.paymentStatus,
+          ) === "awaiting-payment",
+      ),
+    [bookings],
+  );
+
+  useEffect(() => {
+    if (!hasAwaitingPayment || !venueId) return;
+    const timer = setInterval(() => {
+      fetchBookings();
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [hasAwaitingPayment, venueId]);
 
   const fetchBookings = async () => {
     if (!venueId) return;
@@ -147,12 +195,12 @@ const BookingSchedule: React.FC = () => {
       const res: any = await bookingApi.getAll({ venueId: venueId });
       const bookingsList = Array.isArray(res) ? res : (res as any).data || [];
 
-      // Filter by date
-      const targetDateStr = selectedDate.toISOString().split("T")[0];
+      // Lọc theo ngày local (tránh lệch UTC với toISOString)
+      const targetDateStr = formatDateYMD(selectedDate);
 
       const dayBookings = bookingsList.filter((b: any) => {
         if (!b.startTime) return false;
-        const bookingDate = new Date(b.startTime).toISOString().split("T")[0];
+        const bookingDate = formatDateYMD(new Date(b.startTime));
         // Only showing active bookings (not cancelled)
         const isActive = b.status !== "CANCELLED" && b.status !== "REJECTED";
         return bookingDate === targetDateStr && isActive;
@@ -175,6 +223,8 @@ const BookingSchedule: React.FC = () => {
           type: b.status === "CONFIRMED" ? "booked" : "pending", // diligent mapping
           status: b.status,
           source: b.source,
+          paymentMethod: b.payment?.method,
+          paymentStatus: b.payment?.status,
           note: b.note,
           originalData: b,
         };
@@ -281,22 +331,15 @@ const BookingSchedule: React.FC = () => {
     );
   };
 
-  const HOURS = Array.from(
-    { length: 18 },
-    (_, i) => `${(i + 6).toString().padStart(2, "0")}:00`,
+  const HOURS = scheduleConfig.hourLabels;
+
+  const hourToPx = useCallback(
+    (time: string) => {
+      const [h, m] = time.split(":").map(Number);
+      return (h + m / 60 - scheduleConfig.startHour) * SLOT_HEIGHT_PX;
+    },
+    [scheduleConfig.startHour],
   );
-
-  const hourToPx = (time: string) => {
-    const [h, m] = time.split(":").map(Number);
-    return (h + m / 60 - 6) * 64;
-  };
-
-  const formatDateYMD = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  };
 
   const timeToMinutes = (time: string) => {
     const [h, m] = time.split(":").map(Number);
@@ -453,15 +496,15 @@ const BookingSchedule: React.FC = () => {
 
   useEffect(() => {
     clearSlotSelection();
-  }, [selectedDate, venueId]);
+  }, [selectedDate, venueId, scheduleConfig.startHour, scheduleConfig.endHourExclusive]);
 
   const renderHourSlots = (field: Field) => {
     const status =
       field.operationalStatus ?? (field.isActive ? "ACTIVE" : "INACTIVE");
     const fieldActive = status === "ACTIVE";
 
-    return Array.from({ length: SCHEDULE_SLOT_COUNT }, (_, i) => {
-      const hour = SCHEDULE_START_HOUR + i;
+    return Array.from({ length: scheduleConfig.slotCount }, (_, i) => {
+      const hour = scheduleConfig.startHour + i;
       const startTime = hourToTimeString(hour);
       const endTime = hourToTimeString(hour + 1);
       const occupied = !isHourFree(field.id, hour);
@@ -482,7 +525,7 @@ const BookingSchedule: React.FC = () => {
           ]
             .filter(Boolean)
             .join(" ")}
-          style={{ top: i * 64, height: 64 }}
+          style={{ top: i * SLOT_HEIGHT_PX, height: SLOT_HEIGHT_PX }}
           disabled={!fieldActive || occupied}
           onPointerDown={(e) => handleSlotPointerDown(e, field, hour)}
           onPointerEnter={() => handleSlotPointerEnter(field, hour)}
@@ -541,7 +584,7 @@ const BookingSchedule: React.FC = () => {
     return (
       <div
         className={`booking-card field-status bg-[#e5e7eb] text-black ${isMaintenance ? "maintenance" : "inactive"}`}
-        style={{ top: 0, height: SCHEDULE_BODY_HEIGHT }}
+        style={{ top: 0, height: scheduleBodyHeight }}
         title={
           isMaintenance ? "Sân đang bảo trì cả ngày" : "Sân đã tắt cả ngày"
         }
@@ -550,8 +593,7 @@ const BookingSchedule: React.FC = () => {
           {isMaintenance ? "Bảo trì" : "Ngưng hoạt động"}
         </div>
         <div className="booking-time">
-          Cả ngày ({SCHEDULE_START_HOUR}:00 –{" "}
-          {SCHEDULE_START_HOUR + SCHEDULE_SLOT_COUNT}:00)
+          Cả ngày ({scheduleConfig.hoursLabel})
         </div>
       </div>
     );
@@ -574,7 +616,7 @@ const BookingSchedule: React.FC = () => {
           <h2>Quản lý lịch đặt sân</h2>
           <p>
             {currentVenue
-              ? `${currentVenue.name} — Xem và quản lý đặt sân`
+              ? `${currentVenue.name} — Giờ hoạt động ${scheduleConfig.hoursLabel}`
               : "Xem và quản lý tất cả đặt sân của bạn"}
           </p>
         </div>
@@ -639,6 +681,16 @@ const BookingSchedule: React.FC = () => {
             <div className="legend-item">
               <span
                 className="dot"
+                style={{
+                  background: "repeating-linear-gradient(135deg, #e9d5ff, #e9d5ff 4px, #f3e8ff 4px, #f3e8ff 8px)",
+                  border: "2px dashed #7c3aed",
+                }}
+              />{" "}
+              Chờ thanh toán CK
+            </div>
+            <div className="legend-item">
+              <span
+                className="dot"
                 style={{ background: "#e5e7eb", border: "1px solid #9ca3af" }}
               />{" "}
               Ngưng hoạt động
@@ -654,7 +706,7 @@ const BookingSchedule: React.FC = () => {
                   border: "2px solid #1f6650",
                 }}
               />{" "}
-              Đang chọn / kéo chọn
+              Đang chọn
             </div>
           </div>
 
@@ -754,7 +806,13 @@ const BookingSchedule: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="field-body">
+                    <div
+                      className="field-body"
+                      style={{
+                        height: scheduleBodyHeight,
+                        backgroundSize: `100% ${SLOT_HEIGHT_PX}px`,
+                      }}
+                    >
                       <div className="schedule-hour-slots" aria-hidden={false}>
                         {renderHourSlots(field)}
                       </div>
@@ -767,25 +825,21 @@ const BookingSchedule: React.FC = () => {
                           // Handle case where height is 0 or negative
                           if (height <= 0) return null;
 
-                          const getStatusClass = (status?: string) => {
-                            switch (status) {
-                              case "CONFIRMED":
-                                return "booked";
-                              case "PENDING":
-                                return "pending";
-                              case "COMPLETED":
-                                return "completed";
-                              case "MAINTENANCE":
-                                return "maintenance";
-                              default:
-                                return "maintenance";
-                            }
-                          };
+                          const cardVariant = getBookingCardVariant(
+                            b.status,
+                            b.paymentMethod,
+                            b.paymentStatus,
+                          );
+                          const statusLabel = getBookingStatusLabel(
+                            b.status,
+                            b.paymentMethod,
+                            b.paymentStatus,
+                          );
 
                           return (
                             <div
                               key={b.id}
-                              className={`booking-card ${getStatusClass(b.status)}`}
+                              className={`booking-card ${cardVariant}`}
                               style={{
                                 top,
                                 height,
@@ -798,6 +852,11 @@ const BookingSchedule: React.FC = () => {
                               <div className="booking-time">
                                 {b.startTime} - {b.endTime}
                               </div>
+                              {cardVariant !== "booked" && (
+                                <div className="booking-status-tag">
+                                  {statusLabel}
+                                </div>
+                              )}
                               {b.source === "WEB_WALK_IN" && (
                                 <div
                                   className="booking-walkin-tag"
@@ -849,7 +908,7 @@ const BookingSchedule: React.FC = () => {
                   className="btn-primary !py-2 !px-5 text-sm"
                   onClick={openWalkInFromSelection}
                 >
-                  Đặt sân hộ
+                  Đặt sân
                 </button>
               </div>
             </div>
@@ -866,6 +925,7 @@ const BookingSchedule: React.FC = () => {
               selectedBooking.originalData?.source,
           }}
           onClose={() => setSelectedBooking(null)}
+          onRefresh={fetchBookings}
           onUpdate={() => {
             setSelectedBooking(null);
             fetchBookings();
@@ -880,6 +940,25 @@ const BookingSchedule: React.FC = () => {
           onClose={() => setWalkInSlot(null)}
           onSuccess={() => {
             setWalkInSlot(null);
+            fetchBookings();
+          }}
+          onBankTransferCreated={(items) => {
+            setWalkInSlot(null);
+            setQrQueue(items);
+            fetchBookings();
+          }}
+        />
+      )}
+
+      {qrQueue && qrQueue.length > 0 && (
+        <WalkInPaymentQrModal
+          items={qrQueue}
+          onClose={() => {
+            setQrQueue(null);
+            fetchBookings();
+          }}
+          onAllPaid={() => {
+            setQrQueue(null);
             fetchBookings();
           }}
         />

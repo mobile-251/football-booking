@@ -257,20 +257,33 @@ enum PaymentMethod {
 }
 
 model Payment {
-  id            Int           @id @default(autoincrement())
-  bookingId     Int           @unique
-  amount        Float
-  method        PaymentMethod @default(CASH)
-  status        PaymentStatus @default(PENDING)
-  transactionId String?
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id               Int           @id @default(autoincrement())
+  bookingId        Int           @unique
+  amount           Float
+  method           PaymentMethod @default(CASH)
+  status           PaymentStatus @default(PENDING)
+  transactionId    String?
+  sepayPaymentCode String?       @unique
+  sepayQrUrl       String?
+  sepayOrderMeta   Json?
+  expiresAt        DateTime?
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   // Relations
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+model SepayWebhookEvent {
+  id                 Int      @id @default(autoincrement())
+  sepayTransactionId Int      @unique
+  payload            Json
+  processedAt        DateTime @default(now())
+
+  @@map("sepay_webhook_events")
 }
 
 // ============================================

@@ -6,9 +6,10 @@ import { WalkInBookingService } from './walk-in-booking.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { NotificationModule } from 'src/notification/notification.module';
 import { AuthModule } from '../auth/auth.module';
+import { SepayModule } from '../sepay/sepay.module';
 
 @Module({
-  imports: [PrismaModule, NotificationModule, AuthModule],
+  imports: [PrismaModule, NotificationModule, AuthModule, SepayModule],
   controllers: [BookingController, WalkInBookingController],
   providers: [BookingService, WalkInBookingService],
   exports: [BookingService, WalkInBookingService],

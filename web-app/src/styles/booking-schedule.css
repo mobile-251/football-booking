@@ -325,7 +325,6 @@
 
 .field-body {
     position: relative;
-    height: calc(64px * 18);
     background-image: linear-gradient(#f9fafb 1px, transparent 1px);
     background-size: 100% 64px;
 }
@@ -503,6 +502,27 @@
     background: #fef3c7;
     border-left: 4px solid #f59e0b;
     color: #92400e;
+}
+
+.booking-card.awaiting-payment {
+    background: repeating-linear-gradient(
+        135deg,
+        #f3e8ff,
+        #f3e8ff 8px,
+        #ede9fe 8px,
+        #ede9fe 16px
+    );
+    border-left: 4px solid #7c3aed;
+    color: #5b21b6;
+}
+
+.booking-status-tag {
+    margin-top: 2px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    opacity: 0.95;
 }
 
 .booking-card.completed {

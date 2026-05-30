@@ -8,16 +8,25 @@ import {
   Delete,
   ParseIntPipe,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { BookingService } from './booking.service';
+import { WalkInBookingService } from './walk-in-booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CompleteBookingDto } from './dto/complete-booking.dto';
 import { BookingStatus } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('bookings')
 export class BookingController {
-  constructor(private readonly bookingService: BookingService) { }
+  constructor(
+    private readonly bookingService: BookingService,
+    private readonly walkInBookingService: WalkInBookingService,
+  ) { }
 
   @Post()
   create(@Body() createBookingDto: CreateBookingDto) {
@@ -45,6 +54,13 @@ export class BookingController {
     @Query('date') date: string,
   ) {
     return this.bookingService.getFieldAvailability(fieldId, date);
+  }
+
+  @Get(':id/payment-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.FIELD_OWNER, UserRole.VENUE_MANAGER, UserRole.ADMIN)
+  getPaymentStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.walkInBookingService.getPaymentStatus(id);
   }
 
   @Get(':id')

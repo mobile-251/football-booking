@@ -3,7 +3,10 @@ import { toast } from "react-hot-toast";
 import bookingApi from "../../api/bookingApi";
 import fieldApi from "../../api/fieldApi";
 import type { FieldPricingSlot } from "../../api/fieldApi";
+import type { WalkInQrQueueItem } from "./WalkInPaymentQrModal";
 import { groupContiguousHours, type TimeRange } from "./slotSelection";
+
+export type WalkInPaymentMethod = "CASH" | "BANK_TRANSFER";
 
 export interface WalkInTimeRange {
   startTime: string;
@@ -22,6 +25,7 @@ interface WalkInBookingModalProps {
   slot: WalkInSlotContext;
   onClose: () => void;
   onSuccess: () => void;
+  onBankTransferCreated?: (items: WalkInQrQueueItem[]) => void;
 }
 
 function formatDisplayDate(dateStr: string) {
@@ -49,11 +53,14 @@ const WalkInBookingModal: React.FC<WalkInBookingModalProps> = ({
   slot,
   onClose,
   onSuccess,
+  onBankTransferCreated,
 }) => {
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [note, setNote] = useState("");
+  const [paymentMethod, setPaymentMethod] =
+    useState<WalkInPaymentMethod>("CASH");
   const [pricingSlots, setPricingSlots] = useState<FieldPricingSlot[]>([]);
   const [pricingLoading, setPricingLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -135,15 +142,42 @@ const WalkInBookingModal: React.FC<WalkInBookingModalProps> = ({
     };
 
     try {
+      const bankItems: WalkInQrQueueItem[] = [];
+
       for (const range of groupedRanges) {
-        await bookingApi.createWalkIn(venueId, {
+        const res = await bookingApi.createWalkIn(venueId, {
           fieldId: slot.fieldId,
           date: slot.date,
           startTime: range.startTime,
           endTime: range.endTime,
+          paymentMethod,
           ...payload,
         });
+
+        if (
+          paymentMethod === "BANK_TRANSFER" &&
+          res.payment?.qrImageUrl &&
+          res.payment.sepayPaymentCode
+        ) {
+          bankItems.push({
+            bookingId: res.booking.id,
+            slotLabel: `${range.startTime} – ${range.endTime}`,
+            method: res.payment.method,
+            status: res.payment.status,
+            amount: res.payment.amount,
+            sepayPaymentCode: res.payment.sepayPaymentCode,
+            qrImageUrl: res.payment.qrImageUrl,
+            expiresAt: res.payment.expiresAt,
+          });
+        }
       }
+
+      if (paymentMethod === "BANK_TRANSFER" && bankItems.length > 0) {
+        onClose();
+        onBankTransferCreated?.(bankItems);
+        return;
+      }
+
       const count = groupedRanges.length;
       toast.success(
         count > 1
@@ -323,20 +357,55 @@ const WalkInBookingModal: React.FC<WalkInBookingModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-lg">
-                💵
-              </span>
-              <div>
-                <p className="m-0 text-sm font-semibold text-primary-dark">
-                  Thanh toán tại sân
-                </p>
-                <p className="m-0 text-xs text-slate-600">
-                  {groupedRanges.length > 1
-                    ? "Mỗi khung giờ tạo một booking riêng"
-                    : "Khách trả tiền mặt trực tiếp tại quầy"}
-                </p>
+            <div className="space-y-3">
+              <p className="m-0 text-xs font-semibold text-slate-600">
+                Phương thức thanh toán
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  className={`rounded-xl border-2 p-3 text-left transition-colors ${
+                    paymentMethod === "CASH"
+                      ? "border-primary bg-primary-light"
+                      : "border-gray-200 hover:border-primary/40"
+                  }`}
+                  onClick={() => setPaymentMethod("CASH")}
+                >
+                  <span className="text-lg">💵</span>
+                  <p className="m-0 mt-1 text-sm font-semibold text-primary-dark">
+                    Tiền mặt tại sân
+                  </p>
+                  <p className="m-0 text-xs text-slate-500">Xác nhận ngay</p>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-xl border-2 p-3 text-left transition-colors ${
+                    paymentMethod === "BANK_TRANSFER"
+                      ? "border-primary bg-primary-light"
+                      : "border-gray-200 hover:border-primary/40"
+                  }`}
+                  onClick={() => setPaymentMethod("BANK_TRANSFER")}
+                >
+                  <span className="text-lg">🏦</span>
+                  <p className="m-0 mt-1 text-sm font-semibold text-primary-dark">
+                    Chuyển khoản
+                  </p>
+                  <p className="m-0 text-xs text-slate-500">QR SePay tại quầy</p>
+                </button>
               </div>
+              {paymentMethod === "BANK_TRANSFER" && (
+                <p className="m-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Booking chờ thanh toán — hiện QR để khách quét. Tự xác nhận
+                  khi tiền vào (15 phút).
+                  {groupedRanges.length > 1 &&
+                    " Mỗi khung giờ một QR riêng."}
+                </p>
+              )}
+              {paymentMethod === "CASH" && groupedRanges.length > 1 && (
+                <p className="m-0 text-xs text-slate-500">
+                  Mỗi khung giờ tạo một booking riêng.
+                </p>
+              )}
             </div>
           </div>
 
@@ -356,9 +425,13 @@ const WalkInBookingModal: React.FC<WalkInBookingModalProps> = ({
             >
               {submitting
                 ? "Đang lưu..."
-                : groupedRanges.length > 1
-                  ? `Xác nhận ${groupedRanges.length} booking`
-                  : "Xác nhận đặt sân"}
+                : paymentMethod === "BANK_TRANSFER"
+                  ? groupedRanges.length > 1
+                    ? "Tạo & hiện QR"
+                    : "Tạo & hiện QR thanh toán"
+                  : groupedRanges.length > 1
+                    ? `Xác nhận ${groupedRanges.length} booking`
+                    : "Xác nhận đặt sân"}
             </button>
           </div>
         </form>

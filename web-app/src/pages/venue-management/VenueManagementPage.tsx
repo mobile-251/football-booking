@@ -13,13 +13,14 @@ import VenueEditDialog, {
   type EditSection,
 } from "./components/VenueEditDialog";
 import EditModal from "./components/EditModal";
+import { formatVenueHoursLabel } from "../../utils/venueHours";
 
 function formatPrice(amount: number): string {
   return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
 }
 
 function formatHours(open: string, close: string): string {
-  return `${open} - ${close}`;
+  return formatVenueHoursLabel(open, close);
 }
 
 const AMENITY_ICONS: Record<string, string> = {

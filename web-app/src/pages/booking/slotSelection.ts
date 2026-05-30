@@ -1,6 +1,3 @@
-export const SCHEDULE_START_HOUR = 6;
-export const SCHEDULE_SLOT_COUNT = 18;
-
 export interface SlotSelection {
   fieldId: number;
   fieldName: string;

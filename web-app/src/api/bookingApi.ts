@@ -29,6 +29,40 @@ export interface CreateWalkInBookingDto {
     customerEmail: string;
     customerPhone: string;
     note?: string;
+    paymentMethod?: 'CASH' | 'BANK_TRANSFER';
+}
+
+export interface WalkInBankTransferPayment {
+    method: string;
+    status: string;
+    amount: number;
+    sepayPaymentCode: string;
+    qrImageUrl: string;
+    expiresAt: string;
+}
+
+export interface WalkInBookingResponse {
+    booking: {
+        id: number;
+        bookingCode: string;
+        status: string;
+        totalPrice: number;
+        startTime: string;
+        endTime: string;
+    };
+    payment?: WalkInBankTransferPayment | null;
+}
+
+export interface BookingPaymentStatus {
+    bookingId: number;
+    bookingStatus: string;
+    paymentStatus: string;
+    paidAt?: string;
+    expired?: boolean;
+    qrImageUrl?: string;
+    sepayPaymentCode?: string;
+    amount?: number;
+    expiresAt?: string;
 }
 
 const bookingApi = {
@@ -57,7 +91,10 @@ const bookingApi = {
         return AxiosClient.delete(`/bookings/${id}`);
     },
     createWalkIn: (venueId: number, data: CreateWalkInBookingDto) => {
-        return AxiosClient.post(`/venues/${venueId}/walk-in-bookings`, data);
+        return AxiosClient.post(`/venues/${venueId}/walk-in-bookings`, data) as Promise<WalkInBookingResponse>;
+    },
+    getPaymentStatus: (bookingId: number) => {
+        return AxiosClient.get(`/bookings/${bookingId}/payment-status`) as Promise<BookingPaymentStatus>;
     },
 };
 

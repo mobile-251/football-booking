@@ -4,6 +4,10 @@ import { CreateFieldDto } from './dto/create-field.dto';
 import { UpdateFieldDto } from './dto/update-field.dto';
 import { DayType, FieldType } from '@prisma/client';
 import { findPriceForHour, getDayTypeForDate } from './booking-pricing.util';
+import {
+  parseExclusiveCloseHour,
+  parseOpenHour,
+} from './venue-hours.util';
 
 @Injectable()
 export class FieldService {
@@ -179,12 +183,11 @@ export class FieldService {
       throw new NotFoundException(`Field with ID ${fieldId} not found`);
     }
 
-    const dateObj = new Date(date);
+    const dateObj = new Date(`${date}T12:00:00`);
     const dayType = getDayTypeForDate(dateObj);
 
-    // Parse venue hours (default 6:00-23:00 if not set)
-    const openHour = field.venue?.openTime ? parseInt(field.venue.openTime.split(':')[0]) : 6;
-    const closeHour = field.venue?.closeTime ? parseInt(field.venue.closeTime.split(':')[0]) : 23;
+    const openHour = parseOpenHour(field.venue?.openTime);
+    const closeHourExclusive = parseExclusiveCloseHour(field.venue?.closeTime);
 
     // Generate hourly slots
     const slots: {
@@ -195,7 +198,7 @@ export class FieldService {
       isPeakHour: boolean;
     }[] = [];
 
-    for (let hour = openHour; hour < closeHour; hour++) {
+    for (let hour = openHour; hour < closeHourExclusive; hour++) {
       const startTime = `${hour.toString().padStart(2, '0')}:00`;
       const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
       const isPeakHour = hour >= 17 && hour < 21;

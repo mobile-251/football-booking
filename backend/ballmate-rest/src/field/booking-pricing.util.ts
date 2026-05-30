@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { DayType, FieldPricing } from '@prisma/client';
+import { parseExclusiveEndHour } from './venue-hours.util';
 
 export function getDayTypeForDate(date: Date): DayType {
   const dayOfWeek = date.getDay();
@@ -18,7 +19,7 @@ export function findPriceForHour(
   const dayPricings = pricings.filter((p) => p.dayType === dayType);
   for (const pricing of dayPricings) {
     const pStart = parseHourFromTime(pricing.startTime);
-    const pEnd = parseHourFromTime(pricing.endTime);
+    const pEnd = parseExclusiveEndHour(pricing.endTime);
     if (hour >= pStart && hour < pEnd) {
       return pricing.price;
     }

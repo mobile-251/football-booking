@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import bookingApi from "../../api/bookingApi";
+import WalkInPaymentQrModal from "./WalkInPaymentQrModal";
+import type { WalkInQrQueueItem } from "./WalkInPaymentQrModal";
+import {
+  canConfirmBooking,
+  getBookingStatusLabel,
+  isAwaitingBankPayment,
+} from "./bookingDisplay";
 
 interface Booking {
   id: string | number;
@@ -15,37 +22,65 @@ interface Booking {
   note?: string;
   status?: string;
   source?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
 }
 
 interface BookingDetailModalProps {
   booking: Booking;
   onClose: () => void;
+  onRefresh?: () => void;
   onUpdate?: () => void;
 }
 
 type CheckInStep = "idle" | "walkin" | "mobile";
 
-const statusConfig: Record<
-  string,
-  { label: string; className: string }
-> = {
-  PENDING: { label: "Chờ duyệt", className: "bg-amber-500" },
-  CONFIRMED: { label: "Đã xác nhận", className: "bg-primary" },
-  COMPLETED: { label: "Hoàn tất", className: "bg-blue-500" },
-  CANCELLED: { label: "Đã hủy", className: "bg-slate-400" },
+const statusBadgeClass: Record<string, string> = {
+  "Chờ thanh toán CK": "bg-violet-600",
+  "Chờ duyệt": "bg-amber-500",
+  "Đã xác nhận": "bg-primary",
+  "Hoàn tất": "bg-blue-500",
+  "Đã hủy": "bg-slate-400",
 };
 
 const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
   booking,
   onClose,
+  onRefresh,
   onUpdate,
 }) => {
   const [loading, setLoading] = useState(false);
   const [bookingCode, setBookingCode] = useState("");
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("idle");
   const [fetchingCode, setFetchingCode] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState(booking.paymentStatus);
+  const [qrItem, setQrItem] = useState<WalkInQrQueueItem | null>(null);
 
   const isWalkIn = booking.source === "WEB_WALK_IN";
+  const awaitingPayment = isAwaitingBankPayment(
+    booking.paymentMethod,
+    paymentStatus,
+  );
+  const canConfirm = canConfirmBooking(
+    booking.status,
+    booking.paymentMethod,
+    paymentStatus,
+  );
+  const statusLabel = getBookingStatusLabel(
+    booking.status,
+    booking.paymentMethod,
+    paymentStatus,
+  );
+  const statusClassName =
+    statusBadgeClass[statusLabel] ?? "bg-slate-400";
+
+  useEffect(() => {
+    if (!isWalkIn || booking.paymentMethod !== "BANK_TRANSFER") return;
+    bookingApi
+      .getPaymentStatus(Number(booking.id))
+      .then((data) => setPaymentStatus(data.paymentStatus))
+      .catch(() => {});
+  }, [booking.id, booking.paymentMethod, isWalkIn]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -54,12 +89,40 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     };
   }, []);
 
-  const status = statusConfig[booking.status ?? ""] ?? {
-    label: booking.status ?? "—",
-    className: "bg-slate-400",
+  const openPaymentQr = async () => {
+    setLoading(true);
+    try {
+      const data = await bookingApi.getPaymentStatus(Number(booking.id));
+      if (
+        !data.qrImageUrl ||
+        !data.sepayPaymentCode ||
+        data.paymentStatus === "PAID"
+      ) {
+        toast.error("Không mở được QR — kiểm tra lại trạng thái thanh toán");
+        return;
+      }
+      setQrItem({
+        bookingId: Number(booking.id),
+        slotLabel: `${booking.startTime} – ${booking.endTime}`,
+        method: "BANK_TRANSFER",
+        status: data.paymentStatus,
+        amount: data.amount ?? booking.price ?? 0,
+        sepayPaymentCode: data.sepayPaymentCode,
+        qrImageUrl: data.qrImageUrl,
+        expiresAt: data.expiresAt ?? "",
+      });
+    } catch {
+      toast.error("Không tải được thông tin thanh toán");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleConfirm = async () => {
+    if (!canConfirm) {
+      toast.error("Booking chuyển khoản phải được thanh toán trước khi duyệt");
+      return;
+    }
     if (!window.confirm("Bạn có chắc chắn muốn duyệt booking này?")) return;
 
     setLoading(true);
@@ -224,9 +287,9 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
             </h2>
             <div className="mt-2 flex flex-wrap gap-2">
               <span
-                className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold text-white ${status.className}`}
+                className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold text-white ${statusClassName}`}
               >
-                {status.label}
+                {statusLabel}
               </span>
               {isWalkIn && (
                 <span className="inline-flex rounded-md border border-primary/25 bg-primary-light px-2.5 py-1 text-xs font-semibold text-primary-dark">
@@ -285,6 +348,31 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
             </div>
           )}
 
+          {awaitingPayment && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+              <p className="m-0 text-sm font-semibold text-violet-900">
+                Chưa nhận chuyển khoản
+              </p>
+              <p className="m-0 mt-1 text-xs text-violet-800/90">
+                Khách cần quét QR và chuyển khoản xong. Sau đó bạn mới có thể
+                duyệt booking này.
+              </p>
+            </div>
+          )}
+
+          {booking.status === "PENDING" &&
+            booking.paymentMethod === "BANK_TRANSFER" &&
+            paymentStatus === "PAID" && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="m-0 text-sm font-semibold text-emerald-900">
+                  Đã thanh toán chuyển khoản
+                </p>
+                <p className="m-0 mt-1 text-xs text-emerald-800/90">
+                  Tiền đã vào — vui lòng duyệt booking để xác nhận lịch.
+                </p>
+              </div>
+            )}
+
           {checkInStep === "walkin" && (
             <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary-light to-white p-4">
               <p className="m-0 text-xs font-semibold uppercase tracking-wide text-primary-muted">
@@ -322,23 +410,38 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
 
         <div className="space-y-3 border-t border-gray-100 px-6 py-4">
           {booking.status === "PENDING" && checkInStep === "idle" && (
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-[var(--radius-control)] border border-danger/40 px-4 py-2.5 text-sm font-semibold text-danger transition-colors hover:bg-red-50 disabled:opacity-60"
-                onClick={handleCancel}
-                disabled={loading}
-              >
-                Hủy đơn
-              </button>
-              <button
-                type="button"
-                className="btn-primary flex-1"
-                onClick={handleConfirm}
-                disabled={loading}
-              >
-                Duyệt ngay
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="flex-1 rounded-[var(--radius-control)] border border-danger/40 px-4 py-2.5 text-sm font-semibold text-danger transition-colors hover:bg-red-50 disabled:opacity-60"
+                  onClick={handleCancel}
+                  disabled={loading}
+                >
+                  Hủy đơn
+                </button>
+                {awaitingPayment ? (
+                  <button
+                    type="button"
+                    className="btn-primary flex-1"
+                    onClick={openPaymentQr}
+                    disabled={loading}
+                  >
+                    Xem QR thanh toán
+                  </button>
+                ) : (
+                  canConfirm && (
+                    <button
+                      type="button"
+                      className="btn-primary flex-1"
+                      onClick={handleConfirm}
+                      disabled={loading}
+                    >
+                      Duyệt ngay
+                    </button>
+                  )
+                )}
+              </div>
             </div>
           )}
 
@@ -379,6 +482,18 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
           )}
         </div>
       </div>
+
+      {qrItem && (
+        <WalkInPaymentQrModal
+          items={[qrItem]}
+          onClose={() => setQrItem(null)}
+          onAllPaid={() => {
+            setQrItem(null);
+            setPaymentStatus("PAID");
+            onRefresh?.();
+          }}
+        />
+      )}
     </div>
   );
 };

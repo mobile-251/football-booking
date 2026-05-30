@@ -1,11 +1,17 @@
 import {
   IsEmail,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
 } from 'class-validator';
+
+export enum WalkInPaymentMethod {
+  CASH = 'CASH',
+  BANK_TRANSFER = 'BANK_TRANSFER',
+}
 
 export class CreateWalkInBookingDto {
   @IsInt()
@@ -43,4 +49,8 @@ export class CreateWalkInBookingDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsEnum(WalkInPaymentMethod)
+  paymentMethod?: WalkInPaymentMethod;
 }

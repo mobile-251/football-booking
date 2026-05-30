@@ -11,15 +11,22 @@ import {
   PaymentStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateWalkInBookingDto } from './dto/create-walk-in-booking.dto';
+import {
+  CreateWalkInBookingDto,
+  WalkInPaymentMethod,
+} from './dto/create-walk-in-booking.dto';
 import {
   buildLocalDateTime,
   calculateBookingPriceVnd,
 } from '../field/booking-pricing.util';
+import { SepayService } from '../sepay/sepay.service';
 
 @Injectable()
 export class WalkInBookingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private sepayService: SepayService,
+  ) {}
 
   private generateBookingCode(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -58,7 +65,10 @@ export class WalkInBookingService {
       customerEmail,
       customerPhone,
       note,
+      paymentMethod = WalkInPaymentMethod.CASH,
     } = dto;
+
+    const isBankTransfer = paymentMethod === WalkInPaymentMethod.BANK_TRANSFER;
 
     const field = await this.prisma.field.findFirst({
       where: { id: fieldId, venueId },
@@ -105,8 +115,16 @@ export class WalkInBookingService {
     }
 
     const bookingCode = await this.generateUniqueBookingCode();
+    const expiresAt = isBankTransfer ? this.sepayService.getExpiresAt() : null;
+    const sepayPaymentCode = isBankTransfer
+      ? this.sepayService.getPaymentCode(bookingCode)
+      : null;
+    const sepayQrUrl =
+      isBankTransfer && sepayPaymentCode
+        ? this.sepayService.buildQrImageUrl(totalPrice, sepayPaymentCode)
+        : null;
 
-    return this.prisma.booking.create({
+    const booking = await this.prisma.booking.create({
       data: {
         bookingCode,
         customerName,
@@ -120,13 +138,20 @@ export class WalkInBookingService {
         endTime: end,
         totalPrice,
         note,
-        status: BookingStatus.CONFIRMED,
+        status: isBankTransfer
+          ? BookingStatus.PENDING
+          : BookingStatus.CONFIRMED,
         payment: {
           create: {
             amount: totalPrice,
-            method: PaymentMethod.CASH,
-            status: PaymentStatus.PAID,
-            paidAt: new Date(),
+            method: isBankTransfer
+              ? PaymentMethod.BANK_TRANSFER
+              : PaymentMethod.CASH,
+            status: isBankTransfer ? PaymentStatus.PENDING : PaymentStatus.PAID,
+            paidAt: isBankTransfer ? null : new Date(),
+            sepayPaymentCode,
+            sepayQrUrl,
+            expiresAt,
           },
         },
       },
@@ -144,5 +169,77 @@ export class WalkInBookingService {
         },
       },
     });
+
+    if (isBankTransfer && booking.payment) {
+      return {
+        booking,
+        payment: {
+          method: booking.payment.method,
+          status: booking.payment.status,
+          amount: booking.payment.amount,
+          sepayPaymentCode: booking.payment.sepayPaymentCode,
+          qrImageUrl: booking.payment.sepayQrUrl,
+          expiresAt: booking.payment.expiresAt,
+        },
+      };
+    }
+
+    return { booking, payment: booking.payment };
+  }
+
+  async getPaymentStatus(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { payment: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    }
+
+    if (booking.source !== BookingSource.WEB_WALK_IN) {
+      throw new BadRequestException('Not a walk-in booking');
+    }
+
+    const payment = booking.payment;
+    if (!payment) {
+      throw new NotFoundException('Payment not found for this booking');
+    }
+
+    if (
+      payment.status === PaymentStatus.PENDING &&
+      payment.expiresAt &&
+      payment.expiresAt < new Date()
+    ) {
+      await this.prisma.$transaction([
+        this.prisma.booking.update({
+          where: { id: bookingId },
+          data: { status: BookingStatus.CANCELLED },
+        }),
+        this.prisma.payment.update({
+          where: { id: payment.id },
+          data: { status: PaymentStatus.PENDING },
+        }),
+      ]);
+
+      return {
+        bookingId,
+        bookingStatus: BookingStatus.CANCELLED,
+        paymentStatus: payment.status,
+        expired: true,
+      };
+    }
+
+    return {
+      bookingId,
+      bookingStatus: booking.status,
+      paymentStatus: payment.status,
+      paidAt: payment.paidAt,
+      expired: false,
+      qrImageUrl: payment.sepayQrUrl,
+      sepayPaymentCode: payment.sepayPaymentCode,
+      amount: payment.amount,
+      expiresAt: payment.expiresAt,
+    };
   }
 }
