@@ -113,7 +113,11 @@ export class SepayService {
     return Boolean(this.config.userApiToken?.trim());
   }
 
-  /** Poll SePay User API khi webhook chưa tới (cần SEPAY_USER_API_TOKEN). */
+  isWebhookEnabled(): boolean {
+    return this.config.enableWebhook === true;
+  }
+
+  /** Poll SePay User API — luồng đồng bộ CK chính (cần SEPAY_USER_API_TOKEN). */
   async findIncomingTransactionForPayment(
     paymentCode: string,
     minAmount: number,

@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import bookingApi from "../../api/bookingApi";
 import type { WalkInBankTransferPayment } from "../../api/bookingApi";
+import { usePaymentStatusPoll } from "./usePaymentStatusPoll";
 
 export interface WalkInQrQueueItem extends WalkInBankTransferPayment {
   bookingId: number;
@@ -40,35 +41,6 @@ const WalkInPaymentQrModal: React.FC<WalkInPaymentQrModalProps> = ({
     };
   }, []);
 
-  const pollStatus = useCallback(async () => {
-    if (!current) return;
-    try {
-      const status = await bookingApi.getPaymentStatus(current.bookingId);
-      if (status.paymentStatus === "PAID") {
-        if (index < items.length - 1) {
-          toast.success(`Đã nhận tiền — chuyển sang QR ${index + 2}/${items.length}`);
-          setIndex((i) => i + 1);
-        } else {
-          toast.success("Đã nhận tiền — chờ chủ sân duyệt");
-          onAllPaid();
-        }
-      } else if (status.bookingStatus === "CONFIRMED") {
-        if (index < items.length - 1) {
-          toast.success(`Đã xác nhận — chuyển sang QR ${index + 2}/${items.length}`);
-          setIndex((i) => i + 1);
-        } else {
-          toast.success("Thanh toán hoàn tất — booking đã xác nhận");
-          onAllPaid();
-        }
-      } else if (status.expired || status.bookingStatus === "CANCELLED") {
-        toast.error("QR đã hết hạn — vui lòng đặt lại");
-        onClose();
-      }
-    } catch {
-      /* ignore transient poll errors */
-    }
-  }, [current, index, items.length, onAllPaid, onClose]);
-
   useEffect(() => {
     if (!current?.expiresAt) return;
     const tick = () => setCountdown(formatCountdown(current.expiresAt!));
@@ -77,11 +49,28 @@ const WalkInPaymentQrModal: React.FC<WalkInPaymentQrModalProps> = ({
     return () => clearInterval(t);
   }, [current?.expiresAt]);
 
-  useEffect(() => {
-    pollStatus();
-    const t = setInterval(pollStatus, 4000);
-    return () => clearInterval(t);
-  }, [pollStatus]);
+  usePaymentStatusPoll(current?.bookingId, Boolean(current), (status) => {
+    if (status.paymentStatus === "PAID") {
+      if (index < items.length - 1) {
+        toast.success(`Đã nhận tiền — chuyển sang QR ${index + 2}/${items.length}`);
+        setIndex((i) => i + 1);
+      } else {
+        toast.success("Đã nhận tiền — chờ chủ sân duyệt");
+        onAllPaid();
+      }
+    } else if (status.bookingStatus === "CONFIRMED") {
+      if (index < items.length - 1) {
+        toast.success(`Đã xác nhận — chuyển sang QR ${index + 2}/${items.length}`);
+        setIndex((i) => i + 1);
+      } else {
+        toast.success("Thanh toán hoàn tất — booking đã xác nhận");
+        onAllPaid();
+      }
+    } else if (status.expired || status.bookingStatus === "CANCELLED") {
+      toast.error("QR đã hết hạn — vui lòng đặt lại");
+      onClose();
+    }
+  });
 
   const copyTransferContent = async () => {
     if (!current?.sepayPaymentCode) return;
@@ -176,8 +165,8 @@ const WalkInPaymentQrModal: React.FC<WalkInPaymentQrModalProps> = ({
           </div>
 
           <p className="m-0 text-xs text-slate-500">
-            Khách quét QR trên màn hình quầy bằng app ngân hàng. Hệ thống tự xác
-            nhận khi tiền vào (cần webhook SePay hoặc mở lại QR để theo dõi).
+            Khách quét QR trên màn hình quầy. Hệ thống tự kiểm tra thanh toán
+            mỗi 5 giây qua SePay User API.
           </p>
 
           <button

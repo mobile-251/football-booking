@@ -260,7 +260,7 @@ export class WalkInBookingService {
     };
   }
 
-  /** Chủ sân xác nhận đã nhận CK (fallback khi webhook/API sync chưa chạy). */
+  /** Chủ sân xác nhận đã nhận CK (fallback khi poll User API chưa khớp). */
   async markBankTransferPaidManually(bookingId: number) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },

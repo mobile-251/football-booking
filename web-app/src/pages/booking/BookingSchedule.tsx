@@ -12,7 +12,9 @@ import { Toaster, toast } from "react-hot-toast";
 import {
   getBookingCardVariant,
   getBookingStatusLabel,
+  isAwaitingBankPayment,
 } from "./bookingDisplay";
+import { PAYMENT_POLL_INTERVAL_MS } from "./paymentPolling";
 import {
   addDragRangeToSelection,
   formatSelectionRanges,
@@ -155,90 +157,6 @@ const BookingSchedule: React.FC = () => {
     return `${y}-${m}-${d}`;
   };
 
-  // Load bookings when date or venue changes
-  useEffect(() => {
-    if (venueId) {
-      fetchBookings();
-    }
-  }, [venueId, selectedDate]);
-
-  const hasAwaitingPayment = useMemo(
-    () =>
-      bookings.some(
-        (b) =>
-          getBookingCardVariant(
-            b.status,
-            b.paymentMethod,
-            b.paymentStatus,
-          ) === "awaiting-payment",
-      ),
-    [bookings],
-  );
-
-  useEffect(() => {
-    if (!hasAwaitingPayment || !venueId) return;
-    const timer = setInterval(() => {
-      fetchBookings();
-    }, 8000);
-    return () => clearInterval(timer);
-  }, [hasAwaitingPayment, venueId]);
-
-  const fetchBookings = async () => {
-    if (!venueId) return;
-    setLoading(true);
-    try {
-      // Fetch bookings for the select venue
-      // API doesn't support date filtering for "findAll", so we might fetch all confirmed/pending bookings
-      // Or we check if there is a better endpoint.
-      // Currently using findAll({ venueId }) and filtering by date locally.
-      // Note: Optimally backend should support date range filtering.
-      const res: any = await bookingApi.getAll({ venueId: venueId });
-      const bookingsList = Array.isArray(res) ? res : (res as any).data || [];
-
-      // Lọc theo ngày local (tránh lệch UTC với toISOString)
-      const targetDateStr = formatDateYMD(selectedDate);
-
-      const dayBookings = bookingsList.filter((b: any) => {
-        if (!b.startTime) return false;
-        const bookingDate = formatDateYMD(new Date(b.startTime));
-        // Only showing active bookings (not cancelled)
-        const isActive = b.status !== "CANCELLED" && b.status !== "REJECTED";
-        return bookingDate === targetDateStr && isActive;
-      });
-
-      // Map to frontend Booking interface
-      const mappedBookings: Booking[] = dayBookings.map((b: any) => {
-        const start = new Date(b.startTime);
-        const end = new Date(b.endTime);
-
-        return {
-          id: b.id,
-          fieldId: b.fieldId,
-          fieldName: b.field?.name || `Sân ${b.fieldId}`,
-          customerName: b.customerName,
-          phoneNumber: b.customerPhone,
-          startTime: formatTime(start),
-          endTime: formatTime(end),
-          price: b.totalPrice,
-          type: b.status === "CONFIRMED" ? "booked" : "pending", // diligent mapping
-          status: b.status,
-          source: b.source,
-          paymentMethod: b.payment?.method,
-          paymentStatus: b.payment?.status,
-          note: b.note,
-          originalData: b,
-        };
-      });
-
-      setBookings(mappedBookings);
-    } catch (error) {
-      console.error("Error fetching bookings:", error);
-      toast.error("Không thể tải lịch đặt sân");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString("en-US", {
       hour12: false,
@@ -247,7 +165,111 @@ const BookingSchedule: React.FC = () => {
     });
   };
 
-  // Helpers
+  const fetchBookings = useCallback(
+    async (silent = false) => {
+      if (!venueId) return;
+      if (!silent) setLoading(true);
+      try {
+        const res: any = await bookingApi.getAll({ venueId: venueId });
+        const bookingsList = Array.isArray(res) ? res : (res as any).data || [];
+
+        const targetDateStr = formatDateYMD(selectedDate);
+
+        const dayBookings = bookingsList.filter((b: any) => {
+          if (!b.startTime) return false;
+          const bookingDate = formatDateYMD(new Date(b.startTime));
+          const isActive = b.status !== "CANCELLED" && b.status !== "REJECTED";
+          return bookingDate === targetDateStr && isActive;
+        });
+
+        const mappedBookings: Booking[] = dayBookings.map((b: any) => {
+          const start = new Date(b.startTime);
+          const end = new Date(b.endTime);
+
+          return {
+            id: b.id,
+            fieldId: b.fieldId,
+            fieldName: b.field?.name || `Sân ${b.fieldId}`,
+            customerName: b.customerName,
+            phoneNumber: b.customerPhone,
+            startTime: formatTime(start),
+            endTime: formatTime(end),
+            price: b.totalPrice,
+            type: b.status === "CONFIRMED" ? "booked" : "pending",
+            status: b.status,
+            source: b.source,
+            paymentMethod: b.payment?.method,
+            paymentStatus: b.payment?.status,
+            note: b.note,
+            originalData: b,
+          };
+        });
+
+        setBookings(mappedBookings);
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+        if (!silent) toast.error("Không thể tải lịch đặt sân");
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [venueId, selectedDate],
+  );
+
+  const awaitingPaymentIdsKey = useMemo(() => {
+    const ids = bookings
+      .filter(
+        (b) =>
+          getBookingCardVariant(
+            b.status,
+            b.paymentMethod,
+            b.paymentStatus,
+          ) === "awaiting-payment",
+      )
+      .map((b) => Number(b.id))
+      .sort((a, b) => a - b);
+    return ids.length > 0 ? ids.join(",") : "";
+  }, [bookings]);
+
+  const paymentPollPaused =
+    qrQueue != null ||
+    (selectedBooking != null &&
+      isAwaitingBankPayment(
+        selectedBooking.paymentMethod,
+        selectedBooking.paymentStatus,
+      ));
+
+  // Load bookings when date or venue changes
+  useEffect(() => {
+    if (venueId) {
+      fetchBookings();
+    }
+  }, [venueId, selectedDate, fetchBookings]);
+
+  // Poll payment-status mỗi 5s (chỉ khi danh sách id chờ CK đổi — tránh loop)
+  useEffect(() => {
+    if (!awaitingPaymentIdsKey || !venueId || paymentPollPaused) return;
+
+    const ids = awaitingPaymentIdsKey.split(",").map(Number);
+    let inFlight = false;
+
+    const tick = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        await Promise.all(
+          ids.map((id) => bookingApi.getPaymentStatus(id).catch(() => null)),
+        );
+        await fetchBookings(true);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const timer = window.setInterval(tick, PAYMENT_POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [awaitingPaymentIdsKey, venueId, paymentPollPaused, fetchBookings]);
+
   const handlePrevDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(selectedDate.getDate() - 1);
@@ -330,6 +352,16 @@ const BookingSchedule: React.FC = () => {
       today.getFullYear() === viewDate.getFullYear()
     );
   };
+
+  const closeQrModal = useCallback(() => {
+    setQrQueue(null);
+    fetchBookings();
+  }, [fetchBookings]);
+
+  const handleQrAllPaid = useCallback(() => {
+    setQrQueue(null);
+    fetchBookings();
+  }, [fetchBookings]);
 
   const HOURS = scheduleConfig.hourLabels;
 
@@ -953,14 +985,8 @@ const BookingSchedule: React.FC = () => {
       {qrQueue && qrQueue.length > 0 && (
         <WalkInPaymentQrModal
           items={qrQueue}
-          onClose={() => {
-            setQrQueue(null);
-            fetchBookings();
-          }}
-          onAllPaid={() => {
-            setQrQueue(null);
-            fetchBookings();
-          }}
+          onClose={closeQrModal}
+          onAllPaid={handleQrAllPaid}
         />
       )}
     </div>

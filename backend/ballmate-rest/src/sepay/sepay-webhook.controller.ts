@@ -35,6 +35,10 @@ export class SepayWebhookController {
     @Body() payload: SepayWebhookPayloadDto,
     @Headers() headers: Record<string, string | string[] | undefined>,
   ) {
+    if (!this.sepayService.isWebhookEnabled()) {
+      return { success: true, skipped: 'webhook_disabled' };
+    }
+
     const authorization = this.sepayService.resolveAuthorizationHeader(headers);
     try {
       this.webhookService.verifyRequest(authorization);

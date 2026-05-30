@@ -8,6 +8,7 @@ import {
   getBookingStatusLabel,
   isAwaitingBankPayment,
 } from "./bookingDisplay";
+import { usePaymentStatusPoll } from "./usePaymentStatusPoll";
 
 interface Booking {
   id: string | number;
@@ -82,6 +83,18 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
       .catch(() => {});
   }, [booking.id, booking.paymentMethod, isWalkIn]);
 
+  usePaymentStatusPoll(
+    Number(booking.id),
+    awaitingPayment,
+    (data) => {
+      if (data.paymentStatus === "PAID") {
+        setPaymentStatus("PAID");
+        toast.success("Đã nhận chuyển khoản — có thể duyệt booking");
+        onRefresh?.();
+      }
+    },
+  );
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => {
@@ -133,7 +146,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
         onRefresh?.();
       } else {
         toast.error(
-          "SePay chưa ghi nhận thanh toán. Kiểm tra nội dung CK hoặc webhook.",
+          "SePay chưa ghi nhận thanh toán. Kiểm tra số VA, số tiền và nội dung CK (mã BM...).",
         );
       }
     } catch {

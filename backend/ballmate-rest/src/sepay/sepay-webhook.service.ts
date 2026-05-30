@@ -89,7 +89,7 @@ export class SepayWebhookService {
     return null;
   }
 
-  /** Đồng bộ từ SePay User API khi poll payment-status (fallback nếu webhook chưa tới). */
+  /** Đồng bộ từ SePay User API khi poll GET /bookings/:id/payment-status. */
   async tryReconcilePendingPayment(payment: Payment): Promise<boolean> {
     if (
       payment.status !== PaymentStatus.PENDING ||

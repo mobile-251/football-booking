@@ -396,7 +396,7 @@ const WalkInBookingModal: React.FC<WalkInBookingModalProps> = ({
               {paymentMethod === "BANK_TRANSFER" && (
                 <p className="m-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   Booking chờ thanh toán — hiện QR để khách quét. Tự xác nhận
-                  khi tiền vào (15 phút).
+                  khi tiền vào (5 phút).
                   {groupedRanges.length > 1 &&
                     " Mỗi khung giờ một QR riêng."}
                 </p>

@@ -34,7 +34,7 @@ export default () => ({
             process.env.SEPAY_PAYMENT_CODE_PREFIX || 'BM',
         env: process.env.SEPAY_ENV || 'sandbox',
         paymentTtlMinutes: parseInt(
-            process.env.SEPAY_PAYMENT_TTL_MINUTES ?? '15',
+            process.env.SEPAY_PAYMENT_TTL_MINUTES ?? '5',
             10,
         ),
         appPublicUrl: process.env.APP_PUBLIC_URL || 'http://localhost:3001',
@@ -42,6 +42,8 @@ export default () => ({
             process.env.SEPAY_USER_API_TOKEN ||
             process.env.SEPAY_API_TOKEN ||
             '',
+        /** Mặc định tắt — đồng bộ CK qua poll User API (GET payment-status). */
+        enableWebhook: process.env.SEPAY_ENABLE_WEBHOOK === 'true',
     },
 });
 
@@ -71,5 +73,6 @@ export interface AppConfiguration {
         paymentTtlMinutes: number;
         appPublicUrl: string;
         userApiToken: string;
+        enableWebhook: boolean;
     };
 }
