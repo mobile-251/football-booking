@@ -25,6 +25,7 @@ import {
 } from '../types/types';
 import { api } from '../services/api';
 import { formatCoin, formatVndAsCoin, vndToCoin } from '../utils/coin';
+import { fieldTypeLabel } from '../utils/combo';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useBadges, RootStackParamList } from '../navigation/AppNavigator';
@@ -56,6 +57,18 @@ interface TimeSlotData {
 }
 
 type ExtraCategory = 'equipment' | 'canteen';
+
+type EligiblePlayerCombo = {
+	id: number;
+	matchesRemaining: number;
+	matchesTotal: number;
+	expiresAt: string;
+	comboPackage?: {
+		name?: string;
+		fieldType?: string;
+		venue?: { name?: string };
+	};
+};
 
 const extraItemKey = (category: ExtraCategory, name: string) => `${category}:${name}`;
 
@@ -91,6 +104,9 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const [submitting, setSubmitting] = useState(false);
 	const [showSuccess, setShowSuccess] = useState(false);
 	const [walletBalance, setWalletBalance] = useState<number | null>(null);
+	const [eligibleCombos, setEligibleCombos] = useState<EligiblePlayerCombo[]>([]);
+	const [loadingEligibleCombos, setLoadingEligibleCombos] = useState(false);
+	const [selectedPlayerComboId, setSelectedPlayerComboId] = useState<number | null>(null);
 	const [quickTopUp, setQuickTopUp] = useState<{
 		missingCoin: number;
 		holdId: number;
@@ -154,6 +170,10 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setVenueEquipment([]);
 		setVenueCanteen([]);
 		setSelectedExtras({});
+		setWalletBalance(null);
+		setEligibleCombos([]);
+		setSelectedPlayerComboId(null);
+		setLoadingEligibleCombos(false);
 	}, [visible, field.id]);
 
 	useEffect(() => {
@@ -375,14 +395,68 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 
 	const getExtrasTotalVnd = () => getExtrasTotal();
 
+	const getSelectedCombo = () =>
+		selectedPlayerComboId != null
+			? eligibleCombos.find((c) => c.id === selectedPlayerComboId)
+			: undefined;
+
+	const getFieldCoinAfterCombo = () => {
+		const combo = getSelectedCombo();
+		if (!combo) return vndToCoin(getSlotsTotalVnd());
+		const freeSlots = Math.min(combo.matchesRemaining, selectedSlots.length);
+		const slotsVnd = selectedSlots.reduce(
+			(sum, slot, index) => (index >= freeSlots ? sum + slot.price : sum),
+			0,
+		);
+		return vndToCoin(slotsVnd);
+	};
+
+	const getPayableCoinTotal = () => getFieldCoinAfterCombo() + vndToCoin(getExtrasTotalVnd());
+
 	const getTotalCoin = () => vndToCoin(getSlotsTotalVnd() + getExtrasTotalVnd());
+
+	const handleOpenTopUp = () => {
+		onClose();
+		requestAnimationFrame(() => {
+			navigation.navigate('TopUp');
+		});
+	};
 
 	useEffect(() => {
 		if (currentStep !== 'confirm' || !visible) return;
 		api.getWalletMe()
 			.then((w) => setWalletBalance(w.balance))
 			.catch(() => setWalletBalance(null));
-	}, [currentStep, visible]);
+	}, [currentStep, visible, selectedPlayerComboId, selectedExtras]);
+
+	useEffect(() => {
+		if (currentStep !== 'confirm' || !visible || !venueId) return;
+		const fieldType = getCurrentFieldType();
+		let cancelled = false;
+		setLoadingEligibleCombos(true);
+		api.getEligibleCombos(venueId, fieldType)
+			.then((list) => {
+				if (cancelled) return;
+				const combos = Array.isArray(list) ? list : [];
+				setEligibleCombos(combos);
+				setSelectedPlayerComboId((prev) => {
+					if (prev != null && combos.some((c) => c.id === prev)) return prev;
+					return combos.length > 0 ? combos[0].id : null;
+				});
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setEligibleCombos([]);
+					setSelectedPlayerComboId(null);
+				}
+			})
+			.finally(() => {
+				if (!cancelled) setLoadingEligibleCombos(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [currentStep, visible, venueId, selectedSlots, getCurrentFieldType]);
 
 	const getTotalHours = () => {
 		return selectedSlots.length;
@@ -409,10 +483,14 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					? { selectedExtras, equipment: venueEquipment, canteen: venueCanteen }
 					: undefined;
 
+			let comboUsesLeft = getSelectedCombo()?.matchesRemaining ?? 0;
+
 			for (let i = 0; i < selectedSlots.length; i++) {
 				const slot = selectedSlots[i];
 				const startDateTime = new Date(slot.startTime);
 				const endDateTime = new Date(slot.endTime);
+				const useCombo =
+					selectedPlayerComboId != null && comboUsesLeft > 0;
 
 				try {
 					const booking = await api.confirmCoinBooking({
@@ -423,8 +501,10 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 						startTime: startDateTime.toISOString(),
 						endTime: endDateTime.toISOString(),
 						note: i === 0 ? combinedNote : note.trim() || undefined,
+						playerComboId: useCombo ? selectedPlayerComboId! : undefined,
 						extrasJson: i === 0 ? extrasJson : undefined,
 					});
+					if (useCombo) comboUsesLeft -= 1;
 					setBookingId(booking.id);
 				} catch (err: any) {
 					if (err?.response?.status === 402) {
@@ -917,7 +997,14 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					<Text style={styles.summaryTotalLabel}>
 						Tổng số giờ: <Text style={styles.summaryTotalValue}>{getTotalHours()} giờ</Text>
 					</Text>
-					<Text style={styles.summaryTotalPrice}>{formatCoin(getTotalCoin())}</Text>
+					<View style={styles.summaryTotalPriceWrap}>
+						{getPayableCoinTotal() < getTotalCoin() && (
+							<Text style={styles.summaryTotalPriceOriginal}>
+								{formatCoin(getTotalCoin())}
+							</Text>
+						)}
+						<Text style={styles.summaryTotalPrice}>{formatCoin(getPayableCoinTotal())}</Text>
+					</View>
 				</View>
 			</View>
 
@@ -1037,36 +1124,154 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				</View>
 			</View>
 
-			<Text style={styles.sectionTitle}>Thanh toán bằng coin</Text>
-			<View style={[styles.paymentOption, styles.paymentOptionSelected]}>
-				<View style={styles.paymentOptionLeft}>
+			<Text style={styles.sectionTitle}>Thanh toán</Text>
+			<View style={styles.paymentCard}>
+				<View style={styles.paymentWalletRow}>
 					<View style={[styles.paymentIcon, { backgroundColor: '#16a34a' }]}>
 						<Ionicons name='wallet' size={20} color={theme.colors.white} />
 					</View>
-					<View>
-						<Text style={styles.paymentLabel}>
-							Số dư ví:{' '}
+					<View style={styles.paymentWalletInfo}>
+						<Text style={styles.paymentWalletLabel}>Số dư ví</Text>
+						<Text style={styles.paymentWalletBalance}>
 							{walletBalance != null ? formatCoin(walletBalance) : '...'}
-						</Text>
-						<Text style={styles.paymentDescription}>
-							Tổng đặt: {formatCoin(getTotalCoin())}
-							{walletBalance != null && walletBalance < getTotalCoin()
-								? ' — sẽ mở nạp coin khi xác nhận'
-								: ''}
 						</Text>
 					</View>
 				</View>
-			</View>
 
-			{walletBalance != null && walletBalance < getTotalCoin() && (
-				<TouchableOpacity
-					style={styles.topUpLink}
-					onPress={() => navigation.navigate('TopUp')}
-				>
-					<Ionicons name='add-circle' size={18} color={theme.colors.primary} />
-					<Text style={styles.topUpLinkText}>Nạp thêm coin</Text>
-				</TouchableOpacity>
-			)}
+				{loadingEligibleCombos ? (
+					<ActivityIndicator
+						style={styles.paymentComboLoader}
+						color={theme.colors.primary}
+					/>
+				) : eligibleCombos.length > 0 ? (
+					<View style={styles.paymentComboSection}>
+						<Text style={styles.paymentComboHeading}>
+							Gói combo tại {field.venue?.name ?? 'cụm sân này'}
+						</Text>
+						{eligibleCombos.map((combo) => {
+							const selected = selectedPlayerComboId === combo.id;
+							const venueName =
+								combo.comboPackage?.venue?.name ?? field.venue?.name ?? 'Cụm sân';
+							return (
+								<TouchableOpacity
+									key={combo.id}
+									style={[
+										styles.paymentMethodOption,
+										selected && styles.paymentMethodOptionSelected,
+									]}
+									onPress={() => setSelectedPlayerComboId(combo.id)}
+									activeOpacity={0.85}
+								>
+									<View style={styles.paymentMethodLeft}>
+										<View
+											style={[
+												styles.paymentMethodIcon,
+												{ backgroundColor: '#7c3aed' },
+											]}
+										>
+											<Ionicons name='ticket' size={18} color={theme.colors.white} />
+										</View>
+										<View style={styles.paymentMethodText}>
+											<Text style={styles.paymentMethodVenue}>{venueName}</Text>
+											<Text style={styles.paymentMethodTitle}>
+												{combo.comboPackage?.name ?? 'Gói combo'}
+												{combo.comboPackage?.fieldType
+													? ` · ${fieldTypeLabel(combo.comboPackage.fieldType)}`
+													: ''}
+											</Text>
+											<Text style={styles.paymentMethodMeta}>
+												Còn {combo.matchesRemaining}/{combo.matchesTotal} lượt · HSD{' '}
+												{new Date(combo.expiresAt).toLocaleDateString('vi-VN')}
+											</Text>
+										</View>
+									</View>
+									<Ionicons
+										name={selected ? 'radio-button-on' : 'radio-button-off'}
+										size={22}
+										color={selected ? theme.colors.primary : theme.colors.foregroundMuted}
+									/>
+								</TouchableOpacity>
+							);
+						})}
+						<TouchableOpacity
+							style={[
+								styles.paymentMethodOption,
+								selectedPlayerComboId == null && styles.paymentMethodOptionSelected,
+							]}
+							onPress={() => setSelectedPlayerComboId(null)}
+							activeOpacity={0.85}
+						>
+							<View style={styles.paymentMethodLeft}>
+								<View
+									style={[styles.paymentMethodIcon, { backgroundColor: '#16a34a' }]}
+								>
+									<Ionicons name='cash' size={18} color={theme.colors.white} />
+								</View>
+								<View style={styles.paymentMethodText}>
+									<Text style={styles.paymentMethodTitle}>Thanh toán bằng coin</Text>
+									<Text style={styles.paymentMethodMeta}>
+										Trừ coin từ ví cho toàn bộ giờ đặt
+									</Text>
+								</View>
+							</View>
+							<Ionicons
+								name={
+									selectedPlayerComboId == null
+										? 'radio-button-on'
+										: 'radio-button-off'
+								}
+								size={22}
+								color={
+									selectedPlayerComboId == null
+										? theme.colors.primary
+										: theme.colors.foregroundMuted
+								}
+							/>
+						</TouchableOpacity>
+					</View>
+				) : null}
+
+				<View style={styles.paymentBreakdown}>
+					<View style={styles.paymentBreakdownRow}>
+						<Text style={styles.paymentBreakdownLabel}>Tiền sân</Text>
+						<Text style={styles.paymentBreakdownValue}>
+							{getSelectedCombo() && getFieldCoinAfterCombo() === 0
+								? 'Dùng gói combo'
+								: formatCoin(getFieldCoinAfterCombo())}
+						</Text>
+					</View>
+					{getExtrasTotalVnd() > 0 && (
+						<View style={styles.paymentBreakdownRow}>
+							<Text style={styles.paymentBreakdownLabel}>Tiện ích thêm</Text>
+							<Text style={styles.paymentBreakdownValue}>
+								{formatCoin(vndToCoin(getExtrasTotalVnd()))}
+							</Text>
+						</View>
+					)}
+					<View style={[styles.paymentBreakdownRow, styles.paymentBreakdownTotalRow]}>
+						<Text style={styles.paymentBreakdownTotalLabel}>Tổng thanh toán</Text>
+						<Text style={styles.paymentBreakdownTotalValue}>
+							{formatCoin(getPayableCoinTotal())}
+						</Text>
+					</View>
+				</View>
+
+				{walletBalance != null && walletBalance < getPayableCoinTotal() && (
+					<View style={styles.paymentInsufficient}>
+						<Ionicons name='alert-circle' size={18} color='#b45309' />
+						<Text style={styles.paymentInsufficientText}>
+							Thiếu {formatCoin(getPayableCoinTotal() - walletBalance)} coin
+						</Text>
+					</View>
+				)}
+
+				{walletBalance != null && walletBalance < getPayableCoinTotal() && (
+					<TouchableOpacity style={styles.topUpLink} onPress={handleOpenTopUp}>
+						<Ionicons name='add-circle' size={18} color={theme.colors.primary} />
+						<Text style={styles.topUpLinkText}>Nạp thêm coin</Text>
+					</TouchableOpacity>
+				)}
+			</View>
 
 			<View style={{ height: 100 }} />
 			</KeyboardAwareScrollView>
@@ -1780,6 +1985,15 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 		color: theme.colors.foreground,
 	},
+	summaryTotalPriceWrap: {
+		alignItems: 'flex-end',
+		gap: 2,
+	},
+	summaryTotalPriceOriginal: {
+		fontSize: 13,
+		color: theme.colors.foregroundMuted,
+		textDecorationLine: 'line-through',
+	},
 	summaryTotalPrice: {
 		fontSize: 20,
 		fontWeight: 'bold',
@@ -1814,25 +2028,148 @@ const styles = StyleSheet.create({
 		color: theme.colors.foreground,
 		paddingVertical: 8,
 	},
-	paymentOption: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
+	paymentCard: {
 		backgroundColor: theme.colors.white,
-		borderRadius: theme.borderRadius.md,
+		borderRadius: theme.borderRadius.lg,
 		padding: theme.spacing.md,
-		marginBottom: theme.spacing.sm,
-		borderWidth: 2,
-		borderColor: 'transparent',
+		marginBottom: theme.spacing.md,
+		borderWidth: 1,
+		borderColor: theme.colors.border,
 	},
-	paymentOptionSelected: {
-		borderColor: theme.colors.primary,
-		backgroundColor: theme.colors.primary + '10',
-	},
-	paymentOptionLeft: {
+	paymentWalletRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 12,
+		paddingBottom: theme.spacing.md,
+		borderBottomWidth: 1,
+		borderBottomColor: theme.colors.border,
+		marginBottom: theme.spacing.md,
+	},
+	paymentWalletInfo: {
+		flex: 1,
+	},
+	paymentWalletLabel: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+		marginBottom: 2,
+	},
+	paymentWalletBalance: {
+		fontSize: 20,
+		fontWeight: '800',
+		color: theme.colors.foreground,
+	},
+	paymentComboLoader: {
+		marginVertical: theme.spacing.sm,
+	},
+	paymentComboSection: {
+		gap: 8,
+		marginBottom: theme.spacing.md,
+	},
+	paymentComboHeading: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: theme.colors.foregroundMuted,
+		marginBottom: 4,
+	},
+	paymentMethodOption: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		backgroundColor: theme.colors.background,
+		borderRadius: theme.borderRadius.md,
+		padding: 12,
+		borderWidth: 2,
+		borderColor: 'transparent',
+	},
+	paymentMethodOptionSelected: {
+		borderColor: theme.colors.primary,
+		backgroundColor: theme.colors.primary + '10',
+	},
+	paymentMethodLeft: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+		flex: 1,
+		paddingRight: 8,
+	},
+	paymentMethodIcon: {
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	paymentMethodText: {
+		flex: 1,
+	},
+	paymentMethodVenue: {
+		fontSize: 11,
+		fontWeight: '700',
+		color: theme.colors.foregroundMuted,
+		textTransform: 'uppercase',
+		letterSpacing: 0.3,
+	},
+	paymentMethodTitle: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: theme.colors.foreground,
+		marginTop: 2,
+	},
+	paymentMethodMeta: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+		marginTop: 2,
+	},
+	paymentBreakdown: {
+		backgroundColor: theme.colors.background,
+		borderRadius: theme.borderRadius.md,
+		padding: 12,
+		gap: 8,
+	},
+	paymentBreakdownRow: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+	},
+	paymentBreakdownLabel: {
+		fontSize: 13,
+		color: theme.colors.foregroundMuted,
+	},
+	paymentBreakdownValue: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: theme.colors.foreground,
+	},
+	paymentBreakdownTotalRow: {
+		marginTop: 4,
+		paddingTop: 10,
+		borderTopWidth: 1,
+		borderTopColor: theme.colors.border,
+	},
+	paymentBreakdownTotalLabel: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: theme.colors.foreground,
+	},
+	paymentBreakdownTotalValue: {
+		fontSize: 16,
+		fontWeight: '800',
+		color: theme.colors.primary,
+	},
+	paymentInsufficient: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+		marginTop: theme.spacing.md,
+		padding: 10,
+		borderRadius: theme.borderRadius.md,
+		backgroundColor: '#fef3c7',
+	},
+	paymentInsufficientText: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: '#b45309',
+		flex: 1,
 	},
 	paymentIcon: {
 		width: 40,
@@ -1841,23 +2178,13 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
-	paymentLabel: {
-		fontSize: 14,
-		fontWeight: '600',
-		color: theme.colors.foreground,
-	},
-	paymentDescription: {
-		fontSize: 12,
-		color: theme.colors.foregroundMuted,
-	},
 	topUpLink: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
 		gap: 6,
-		marginHorizontal: theme.spacing.lg,
-		marginBottom: 8,
-		paddingVertical: 10,
+		marginTop: 10,
+		paddingVertical: 12,
 		borderRadius: 10,
 		backgroundColor: theme.colors.primary + '12',
 	},

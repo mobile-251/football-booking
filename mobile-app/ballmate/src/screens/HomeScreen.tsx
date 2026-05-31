@@ -23,6 +23,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import VenueCard from '../components/VenueCard';
 import NotificationBell from '../components/NotificationBell';
 import { formatCoin, formatVndAsCoin } from '../utils/coin';
+import { fieldTypeLabel } from '../utils/combo';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import * as Location from 'expo-location';
 
@@ -35,6 +36,19 @@ interface CategoryItem {
 }
 
 type QuickFilterKey = 'near' | 'available';
+
+type PlayerComboRow = {
+	id: number;
+	matchesRemaining: number;
+	matchesTotal: number;
+	expiresAt: string;
+	comboPackage?: {
+		name?: string;
+		fieldType?: string;
+		venueId?: number;
+		venue?: { id?: number; name?: string };
+	};
+};
 
 const QUICK_FILTERS: { key: QuickFilterKey; label: string; icon: string }[] = [
 	{ key: 'near', label: 'Gần tôi nhất', icon: 'location-outline' },
@@ -56,6 +70,8 @@ export default function HomeScreen() {
 	const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 	const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
 	const [walletBalance, setWalletBalance] = useState<number | null>(null);
+	const [myCombos, setMyCombos] = useState<PlayerComboRow[]>([]);
+	const [loadingCombos, setLoadingCombos] = useState(false);
 
 	const hasLoadedRef = useRef(false);
 
@@ -65,6 +81,22 @@ export default function HomeScreen() {
 			setWalletBalance(w.balance);
 		} catch {
 			setWalletBalance(null);
+		}
+	}, []);
+
+	const loadMyCombos = useCallback(async (silent = false) => {
+		if (!api.currentUser) {
+			setMyCombos([]);
+			return;
+		}
+		try {
+			if (!silent) setLoadingCombos(true);
+			const list = await api.getMyCombos();
+			setMyCombos(Array.isArray(list) ? list : []);
+		} catch {
+			setMyCombos([]);
+		} finally {
+			setLoadingCombos(false);
 		}
 	}, []);
 
@@ -95,11 +127,13 @@ export default function HomeScreen() {
 	useRefreshOnFocus(() => {
 		loadInitialData(hasLoadedRef.current);
 		loadWallet();
+		loadMyCombos(hasLoadedRef.current);
 	}, true);
 
 	useEffect(() => {
 		loadWallet();
-	}, [loadWallet]);
+		loadMyCombos();
+	}, [loadWallet, loadMyCombos]);
 
 	// const loadFavorites = async () => {
 	//     try {
@@ -219,7 +253,7 @@ export default function HomeScreen() {
 
 	const onRefresh = async () => {
 		setRefreshing(true);
-		await loadInitialData();
+		await Promise.all([loadInitialData(), loadWallet(), loadMyCombos(true)]);
 		setRefreshing(false);
 	};
 
@@ -251,6 +285,15 @@ export default function HomeScreen() {
 
 	const handleVenuePress = (venue: Venue & { minPrice?: number }) => {
 		navigation.navigate('VenueDetail', { venueId: venue.id });
+	};
+
+	const handleComboPress = (item: PlayerComboRow) => {
+		const venueId = item.comboPackage?.venue?.id ?? item.comboPackage?.venueId;
+		if (venueId) {
+			navigation.navigate('VenueDetail', { venueId });
+			return;
+		}
+		navigation.navigate('MyCombos');
 	};
 
 	return (
@@ -372,6 +415,73 @@ export default function HomeScreen() {
 							</View>
 							<Text style={styles.quickActionLabel}>Ví coin</Text>
 						</TouchableOpacity>
+						<TouchableOpacity
+							style={styles.quickActionCard}
+							onPress={() => navigation.navigate('MyCombos')}
+						>
+							<View style={[styles.quickActionIcon, { backgroundColor: '#ede9fe' }]}>
+								<Ionicons name='ticket' size={22} color='#7c3aed' />
+							</View>
+							<Text style={styles.quickActionLabel}>Gói combo</Text>
+						</TouchableOpacity>
+					</View>
+
+					<View style={styles.section}>
+						<View style={styles.sectionHeader}>
+							<Text style={styles.sectionTitle}>Gói combo của tôi</Text>
+							{myCombos.length > 0 && (
+								<TouchableOpacity onPress={() => navigation.navigate('MyCombos')}>
+									<Text style={styles.seeAllText}>Xem tất cả</Text>
+								</TouchableOpacity>
+							)}
+						</View>
+						{loadingCombos ? (
+							<ActivityIndicator color={theme.colors.primary} style={styles.comboLoader} />
+						) : myCombos.length === 0 ? (
+							<View style={styles.comboEmpty}>
+								<Ionicons name='ticket-outline' size={28} color={theme.colors.foregroundMuted} />
+								<Text style={styles.comboEmptyText}>Chưa có gói combo</Text>
+								<Text style={styles.comboEmptyHint}>
+									Mua gói tại trang chi tiết cụm sân
+								</Text>
+							</View>
+						) : (
+							myCombos.slice(0, 3).map((item) => (
+								<TouchableOpacity
+									key={item.id}
+									style={styles.comboCard}
+									onPress={() => handleComboPress(item)}
+									activeOpacity={0.85}
+								>
+									<View style={styles.comboVenueRow}>
+										<Ionicons name='location' size={14} color={theme.colors.primary} />
+										<Text style={styles.comboVenueName}>
+											{item.comboPackage?.venue?.name ?? 'Cụm sân'}
+										</Text>
+									</View>
+									<Text style={styles.comboName}>
+										{item.comboPackage?.name ?? 'Gói combo'}
+									</Text>
+									{item.comboPackage?.fieldType ? (
+										<Text style={styles.comboFieldType}>
+											{fieldTypeLabel(item.comboPackage.fieldType)}
+										</Text>
+									) : null}
+									<View style={styles.comboStatsRow}>
+										<Text style={styles.comboStat}>
+											Còn{' '}
+											<Text style={styles.comboStatBold}>
+												{item.matchesRemaining}/{item.matchesTotal}
+											</Text>{' '}
+											lượt
+										</Text>
+										<Text style={styles.comboExp}>
+											HSD: {new Date(item.expiresAt).toLocaleDateString('vi-VN')}
+										</Text>
+									</View>
+								</TouchableOpacity>
+							))
+						)}
 					</View>
 
 					{/* Quick Filters */}
@@ -633,6 +743,84 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 		color: theme.colors.foreground,
 		textAlign: 'center',
+	},
+	comboLoader: {
+		marginVertical: 16,
+	},
+	comboEmpty: {
+		alignItems: 'center',
+		backgroundColor: theme.colors.white,
+		borderRadius: theme.borderRadius.lg,
+		paddingVertical: 24,
+		paddingHorizontal: 16,
+		borderWidth: 1,
+		borderColor: theme.colors.border,
+	},
+	comboEmptyText: {
+		marginTop: 8,
+		fontSize: 14,
+		fontWeight: '700',
+		color: theme.colors.foreground,
+	},
+	comboEmptyHint: {
+		marginTop: 4,
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+		textAlign: 'center',
+	},
+	comboCard: {
+		backgroundColor: theme.colors.white,
+		borderRadius: 14,
+		padding: 14,
+		marginBottom: 10,
+		borderWidth: 1,
+		borderColor: theme.colors.border,
+		...theme.shadows.soft,
+	},
+	comboVenueRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 4,
+	},
+	comboVenueName: {
+		fontSize: 13,
+		color: theme.colors.primary,
+		fontWeight: '700',
+		flex: 1,
+	},
+	comboName: {
+		fontSize: 16,
+		fontWeight: '800',
+		color: theme.colors.foreground,
+		marginTop: 4,
+	},
+	comboFieldType: {
+		alignSelf: 'flex-start',
+		marginTop: 6,
+		fontSize: 11,
+		fontWeight: '700',
+		color: '#7c3aed',
+		backgroundColor: '#ede9fe',
+		paddingHorizontal: 8,
+		paddingVertical: 3,
+		borderRadius: 6,
+		overflow: 'hidden',
+	},
+	comboStatsRow: {
+		marginTop: 10,
+		gap: 2,
+	},
+	comboStat: {
+		fontSize: 13,
+		color: theme.colors.foreground,
+	},
+	comboStatBold: {
+		fontWeight: '800',
+		color: theme.colors.primary,
+	},
+	comboExp: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
 	},
 	section: {
 		marginBottom: theme.spacing.xl,

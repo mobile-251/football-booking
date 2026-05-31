@@ -616,6 +616,14 @@ class ApiService {
 		return Array.isArray(data) ? data : [];
 	}
 
+	async getEligibleCombos(venueId: number, fieldType: string): Promise<any[]> {
+		const response = await this.client.get('/combos/eligible', {
+			params: { venueId, fieldType },
+		});
+		const data = response.data;
+		return Array.isArray(data) ? data : [];
+	}
+
 	async purchaseCombo(packageId: number): Promise<any> {
 		const response = await this.client.post(`/combos/packages/${packageId}/purchase`);
 		return response.data;

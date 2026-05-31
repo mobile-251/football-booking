@@ -162,7 +162,7 @@ export default function ComboPackageManagementPage() {
   return (
     <PageShell
       title="Gói combo membership"
-      subtitle="Cấu hình gói đặt sân theo lượt — hiển thị trên app mobile"
+      subtitle="Cấu hình gói đặt sân theo lượt"
       loading={loading}
       actions={
         <button

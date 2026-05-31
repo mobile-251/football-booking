@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   CoinTransactionType,
+  ComboPackage,
   PlayerComboStatus,
   TopUpPurpose,
 } from '@prisma/client';
@@ -38,17 +39,7 @@ export class ComboService {
     return packages.map((p) => this.mapPackage(p));
   }
 
-  private mapPackage(p: {
-    id: number;
-    venueId: number;
-    fieldType: string;
-    name: string;
-    description: string | null;
-    matchCount: number;
-    priceCoin: { toString(): string } | number;
-    validityDays: number;
-    isActive: boolean;
-  }) {
+  private mapPackage(p: ComboPackage) {
     const priceCoin = decimalToNumber(p.priceCoin);
     return {
       id: p.id,
@@ -91,7 +82,7 @@ export class ComboService {
         expiresAt: { gt: new Date() },
         comboPackage: { venueId, fieldType: fieldType as never },
       },
-      include: { comboPackage: true },
+      include: { comboPackage: { include: { venue: true } } },
       orderBy: { expiresAt: 'asc' },
     });
   }

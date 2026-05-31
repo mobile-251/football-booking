@@ -77,9 +77,12 @@ export default function MyCombosScreen() {
 					}
 					renderItem={({ item }) => (
 						<View style={styles.card}>
-							<Text style={styles.venueName}>
-								{item.comboPackage?.venue?.name ?? 'Cụm sân'}
-							</Text>
+							<View style={styles.venueRow}>
+								<Ionicons name='location' size={14} color={theme.colors.primary} />
+								<Text style={styles.venueName}>
+									{item.comboPackage?.venue?.name ?? 'Cụm sân'}
+								</Text>
+							</View>
 							<Text style={styles.name}>{item.comboPackage?.name ?? 'Gói combo'}</Text>
 							{item.comboPackage?.fieldType ? (
 								<Text style={styles.fieldType}>
@@ -137,7 +140,18 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderColor: theme.colors.border,
 	},
-	venueName: { fontSize: 12, color: theme.colors.foregroundMuted, fontWeight: '600' },
+	venueRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 4,
+		marginBottom: 2,
+	},
+	venueName: {
+		fontSize: 13,
+		color: theme.colors.primary,
+		fontWeight: '700',
+		flex: 1,
+	},
 	name: { fontWeight: '800', fontSize: 17, color: theme.colors.foreground, marginTop: 4 },
 	fieldType: {
 		alignSelf: 'flex-start',
