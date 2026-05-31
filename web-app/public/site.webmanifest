@@ -1,0 +1,19 @@
+{
+  "name": "Ballmate - Quản lý sân bóng đá",
+  "short_name": "Ballmate",
+  "description": "Nền tảng quản lý và đặt sân bóng đá hàng đầu Việt Nam.",
+  "lang": "vi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1f6650",
+  "icons": [
+    {
+      "src": "/favicon-ballmate.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
