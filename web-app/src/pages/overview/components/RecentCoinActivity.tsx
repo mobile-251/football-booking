@@ -4,8 +4,23 @@ interface RecentCoinActivityProps {
   items: RecentActivityItem[];
 }
 
-function formatCurrency(amount: number): string {
-  return `${new Intl.NumberFormat('vi-VN').format(Math.round(amount))}đ`;
+function formatAmountVnd(amount: number): string {
+  const value = Math.abs(Math.round(amount));
+  return `${new Intl.NumberFormat('vi-VN').format(value)}đ`;
+}
+
+function amountMeta(type: RecentActivityItem['type'], amountVnd: number) {
+  const value = Math.abs(amountVnd);
+  if (type === 'combo_purchase') {
+    return {
+      text: formatAmountVnd(value),
+      className: 'text-violet-700',
+    };
+  }
+  return {
+    text: `+${formatAmountVnd(value)}`,
+    className: 'text-emerald-700',
+  };
 }
 
 function formatTimeAgo(iso: string): string {
@@ -61,6 +76,7 @@ export default function RecentCoinActivity({ items }: RecentCoinActivityProps) {
         <div className="flex flex-col gap-3">
           {items.map((item) => {
             const meta = typeMeta(item.type);
+            const amount = amountMeta(item.type, item.amountVnd);
             return (
               <div
                 key={item.id}
@@ -84,8 +100,10 @@ export default function RecentCoinActivity({ items }: RecentCoinActivityProps) {
                     {item.subtitle} · {formatTimeAgo(item.createdAt)}
                   </p>
                 </div>
-                <p className="m-0 shrink-0 text-sm font-bold text-primary-dark">
-                  +{formatCurrency(item.amountVnd)}
+                <p
+                  className={`m-0 shrink-0 text-sm font-bold ${amount.className}`}
+                >
+                  {amount.text}
                 </p>
               </div>
             );

@@ -24,8 +24,9 @@ function formatPercentChange(
   value: number,
   suffix = "so với tháng trước",
 ): string {
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value}% ${suffix}`;
+  const abs = Math.abs(value);
+  if (value > 0) return `+${abs}% ${suffix}`;
+  return `${abs}% ${suffix}`;
 }
 
 function OverviewDashboard({
@@ -110,7 +111,7 @@ function OverviewDashboard({
   return (
     <PageShell
       title="Tổng quan"
-      subtitle="Doanh thu gồm đặt sân và bán gói combo. Đặt bằng gói không cộng thêm tiền sân."
+      subtitle="Theo dõi doanh thu, lịch đặt sân và hoạt động coin tại sân."
     >
       {dashboardError && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -120,9 +121,10 @@ function OverviewDashboard({
 
       {dashboardLoading && !dashboard ? (
         <div className="flex flex-col gap-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="skeleton-shimmer h-[140px] rounded-2xl" />
+          <div className="skeleton-shimmer h-[160px] rounded-2xl" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton-shimmer h-[120px] rounded-2xl" />
             ))}
           </div>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -133,15 +135,16 @@ function OverviewDashboard({
         </div>
       ) : stats ? (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <RevenueSummaryCard
-              total={stats.monthlyRevenue}
-              bookingRevenue={stats.monthlyBookingRevenue}
-              comboRevenue={stats.monthlyComboRevenue}
-              comboBookings={stats.comboBookingsThisMonth}
-              changePercent={stats.monthlyRevenueChangePercent}
-              formatCurrency={formatCurrency}
-            />
+          <RevenueSummaryCard
+            total={stats.monthlyRevenue}
+            bookingRevenue={stats.monthlyBookingRevenue}
+            comboRevenue={stats.monthlyComboRevenue}
+            comboBookings={stats.comboBookingsThisMonth}
+            changePercent={stats.monthlyRevenueChangePercent}
+            formatCurrency={formatCurrency}
+          />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
               icon={
                 <svg
@@ -162,7 +165,13 @@ function OverviewDashboard({
               iconBg="bg-slate-100"
               label="Đặt sân hôm nay"
               value={String(stats.todayBookings)}
-              badge={`${stats.todayBookingsChange >= 0 ? "+" : ""}${stats.todayBookingsChange} so với hôm qua`}
+              badge={
+                stats.todayBookingsChange > 0
+                  ? `+${stats.todayBookingsChange} so với hôm qua`
+                  : stats.todayBookingsChange < 0
+                    ? `${Math.abs(stats.todayBookingsChange)} ít hơn hôm qua`
+                    : "Bằng hôm qua"
+              }
               badgeTone="neutral"
             />
             <StatCard

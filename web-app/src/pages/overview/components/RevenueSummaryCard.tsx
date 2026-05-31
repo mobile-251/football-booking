@@ -15,53 +15,62 @@ export default function RevenueSummaryCard({
   changePercent,
   formatCurrency,
 }: RevenueSummaryCardProps) {
-  const sign = changePercent > 0 ? '+' : '';
+  const absChange = Math.abs(changePercent);
+  const changeLabel =
+    changePercent > 0
+      ? `+${absChange}% so với tháng trước`
+      : `${absChange}% so với tháng trước`;
+  const changeTone =
+    changePercent > 0
+      ? 'text-emerald-700 bg-emerald-50'
+      : changePercent < 0
+        ? 'text-red-700 bg-red-50'
+        : 'text-slate-600 bg-slate-100';
 
   return (
-    <div className="card-surface col-span-1 flex flex-col gap-4 p-5 sm:col-span-2 xl:col-span-2">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="m-0 text-sm text-slate-500">Doanh thu tháng này</p>
-          <p className="m-0 mt-1 text-3xl font-bold text-primary-dark">
-            {formatCurrency(total)}
-          </p>
-          <p className="m-0 mt-1 text-xs font-medium text-primary">
-            {sign}
-            {changePercent}% so với tháng trước
-          </p>
+    <div className="card-surface overflow-hidden p-0">
+      <div className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-xl font-bold text-white">
+            ₫
+          </div>
+          <div>
+            <p className="m-0 text-sm font-medium text-slate-500">
+              Doanh thu tháng này
+            </p>
+            <p className="m-0 mt-1 text-3xl font-bold tracking-tight text-primary-dark">
+              {formatCurrency(total)}
+            </p>
+            <span
+              className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${changeTone}`}
+            >
+              {changeLabel}
+            </span>
+          </div>
         </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-light text-lg font-bold text-primary">
-          ₫
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Đặt sân (coin/CK)
-          </p>
-          <p className="m-0 mt-1 text-sm font-bold text-slate-800">
-            {formatCurrency(bookingRevenue)}
-          </p>
-        </div>
-        <div className="rounded-xl bg-violet-50 px-3 py-2.5">
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
-            Bán gói combo
-          </p>
-          <p className="m-0 mt-1 text-sm font-bold text-violet-900">
-            {formatCurrency(comboRevenue)}
-          </p>
-        </div>
-        <div className="rounded-xl bg-amber-50 px-3 py-2.5">
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-            Đặt bằng gói
-          </p>
-          <p className="m-0 mt-1 text-sm font-bold text-amber-900">
-            {comboBookings} lượt
-          </p>
-          <p className="m-0 mt-0.5 text-[10px] text-amber-700/80">
-            Không cộng thêm tiền sân
-          </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:min-w-[420px] lg:flex-1 lg:max-w-xl">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3">
+            <p className="m-0 text-xs text-slate-500">Đặt sân (coin / CK)</p>
+            <p className="m-0 mt-1 text-base font-bold text-slate-800">
+              {formatCurrency(bookingRevenue)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-violet-100 bg-violet-50/80 px-4 py-3">
+            <p className="m-0 text-xs text-violet-600">Bán gói combo</p>
+            <p className="m-0 mt-1 text-base font-bold text-violet-900">
+              {formatCurrency(comboRevenue)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-3">
+            <p className="m-0 text-xs text-amber-800">Đặt bằng gói combo</p>
+            <p className="m-0 mt-1 text-base font-bold text-amber-900">
+              {comboBookings} lượt
+            </p>
+            <p className="m-0 mt-0.5 text-[11px] text-amber-700/90">
+              Không tính thêm tiền sân
+            </p>
+          </div>
         </div>
       </div>
     </div>

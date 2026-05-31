@@ -71,7 +71,7 @@ export class DashboardService {
     txs: { amount: Prisma.Decimal }[],
   ): number {
     return txs.reduce(
-      (s, t) => s + coinToVnd(decimalToNumber(t.amount)),
+      (s, t) => s + coinToVnd(Math.abs(decimalToNumber(t.amount))),
       0,
     );
   }
@@ -359,7 +359,7 @@ export class DashboardService {
       const comboRevenue = chartComboTxs
         .filter((t) => t.createdAt >= day && t.createdAt <= dayEnd)
         .reduce(
-          (s, t) => s + coinToVnd(decimalToNumber(t.amount)),
+          (s, t) => s + coinToVnd(Math.abs(decimalToNumber(t.amount))),
           0,
         );
       return {
@@ -450,7 +450,7 @@ export class DashboardService {
     }
 
     for (const tx of recentComboTxs) {
-      const coin = decimalToNumber(tx.amount);
+      const coin = Math.abs(decimalToNumber(tx.amount));
       const name =
         tx.wallet?.player?.user?.fullName?.trim() || 'Khách';
       activity.push({

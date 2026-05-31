@@ -36,17 +36,11 @@ export default function RevenueChart({ data }: RevenueChartProps) {
     <div className="card-surface flex flex-col p-5">
       <div className="mb-4">
         <h3 className="m-0 text-base font-bold text-primary-dark">
-          Doanh thu 7 ngày
+          Xu hướng 7 ngày
         </h3>
         <p className="mt-1 text-sm text-slate-500">
-          Đặt sân + bán gói combo (không gồm lượt đặt trừ gói)
+          Tổng thu theo ngày (đặt sân + bán gói)
         </p>
-        <div className="mt-2 flex flex-wrap gap-3 text-[11px] font-medium text-slate-500">
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full bg-primary" />
-            Tổng
-          </span>
-        </div>
       </div>
 
       <div className="relative flex-1 min-h-[200px]">

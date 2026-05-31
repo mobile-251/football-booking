@@ -76,7 +76,7 @@ export default function RecentBookings({
                   {b.customerName}
                 </p>
                 <p className="m-0 mt-0.5 text-sm text-slate-500">
-                  {b.startTime} - {b.endTime} · {b.fieldName}
+                  {b.startTime} đến {b.endTime} · {b.fieldName}
                 </p>
               </div>
               <div className="shrink-0 text-right">
