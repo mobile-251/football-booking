@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/0.9">
+  <url>
+    <loc>https://ballmate.vn/</loc>
+    <lastmod>2026-05-31</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="vi-VN" href="https://ballmate.vn/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://ballmate.vn/" />
+    <image:image>
+      <image:loc>https://ballmate.vn/landing/hero-phone.jpg</image:loc>
+      <image:title>App Ballmate đặt sân bóng đá trên điện thoại</image:title>
+      <image:caption>Giao diện app Ballmate giúp cầu thủ tìm và đặt sân cỏ nhân tạo gần bạn.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://ballmate.vn/landing/og-image.jpg</image:loc>
+      <image:title>Ballmate - App đặt sân bóng đá thông minh</image:title>
+      <image:caption>Landing page giới thiệu app Ballmate cho cầu thủ phong trào Việt Nam.</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://ballmate.vn/login</loc>
+    <lastmod>2026-05-31</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://ballmate.vn/register</loc>
+    <lastmod>2026-05-31</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>

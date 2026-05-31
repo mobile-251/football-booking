@@ -1,9 +1,10 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ChangePasswordPage from "../pages/auth/ChangePasswordPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
+import LandingPage from "../pages/landing/LandingPage";
 import { ChangePasswordRoute, ProtectedRoute, PublicRoute } from "./guards";
 import { PATHS } from "./paths";
 
@@ -12,6 +13,7 @@ export default function AppRoutes() {
     <>
       <Toaster position="top-right" />
       <Routes>
+        <Route path={PATHS.home} element={<LandingPage />} />
         <Route
           path={PATHS.login}
           element={
@@ -43,10 +45,6 @@ export default function AppRoutes() {
               <DashboardPage />
             </ProtectedRoute>
           }
-        />
-        <Route
-          path={PATHS.home}
-          element={<Navigate to={PATHS.app} replace />}
         />
       </Routes>
     </>

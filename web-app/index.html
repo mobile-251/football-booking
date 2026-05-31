@@ -1,13 +1,207 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f6650" />
+
+    <title>Ballmate - App đặt sân bóng đá nhanh nhất Việt Nam</title>
+    <meta
+      name="description"
+      content="Ballmate là app đặt sân bóng đá phong trào số 1 Việt Nam: hơn 240 sân cỏ nhân tạo, lịch trống thời gian thực, ví coin tiện lợi. Tải miễn phí trên iOS và Android."
+    />
+    <meta
+      name="keywords"
+      content="đặt sân bóng đá, app đặt sân bóng, sân bóng gần đây, sân cỏ nhân tạo, đặt sân online, ballmate, sân bóng mini, đá bóng phong trào, sân 5 người, sân 7 người"
+    />
+    <meta name="author" content="Ballmate" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="googlebot" content="index, follow" />
+
+    <link rel="canonical" href="https://ballmate.vn/" />
+    <link rel="alternate" hreflang="vi-VN" href="https://ballmate.vn/" />
+    <link rel="alternate" hreflang="x-default" href="https://ballmate.vn/" />
+
     <link rel="icon" type="image/png" href="/favicon-ballmate.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ballmate Portal</title>
+    <link rel="apple-touch-icon" href="/favicon-ballmate.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="image" href="/landing/hero-phone.jpg" fetchpriority="high" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ballmate" />
+    <meta property="og:locale" content="vi_VN" />
+    <meta property="og:url" content="https://ballmate.vn/" />
+    <meta property="og:title" content="Ballmate - App đặt sân bóng đá nhanh nhất Việt Nam" />
+    <meta
+      property="og:description"
+      content="Hơn 240 sân cỏ nhân tạo trên toàn quốc. Đặt sân trong 30 giây, thanh toán bằng ví coin. Tải app miễn phí trên iOS và Android."
+    />
+    <meta property="og:image" content="https://ballmate.vn/landing/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Ballmate - app đặt sân bóng đá thông minh" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Ballmate - App đặt sân bóng đá nhanh nhất Việt Nam" />
+    <meta
+      name="twitter:description"
+      content="Hơn 240 sân cỏ nhân tạo trên toàn quốc. Đặt sân trong 30 giây, thanh toán bằng ví coin."
+    />
+    <meta name="twitter:image" content="https://ballmate.vn/landing/og-image.jpg" />
+    <meta name="twitter:image:alt" content="Ballmate - app đặt sân bóng đá thông minh" />
+
+    <!-- App-store linking (Smart App Banners + Android intent) -->
+    <meta name="apple-itunes-app" content="app-id=0000000000, app-argument=https://ballmate.vn/" />
+    <meta name="google-play-app" content="app-id=vn.ballmate.app" />
+
+    <!-- JSON-LD: Organization -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Ballmate",
+        "url": "https://ballmate.vn/",
+        "logo": "https://ballmate.vn/favicon-ballmate.png",
+        "description": "App đặt sân bóng đá phong trào số 1 Việt Nam.",
+        "foundingDate": "2024",
+        "areaServed": "VN",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "telephone": "+84-28-7300-0000",
+          "contactType": "customer support",
+          "areaServed": "VN",
+          "availableLanguage": ["vi", "en"]
+        },
+        "sameAs": [
+          "https://www.facebook.com/ballmate.vn",
+          "https://www.youtube.com/@ballmate",
+          "https://zalo.me/ballmate"
+        ]
+      }
+    </script>
+
+    <!-- JSON-LD: WebSite + SearchAction -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Ballmate",
+        "url": "https://ballmate.vn/",
+        "inLanguage": "vi-VN",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://ballmate.vn/tim-san?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+
+    <!-- JSON-LD: MobileApplication -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "MobileApplication",
+        "name": "Ballmate - Đặt sân bóng đá",
+        "operatingSystem": "iOS, Android",
+        "applicationCategory": "SportsApplication",
+        "inLanguage": "vi-VN",
+        "downloadUrl": "https://ballmate.vn/app",
+        "installUrl": "https://ballmate.vn/app",
+        "screenshot": [
+          "https://ballmate.vn/landing/hero-phone.jpg",
+          "https://ballmate.vn/landing/coin-phone.jpg"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "VND"
+        },
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.8",
+          "reviewCount": "1247",
+          "bestRating": "5",
+          "worstRating": "1"
+        }
+      }
+    </script>
+
+    <!-- JSON-LD: FAQ -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Ballmate có miễn phí tải về không?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Có. App Ballmate miễn phí 100% trên cả App Store và Google Play. Bạn chỉ trả tiền cho sân và dịch vụ bạn thật sự đặt."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Coin trong app là gì? Có quy đổi ra tiền mặt không?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "1 coin tương đương 1.000 VND, dùng để đặt sân, mua combo và đặt dịch vụ trong app. Coin không quy đổi ngược ra tiền mặt nhưng số dư không bao giờ hết hạn."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Nếu bận, có thể huỷ booking và nhận lại coin không?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Có. Huỷ trước giờ chơi từ 24 giờ trở lên được hoàn 100% coin. Huỷ trong 24 giờ tính phí huỷ theo chính sách của từng sân, hiển thị rõ trước khi xác nhận."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Combo thành viên hoạt động ra sao?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Mỗi combo gắn với một sân và một loại sân (5, 7 hoặc 11 người). Mua combo 10 trận sẽ trừ 1 lượt cho mỗi lần đặt sân tương ứng, không phụ thuộc giờ peak hay off-peak."
+            }
+          }
+        ]
+      }
+    </script>
+
+    <!-- JSON-LD: BreadcrumbList -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Trang chủ",
+            "item": "https://ballmate.vn/"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="padding: 24px; font-family: system-ui, sans-serif; color: #0f5132">
+        <h1>Ballmate - App đặt sân bóng đá tại Việt Nam</h1>
+        <p>
+          Ballmate là app giúp bạn tìm và đặt sân bóng đá phong trào trên toàn
+          quốc. Hơn 240 sân cỏ nhân tạo, lịch trống thời gian thực, thanh toán
+          bằng ví coin. Vui lòng bật JavaScript hoặc tải app từ App Store / Google
+          Play.
+        </p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
