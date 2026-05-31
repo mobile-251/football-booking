@@ -16,6 +16,9 @@ import { theme } from '../constants/theme';
 import { VenueDetail, FIELD_TYPE_LABELS, Review, FieldWithPricing, Field } from '../types/types';
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
+import { splitPolicyLines } from '../utils/policyText';
+import { getAmenityLabels } from '../utils/venueDisplay';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import BookingModal from '../components/BookingModal';
 import { useAuth } from '../context/AuthContext';
@@ -25,21 +28,6 @@ type VenueDetailRouteProp = RouteProp<RootStackParamList, 'VenueDetail'>;
 const { width } = Dimensions.get('window');
 
 type TabType = 'images' | 'reviews' | 'terms';
-
-const TERMS = {
-	booking: [
-		'Đặt cọc trước 30% giá trị sân',
-		'Hủy trong vòng 24h mất cọc',
-		'Đến muộn quá 15 phút mất quyền sử dụng sân',
-		'Hủy trước 24h được hoàn 100% cọc',
-	],
-	usage: [
-		'Giữ gìn sạch sẽ khu vực sân',
-		'Không mang đồ ăn có mùi lên sân',
-		'Báo cáo nếu phát hiện hư hỏng',
-		'Trả lại thiết bị mượn trước khi rời sân',
-	],
-};
 
 export default function VenueDetailScreen() {
 	const route = useRoute<VenueDetailRouteProp>();
@@ -61,13 +49,9 @@ export default function VenueDetailScreen() {
 	const [isFavorite, setIsFavorite] = useState(false);
 	const [favoriteLoading, setFavoriteLoading] = useState(false);
 
-	useEffect(() => {
-		loadVenue();
-	}, [venueId]);
-
-	const loadVenue = async () => {
+	const loadVenue = async (silent = false) => {
 		try {
-			setLoading(true);
+			if (!silent) setLoading(true);
 			const data = await api.getVenue(venueId);
 			setVenue(data);
 		} catch (error) {
@@ -76,6 +60,8 @@ export default function VenueDetailScreen() {
 			setLoading(false);
 		}
 	};
+
+	useRefreshOnFocus(() => loadVenue(!!venue));
 
 	const getUniqueFieldTypes = () => {
 		if (!venue?.fields) return [];
@@ -211,39 +197,50 @@ export default function VenueDetailScreen() {
 		</View>
 	);
 
-	const renderTerms = () => (
-		<View style={styles.termsContainer}>
-			<View style={styles.termsSection}>
-				<View style={styles.termsSectionHeader}>
-					<View style={styles.termsIcon}>
-						<Ionicons name='clipboard-outline' size={20} color={theme.colors.primary} />
-					</View>
-					<Text style={styles.termsSectionTitle}>Quy định đặt sân</Text>
-				</View>
-				{TERMS.booking.map((term, index) => (
-					<View key={index} style={styles.termItem}>
-						<Ionicons name='checkmark-circle' size={18} color={theme.colors.primary} />
-						<Text style={styles.termText}>{term}</Text>
-					</View>
-				))}
-			</View>
+	const renderPolicyBlock = (
+		title: string,
+		icon: keyof typeof Ionicons.glyphMap,
+		text: string | undefined,
+	) => {
+		const lines = splitPolicyLines(text);
+		if (lines.length === 0) return null;
 
+		return (
 			<View style={styles.termsSection}>
 				<View style={styles.termsSectionHeader}>
 					<View style={styles.termsIcon}>
-						<Ionicons name='document-text-outline' size={20} color={theme.colors.primary} />
+						<Ionicons name={icon} size={20} color={theme.colors.primary} />
 					</View>
-					<Text style={styles.termsSectionTitle}>Quy định sử dụng sân</Text>
+					<Text style={styles.termsSectionTitle}>{title}</Text>
 				</View>
-				{TERMS.usage.map((term, index) => (
+				{lines.map((line, index) => (
 					<View key={index} style={styles.termItem}>
 						<Ionicons name='checkmark-circle' size={18} color={theme.colors.primary} />
-						<Text style={styles.termText}>{term}</Text>
+						<Text style={styles.termText}>{line}</Text>
 					</View>
 				))}
 			</View>
-		</View>
-	);
+		);
+	};
+
+	const renderTerms = () => {
+		const policies = venue?.policies;
+		if (!policies) {
+			return (
+				<View style={styles.termsContainer}>
+					<Text style={styles.emptyTermsText}>Chưa có điều khoản</Text>
+				</View>
+			);
+		}
+
+		return (
+			<View style={styles.termsContainer}>
+				{renderPolicyBlock('Quy định đặt sân', 'clipboard-outline', policies.booking)}
+				{renderPolicyBlock('Quy định sử dụng sân', 'document-text-outline', policies.usage)}
+				{renderPolicyBlock('Bảo hiểm & trách nhiệm', 'shield-checkmark-outline', policies.insurance)}
+			</View>
+		);
+	};
 
 	const renderTabContent = () => {
 		switch (activeTab) {
@@ -355,10 +352,10 @@ export default function VenueDetailScreen() {
 							<Text style={styles.infoTitle}>Tiện ích</Text>
 						</View>
 						<View style={styles.facilitiesRow}>
-							{venue.facilities?.length > 0 ? (
-								venue.facilities.map((facility, index) => (
+							{getAmenityLabels(venue.amenities).length > 0 ? (
+								getAmenityLabels(venue.amenities).map((label, index) => (
 									<View key={index} style={styles.facilityTag}>
-										<Text style={styles.facilityText}>{facility}</Text>
+										<Text style={styles.facilityText}>{label}</Text>
 									</View>
 								))
 							) : (
@@ -406,6 +403,7 @@ export default function VenueDetailScreen() {
 					field={
 						{
 							...venue.fieldsPricings[0],
+							venueId: venue.id,
 							pricePerHour: Math.min(...(venue.fieldsPricings[0].pricings?.map((p) => p.price) || [0])),
 							description: venue.description || '',
 							images: venue.images || [],
@@ -703,6 +701,11 @@ const styles = StyleSheet.create({
 		marginTop: 4,
 	},
 	// Terms
+	emptyTermsText: {
+		fontSize: 14,
+		color: theme.colors.foregroundMuted,
+		textAlign: 'center',
+	},
 	termsContainer: {
 		backgroundColor: theme.colors.primary + '10',
 		borderRadius: theme.borderRadius.md,

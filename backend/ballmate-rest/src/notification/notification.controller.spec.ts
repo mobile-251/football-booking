@@ -18,7 +18,7 @@ describe('NotificationController', () => {
     };
 
     const mockRequest = {
-        user: { userId: 1, email: 'test@example.com' },
+        user: { id: 1, email: 'test@example.com' },
     };
 
     const mockNotificationService = {

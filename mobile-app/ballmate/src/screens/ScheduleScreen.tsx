@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
 	View,
 	Text,
@@ -17,6 +17,7 @@ import { theme } from '../constants/theme';
 import { Booking, BookingStatus, PAYMENT_METHOD_LABELS, PaymentMethod } from '../types/types';
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 
 type TabType = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
@@ -92,17 +93,15 @@ export default function ScheduleScreen() {
 	const [selectedBooking, setSelectedBooking] = useState<BookingWithDetails | null>(null);
 	const [showDetailModal, setShowDetailModal] = useState(false);
 
-	useEffect(() => {
-		loadBookings();
-	}, []);
+	const hasLoadedRef = useRef(false);
 
 	useEffect(() => {
 		filterBookings();
 	}, [bookings, activeTab]);
 
-	const loadBookings = async () => {
+	const loadBookings = useCallback(async (silent = false) => {
 		try {
-			setLoading(true);
+			if (!silent) setLoading(true);
 			// Get player ID from current logged-in user
 			const playerId = api.currentUser?.player?.id;
 			if (!playerId) {
@@ -134,8 +133,11 @@ export default function ScheduleScreen() {
 			setBookings([]);
 		} finally {
 			setLoading(false);
+			hasLoadedRef.current = true;
 		}
-	};
+	}, []);
+
+	useRefreshOnFocus(() => loadBookings(hasLoadedRef.current));
 
 	const filterBookings = () => {
 		let result = [...bookings];

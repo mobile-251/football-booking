@@ -7,6 +7,7 @@ import BookingSchedule from "../booking/BookingSchedule";
 import OverviewDashboard from "../overview/OverviewDashboard";
 import VenueManagerList from "../venue-managers/VenueManagerList";
 import VenueManagementPage from "../venue-management/VenueManagementPage";
+import NotificationsPage from "../notifications/NotificationsPage";
 import { useCurrentVenue } from "../../hooks/useCurrentVenue";
 import { getStoredUser, isOwner } from "../../types/auth";
 import EmptyState from "../../components/ui/EmptyState";
@@ -19,6 +20,7 @@ const IMPLEMENTED_MENUS = [
   "Đăng ký sân",
   "Lịch đặt sân",
   "Quản lý nhân viên",
+  "Thông báo",
 ];
 
 export default function DashboardLayout() {
@@ -83,6 +85,7 @@ export default function DashboardLayout() {
   const needsVenue =
     activeMenuItem !== "Đăng ký sân" &&
     activeMenuItem !== "Tổng quan" &&
+    activeMenuItem !== "Thông báo" &&
     !currentVenueId;
 
   const renderContent = () => {
@@ -109,6 +112,12 @@ export default function DashboardLayout() {
         return <BookingSchedule key={currentVenueId ?? "none"} />;
       case "Quản lý nhân viên":
         return <VenueManagerList />;
+      case "Thông báo":
+        return (
+          <NotificationsPage
+            onNavigateSchedule={() => setActiveMenuItem("Lịch đặt sân")}
+          />
+        );
       case "Tổng quan":
       default:
         return (
@@ -170,6 +179,10 @@ export default function DashboardLayout() {
           isMobile={isMobile}
           sidebarCollapsed={sidebarCollapsed}
           pageTitle={activeMenuItem}
+          onOpenNotifications={() => {
+            setActiveMenuItem("Thông báo");
+            setShowModal(false);
+          }}
         />
         <div className="flex-1 overflow-y-auto bg-gradient-to-br from-[#F0FDF4] to-[#DCFCE7] pt-16">
           {renderContent()}

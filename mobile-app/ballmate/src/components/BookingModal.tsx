@@ -23,9 +23,11 @@ import {
 	FieldTypePricingSummary,
 	FieldSlotInfo,
 	TimeSlotInfo,
+	PricedItem,
 } from '../types/types';
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
+import { useBadges } from '../navigation/AppNavigator';
 
 const { width, height } = Dimensions.get('window');
 
@@ -52,7 +54,13 @@ interface TimeSlotData {
 	isPeakHour: boolean;
 }
 
+type ExtraCategory = 'equipment' | 'canteen';
+
+const extraItemKey = (category: ExtraCategory, name: string) => `${category}:${name}`;
+
 export default function BookingModal({ visible, onClose, field, onBookingSuccess }: BookingModalProps) {
+	const { refreshBadges } = useBadges();
+	const venueId = field.venueId ?? field.venue?.id;
 	const [currentStep, setCurrentStep] = useState<BookingStep>('date');
 	const [selectedDates, setSelectedDates] = useState<string[]>([]);
 	// Step 2: Field type summaries with minPrice per date
@@ -64,6 +72,9 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const [fieldSlots, setFieldSlots] = useState<FieldSlotInfo[]>([]);
 	const [loadingFields, setLoadingFields] = useState(false);
 	const [loadingSlots, setLoadingSlots] = useState(false);
+	const [venueEquipment, setVenueEquipment] = useState<PricedItem[]>([]);
+	const [venueCanteen, setVenueCanteen] = useState<PricedItem[]>([]);
+	const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
 
 	const [calendarMonth, setCalendarMonth] = useState(() => {
 		const d = new Date();
@@ -101,7 +112,11 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const loadFieldTypePricing = useCallback(async (date: string) => {
 		setLoadingFields(true);
 		try {
-			const summaries = await api.getFieldTypePricing(field.venueId, date);
+			if (!venueId) {
+				setFieldTypeSummaries([]);
+				return;
+			}
+			const summaries = await api.getFieldTypePricing(venueId, date);
 			setFieldTypeSummaries(summaries);
 		} catch (error) {
 			console.error('Failed to load field type pricing:', error);
@@ -109,7 +124,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		} finally {
 			setLoadingFields(false);
 		}
-	}, [field.venueId]);
+	}, [venueId]);
 
 	useEffect(() => {
 		if (!visible) return;
@@ -128,13 +143,42 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setSelectedFields({});
 		setFieldTypeSummaries([]);
 		setFieldSlots([]);
+		setVenueEquipment([]);
+		setVenueCanteen([]);
+		setSelectedExtras({});
 	}, [visible, field.id]);
+
+	useEffect(() => {
+		if (!visible || !venueId) return;
+		let cancelled = false;
+		(async () => {
+			try {
+				const venue = await api.getVenue(venueId);
+				if (cancelled) return;
+				setVenueEquipment(venue.equipment ?? []);
+				setVenueCanteen(venue.canteenItems ?? []);
+			} catch (error) {
+				console.error('Failed to load venue extras:', error);
+				if (!cancelled) {
+					setVenueEquipment([]);
+					setVenueCanteen([]);
+				}
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [visible, venueId]);
 
 	// Step 3: Load field slots for field type and date
 	const loadFieldSlots = useCallback(async (fieldType: FieldType, date: string) => {
 		setLoadingSlots(true);
 		try {
-			const slots = await api.getFieldTypeSlots(field.venueId, fieldType, date);
+			if (!venueId) {
+				setFieldSlots([]);
+				return;
+			}
+			const slots = await api.getFieldTypeSlots(venueId, fieldType, date);
 			setFieldSlots(slots);
 		} catch (error) {
 			console.error('Failed to load field slots:', error);
@@ -142,7 +186,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		} finally {
 			setLoadingSlots(false);
 		}
-	}, [field.venueId]);
+	}, [venueId]);
 
 	// Effect: Load field type pricing when entering Step 2
 	useEffect(() => {
@@ -152,13 +196,40 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		void loadFieldTypePricing(currentDate);
 	}, [currentStep, currentDateIndex, selectedDates, loadFieldTypePricing]);
 
+	// Effect: Tự chọn loại sân khi mở từ chi tiết sân (đã biết field.id)
+	useEffect(() => {
+		if (currentStep !== 'fieldType') return;
+		const currentDate = selectedDates[currentDateIndex];
+		if (!currentDate || fieldTypeSummaries.length === 0) return;
+		if (selectedFields[currentDate] !== undefined) return;
+
+		const preferred = fieldTypeSummaries.find((s) =>
+			s.availableFieldIds.includes(field.id),
+		);
+		const target = preferred ?? (fieldTypeSummaries.length === 1 ? fieldTypeSummaries[0] : null);
+		if (!target?.availableFieldIds[0]) return;
+
+		setSelectedFields((prev) => ({
+			...prev,
+			[currentDate]: target.availableFieldIds.includes(field.id)
+				? field.id
+				: target.availableFieldIds[0],
+		}));
+	}, [
+		currentStep,
+		currentDateIndex,
+		selectedDates,
+		fieldTypeSummaries,
+		selectedFields,
+		field.id,
+	]);
+
 	// Effect: Load field slots when entering Step 3
 	useEffect(() => {
 		if (currentStep !== 'timeSlot') return;
 		const currentDate = selectedDates[currentDateIndex];
-		const selectedFieldId = selectedFields[currentDate];
-		if (!currentDate || !selectedFieldId) return;
-		
+		if (!currentDate) return;
+
 		const fieldType = getCurrentFieldType();
 		void loadFieldSlots(fieldType, currentDate);
 	}, [currentStep, currentDateIndex, selectedDates, selectedFields, loadFieldSlots, getCurrentFieldType]);
@@ -253,9 +324,48 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setSelectedDates((prev) => (prev.includes(date) ? prev.filter((d) => d !== date) : [...prev, date]));
 	};
 
-	const getTotalPrice = () => {
-		return selectedSlots.reduce((sum, slot) => sum + slot.price, 0);
+	const getExtrasTotal = () => {
+		let total = 0;
+		for (const item of venueEquipment) {
+			const qty = selectedExtras[extraItemKey('equipment', item.name)] ?? 0;
+			total += item.price * qty;
+		}
+		for (const item of venueCanteen) {
+			const qty = selectedExtras[extraItemKey('canteen', item.name)] ?? 0;
+			total += item.price * qty;
+		}
+		return total;
 	};
+
+	const buildExtrasNote = () => {
+		const lines: string[] = [];
+		for (const item of venueEquipment) {
+			const qty = selectedExtras[extraItemKey('equipment', item.name)] ?? 0;
+			if (qty > 0) lines.push(`${item.name} x${qty} (${formatPrice(item.price * qty)}đ)`);
+		}
+		for (const item of venueCanteen) {
+			const qty = selectedExtras[extraItemKey('canteen', item.name)] ?? 0;
+			if (qty > 0) lines.push(`${item.name} x${qty} (${formatPrice(item.price * qty)}đ)`);
+		}
+		if (lines.length === 0) return '';
+		return `Tiện ích thêm: ${lines.join('; ')}`;
+	};
+
+	const changeExtraQty = (category: ExtraCategory, name: string, delta: number) => {
+		const key = extraItemKey(category, name);
+		setSelectedExtras((prev) => {
+			const next = Math.max(0, (prev[key] ?? 0) + delta);
+			if (next === 0) {
+				const { [key]: _, ...rest } = prev;
+				return rest;
+			}
+			return { ...prev, [key]: next };
+		});
+	};
+
+	const getSlotsTotal = () => selectedSlots.reduce((sum, slot) => sum + slot.price, 0);
+
+	const getTotalPrice = () => getSlotsTotal() + getExtrasTotal();
 
 	const getTotalHours = () => {
 		return selectedSlots.length;
@@ -276,29 +386,36 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 			}
 			console.log("Select date:", selectedDates)
 			console.log("Select slot:", selectedSlots)
-			for (const slot of selectedSlots) {
-				// startTime and endTime are now in ISO format from API
+			const extrasNote = buildExtrasNote();
+			const extrasTotal = getExtrasTotal();
+			const combinedNote = [note.trim(), extrasNote].filter(Boolean).join('\n') || undefined;
+
+			for (let i = 0; i < selectedSlots.length; i++) {
+				const slot = selectedSlots[i];
 				const startDateTime = new Date(slot.startTime);
 				const endDateTime = new Date(slot.endTime);
+				const bookingTotal = slot.price + (i === 0 ? extrasTotal : 0);
 
 				const booking = await api.createBooking({
 					fieldId: slot.fieldId,
 					playerId: currentUser.player.id,
-					customerName: fullName,     // Send customer contact info
-					customerPhone: phoneNumber, // Send customer contact info
+					customerName: fullName,
+					customerPhone: phoneNumber,
 					startTime: startDateTime.toISOString(),
 					endTime: endDateTime.toISOString(),
-					totalPrice: slot.price,
-					note: note || undefined,
+					totalPrice: bookingTotal,
+					note: i === 0 ? combinedNote : note.trim() || undefined,
 				});
 				setBookingId(booking.id);
 
 				await api.createPayment({
 					bookingId: booking.id,
-					amount: slot.price,
+					amount: bookingTotal,
 					method: paymentMethod,
 				});
 			}
+
+			refreshBadges();
 
 			if (paymentMethod === 'BANK_TRANSFER') {
 				setShowBankTransfer(true);
@@ -592,6 +709,16 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				{/* Time Slots Grid - Grouped by Field */}
 				{loadingSlots ? (
 					<ActivityIndicator size='large' color={theme.colors.primary} style={{ marginTop: 40 }} />
+				) : fieldSlots.length === 0 || fieldSlots.every((fs) => fs.slots.length === 0) ? (
+					<View style={styles.emptySlotsBox}>
+						<Ionicons name='calendar-outline' size={40} color={theme.colors.foregroundMuted} />
+						<Text style={styles.emptySlotsTitle}>Không có khung giờ</Text>
+						<Text style={styles.emptySlotsText}>
+							{!venueId
+								? 'Thiếu thông tin cụm sân. Vui lòng thử lại sau.'
+								: 'Sân chưa cấu hình giá hoặc đã hết chỗ trong ngày này.'}
+						</Text>
+					</View>
 				) : (
 					<ScrollView style={styles.timeSlotsContainer} showsVerticalScrollIndicator={false}>
 						{fieldSlots.map((fieldSlot) => (
@@ -759,6 +886,12 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 						<Text style={styles.summaryPrice}>{formatPrice(slot.price)}đ</Text>
 					</View>
 				))}
+				{getExtrasTotal() > 0 && (
+					<View style={styles.summaryItem}>
+						<Text style={styles.summaryDate}>Tiện ích thêm</Text>
+						<Text style={styles.summaryPrice}>{formatPrice(getExtrasTotal())}đ</Text>
+					</View>
+				)}
 				<View style={styles.summaryTotal}>
 					<Text style={styles.summaryTotalLabel}>
 						Tổng số giờ: <Text style={styles.summaryTotalValue}>{getTotalHours()} giờ</Text>
@@ -766,6 +899,72 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					<Text style={styles.summaryTotalPrice}>{formatPrice(getTotalPrice())}đ</Text>
 				</View>
 			</View>
+
+			{(venueEquipment.length > 0 || venueCanteen.length > 0) && (
+				<View style={styles.extrasCard}>
+					<Text style={styles.sectionTitle}>Thiết bị & tiện ích (tùy chọn)</Text>
+					{venueEquipment.length > 0 && (
+						<Text style={styles.extrasGroupLabel}>Thuê thiết bị</Text>
+					)}
+					{venueEquipment.map((item) => {
+						const qty = selectedExtras[extraItemKey('equipment', item.name)] ?? 0;
+						return (
+							<View key={`eq-${item.name}`} style={styles.extraRow}>
+								<View style={styles.extraInfo}>
+									<Text style={styles.extraName}>{item.name}</Text>
+									<Text style={styles.extraPrice}>{formatPrice(item.price)}đ</Text>
+								</View>
+								<View style={styles.extraQtyControls}>
+									<TouchableOpacity
+										style={styles.extraQtyBtn}
+										onPress={() => changeExtraQty('equipment', item.name, -1)}
+										disabled={qty === 0}
+									>
+										<Ionicons name='remove' size={18} color={theme.colors.primary} />
+									</TouchableOpacity>
+									<Text style={styles.extraQtyText}>{qty}</Text>
+									<TouchableOpacity
+										style={styles.extraQtyBtn}
+										onPress={() => changeExtraQty('equipment', item.name, 1)}
+									>
+										<Ionicons name='add' size={18} color={theme.colors.primary} />
+									</TouchableOpacity>
+								</View>
+							</View>
+						);
+					})}
+					{venueCanteen.length > 0 && (
+						<Text style={[styles.extrasGroupLabel, { marginTop: 12 }]}>Căn tin</Text>
+					)}
+					{venueCanteen.map((item) => {
+						const qty = selectedExtras[extraItemKey('canteen', item.name)] ?? 0;
+						return (
+							<View key={`ct-${item.name}`} style={styles.extraRow}>
+								<View style={styles.extraInfo}>
+									<Text style={styles.extraName}>{item.name}</Text>
+									<Text style={styles.extraPrice}>{formatPrice(item.price)}đ</Text>
+								</View>
+								<View style={styles.extraQtyControls}>
+									<TouchableOpacity
+										style={styles.extraQtyBtn}
+										onPress={() => changeExtraQty('canteen', item.name, -1)}
+										disabled={qty === 0}
+									>
+										<Ionicons name='remove' size={18} color={theme.colors.primary} />
+									</TouchableOpacity>
+									<Text style={styles.extraQtyText}>{qty}</Text>
+									<TouchableOpacity
+										style={styles.extraQtyBtn}
+										onPress={() => changeExtraQty('canteen', item.name, 1)}
+									>
+										<Ionicons name='add' size={18} color={theme.colors.primary} />
+									</TouchableOpacity>
+								</View>
+							</View>
+						);
+					})}
+				</View>
+			)}
 
 			{/* Contact Form */}
 			<Text style={styles.sectionTitle}>Thông tin liên hệ</Text>
@@ -1364,6 +1563,23 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		color: theme.colors.foregroundMuted,
 	},
+	emptySlotsBox: {
+		alignItems: 'center',
+		paddingVertical: 40,
+		paddingHorizontal: theme.spacing.lg,
+	},
+	emptySlotsTitle: {
+		fontSize: 16,
+		fontWeight: '600',
+		color: theme.colors.foreground,
+		marginTop: theme.spacing.md,
+	},
+	emptySlotsText: {
+		fontSize: 14,
+		color: theme.colors.foregroundMuted,
+		textAlign: 'center',
+		marginTop: theme.spacing.sm,
+	},
 	timeSlotsContainer: {
 		flex: 1,
 	},
@@ -1487,6 +1703,61 @@ const styles = StyleSheet.create({
 		borderRadius: theme.borderRadius.md,
 		padding: theme.spacing.lg,
 		marginBottom: theme.spacing.lg,
+	},
+	extrasCard: {
+		backgroundColor: theme.colors.white,
+		borderRadius: theme.borderRadius.md,
+		padding: theme.spacing.lg,
+		marginBottom: theme.spacing.lg,
+	},
+	extrasGroupLabel: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: theme.colors.foregroundMuted,
+		marginBottom: 8,
+	},
+	extraRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingVertical: 10,
+		borderBottomWidth: 1,
+		borderBottomColor: theme.colors.border,
+	},
+	extraInfo: {
+		flex: 1,
+		paddingRight: 12,
+	},
+	extraName: {
+		fontSize: 14,
+		fontWeight: '500',
+		color: theme.colors.foreground,
+	},
+	extraPrice: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+		marginTop: 2,
+	},
+	extraQtyControls: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+	},
+	extraQtyBtn: {
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		borderWidth: 1,
+		borderColor: theme.colors.primary,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	extraQtyText: {
+		fontSize: 15,
+		fontWeight: '600',
+		minWidth: 20,
+		textAlign: 'center',
+		color: theme.colors.foreground,
 	},
 	summaryHeader: {
 		flexDirection: 'row',

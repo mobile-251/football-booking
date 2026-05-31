@@ -55,12 +55,14 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 // Badge Context for real-time counts
 interface BadgeContextType {
 	unreadMessages: number;
+	unreadNotifications: number;
 	upcomingBookings: number;
 	refreshBadges: () => void;
 }
 
 const BadgeContext = createContext<BadgeContextType>({
 	unreadMessages: 0,
+	unreadNotifications: 0,
 	upcomingBookings: 0,
 	refreshBadges: () => { },
 });
@@ -72,11 +74,13 @@ export function useBadges() {
 function BadgeProvider({ children }: { children: React.ReactNode }) {
 	const { isAuthenticated } = useAuth();
 	const [unreadMessages, setUnreadMessages] = useState(0);
+	const [unreadNotifications, setUnreadNotifications] = useState(0);
 	const [upcomingBookings, setUpcomingBookings] = useState(0);
 
 	const refreshBadges = useCallback(async () => {
 		if (!isAuthenticated) {
 			setUnreadMessages(0);
+			setUnreadNotifications(0);
 			setUpcomingBookings(0);
 			return;
 		}
@@ -88,6 +92,13 @@ function BadgeProvider({ children }: { children: React.ReactNode }) {
 			setUnreadMessages(unread);
 		} catch (error) {
 			console.log('Failed to load unread messages:', error);
+		}
+
+		try {
+			const { unreadCount } = await api.getUnreadNotificationCount();
+			setUnreadNotifications(unreadCount);
+		} catch (error) {
+			console.log('Failed to load unread notifications:', error);
 		}
 
 		try {
@@ -111,7 +122,7 @@ function BadgeProvider({ children }: { children: React.ReactNode }) {
 	}, [isAuthenticated]);
 
 	return (
-		<BadgeContext.Provider value={{ unreadMessages, upcomingBookings, refreshBadges }}>
+		<BadgeContext.Provider value={{ unreadMessages, unreadNotifications, upcomingBookings, refreshBadges }}>
 			{children}
 		</BadgeContext.Provider>
 	);

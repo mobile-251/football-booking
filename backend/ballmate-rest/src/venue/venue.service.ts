@@ -6,8 +6,57 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
-import { FieldType, DayType, UserRole } from '@prisma/client';
+import { FieldType, DayType, Prisma, UserRole } from '@prisma/client';
 import { JwtUser } from '../auth/types/jwt-user.type';
+import { findPriceForHour, getDayTypeForDate } from '../field/booking-pricing.util';
+import {
+  parseExclusiveCloseHour,
+  parseOpenHour,
+} from '../field/venue-hours.util';
+
+const DEFAULT_VENUE_POLICIES = {
+  booking:
+    'Đặt sân trước ít nhất 2 giờ. Hủy miễn phí trước 4 giờ. Thanh toán tại sân hoặc chuyển khoản.',
+  usage:
+    'Mang giày đá banh cỏ nhân tạo. Không hút thuốc trong khu vực sân. Giữ gìn vệ sinh chung.',
+  insurance:
+    'Khách hàng tự bảo đảm an toàn khi thi đấu. Sân không chịu trách nhiệm với tư trang để ngoài khu vực quản lý.',
+};
+
+type PricedItem = { name: string; price: number };
+
+function parseVenuePricedItems(raw: Prisma.JsonValue | null): PricedItem[] {
+  if (raw === null || raw === undefined || !Array.isArray(raw) || raw.length === 0) {
+    return [];
+  }
+  return raw
+    .filter(
+      (item): item is PricedItem =>
+        typeof item === 'object' &&
+        item !== null &&
+        'name' in item &&
+        typeof (item as PricedItem).name === 'string' &&
+        (item as PricedItem).name.trim().length > 0 &&
+        'price' in item,
+    )
+    .map((item) => ({
+      name: String((item as PricedItem).name).trim(),
+      price: Number((item as PricedItem).price),
+    }))
+    .filter((item) => Number.isFinite(item.price) && item.price >= 0);
+}
+
+function parseVenuePolicies(raw: Prisma.JsonValue | null) {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const p = raw as Record<string, string>;
+    return {
+      booking: p.booking ?? DEFAULT_VENUE_POLICIES.booking,
+      usage: p.usage ?? DEFAULT_VENUE_POLICIES.usage,
+      insurance: p.insurance ?? DEFAULT_VENUE_POLICIES.insurance,
+    };
+  }
+  return { ...DEFAULT_VENUE_POLICIES };
+}
 
 @Injectable()
 export class VenueService {
@@ -318,6 +367,9 @@ export class VenueService {
       ...venue,
       fields: transformedFields, // deprecated
       fieldsPricings: transformedFields,
+      policies: parseVenuePolicies(venue.policies),
+      equipment: parseVenuePricedItems(venue.equipment),
+      canteenItems: parseVenuePricedItems(venue.canteenItems),
       minPrice,
       averageRating,
       totalBookings,
@@ -359,10 +411,8 @@ export class VenueService {
   /**
    * Helper: Determine if date is weekend
    */
-  private isDayTypeWeekend(date: string): boolean {
-    const dateObj = new Date(date);
-    const dayOfWeek = dateObj.getDay();
-    return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+  private dayTypeForDateString(date: string): DayType {
+    return getDayTypeForDate(new Date(`${date}T12:00:00`));
   }
 
   /**
@@ -410,9 +460,7 @@ export class VenueService {
       return [];
     }
 
-    // Determine dayType
-    const isWeekend = this.isDayTypeWeekend(date);
-    const dayType = isWeekend ? 'WEEKEND' : 'WEEKDAY';
+    const dayType = this.dayTypeForDateString(date);
 
     // Group fields by fieldType
     const grouped: Record<string, typeof fields> = {};
@@ -484,25 +532,17 @@ export class VenueService {
       return [];
     }
 
-    // Determine dayType
-    const isWeekend = this.isDayTypeWeekend(date);
-    const dayType = isWeekend ? 'WEEKEND' : 'WEEKDAY';
-
-    // Parse venue hours
-    const openHour = venue.openTime ? parseInt(venue.openTime.split(':')[0]) : 6;
-    const closeHour = venue.closeTime ? parseInt(venue.closeTime.split(':')[0]) : 23;
+    const dayType = this.dayTypeForDateString(date);
+    const openHour = parseOpenHour(venue.openTime);
+    const closeHourExclusive = parseExclusiveCloseHour(venue.closeTime);
 
     // For each field, generate slots
     const result = await Promise.all(
       fields.map(async (field) => {
-        // Get pricings for this dayType
-        const pricings = field.pricings.filter(p => p.dayType === dayType);
-
         // Get bookings for this field on this date
-        const startOfDay = new Date(date);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(date);
-        endOfDay.setHours(23, 59, 59, 999);
+        const [y, m, d] = date.split('-').map(Number);
+        const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
+        const endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999);
 
         const bookings = await this.prisma.booking.findMany({
           where: {
@@ -532,26 +572,19 @@ export class VenueService {
           isAvailable: boolean;
         }[] = [];
 
-        for (let hour = openHour; hour < closeHour; hour++) {
+        for (let hour = openHour; hour < closeHourExclusive; hour++) {
           // Return ISO format (without timezone) so mobile can convert to local timezone
           const startTime = `${date}T${hour.toString().padStart(2, '0')}:00:00`;
           const endTime = `${date}T${(hour + 1).toString().padStart(2, '0')}:00:00`;
           const isPeakHour = hour >= 17 && hour < 21;
 
-          // Find matching pricing
-          let price = 0;
-          for (const pricing of pricings) {
-            const pStart = parseInt(pricing.startTime.split(':')[0]);
-            const pEnd = parseInt(pricing.endTime.split(':')[0]);
-            if (hour >= pStart && hour < pEnd) {
-              price = pricing.price;
-              break;
-            }
-          }
-
-          // Fallback price if no pricing found
-          if (price === 0) {
-            price = isPeakHour ? 500000 : 300000;
+          const configuredPrice = findPriceForHour(
+            field.pricings,
+            dayType,
+            hour,
+          );
+          if (configuredPrice === null) {
+            continue;
           }
 
           const isAvailable = !bookedHours.has(hour);
@@ -559,7 +592,7 @@ export class VenueService {
           slots.push({
             startTime,
             endTime,
-            price,
+            price: configuredPrice,
             isPeakHour,
             isAvailable,
           });

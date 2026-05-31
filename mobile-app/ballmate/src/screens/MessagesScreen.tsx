@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 
 type FilterType = 'all' | 'unread' | 'important';
 
@@ -29,19 +30,11 @@ export default function MessagesScreen() {
 	const [conversations, setConversations] = useState<Conversation[]>([]);
 	const [loading, setLoading] = useState(true);
 
-	useEffect(() => {
-		if (!authLoading) {
-			if (isAuthenticated) {
-				loadConversations();
-			} else {
-				setLoading(false);
-			}
-		}
-	}, [isAuthenticated, authLoading]);
+	const hasLoadedRef = useRef(false);
 
-	const loadConversations = async () => {
+	const loadConversations = useCallback(async (silent = false) => {
 		try {
-			setLoading(true);
+			if (!silent) setLoading(true);
 			const data = await api.getConversations();
 			const mappedConversations = data.map((c: any) => {
 				const lastMessageAt = c.lastMessageAt ? new Date(c.lastMessageAt) : null;
@@ -66,8 +59,25 @@ export default function MessagesScreen() {
 			setConversations([]);
 		} finally {
 			setLoading(false);
+			hasLoadedRef.current = true;
 		}
-	};
+	}, []);
+
+	useRefreshOnFocus(
+		() => {
+			if (isAuthenticated) {
+				void loadConversations(hasLoadedRef.current);
+			}
+		},
+		!authLoading && isAuthenticated,
+	);
+
+	useEffect(() => {
+		if (!authLoading && !isAuthenticated) {
+			setLoading(false);
+			setConversations([]);
+		}
+	}, [isAuthenticated, authLoading]);
 
 	const getFilteredConversations = () => {
 		let result = [...conversations];

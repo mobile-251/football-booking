@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,8 @@ import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { RootStackParamList, useBadges } from '../navigation/AppNavigator';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 
 type FilterType = 'all' | 'unread';
 
@@ -47,18 +48,14 @@ export default function NotificationsScreen() {
 	const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 	const [notifications, setNotifications] = useState<Notification[]>([]);
 	const [loading, setLoading] = useState(true);
+	const { refreshBadges } = useBadges();
 
-	useEffect(() => {
-		if (!authLoading) {
-			if (isAuthenticated) {
-				loadNotifications();
-			} else {
-				setLoading(false);
-			}
+	const loadNotifications = useCallback(async () => {
+		if (!isAuthenticated) {
+			setLoading(false);
+			setNotifications([]);
+			return;
 		}
-	}, [isAuthenticated, authLoading]);
-
-	const loadNotifications = async () => {
 		try {
 			setLoading(true);
 			const data = await api.getNotifications();
@@ -66,6 +63,7 @@ export default function NotificationsScreen() {
 				const typeMap: Record<string, Notification['type']> = {
 					BOOKING_CONFIRMED: 'booking',
 					BOOKING_CANCELLED: 'booking',
+					BOOKING_PENDING: 'booking',
 					BOOKING_REMINDER: 'reminder',
 					PAYMENT_SUCCESS: 'payment',
 					PAYMENT_PENDING: 'payment',
@@ -100,7 +98,9 @@ export default function NotificationsScreen() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [isAuthenticated]);
+
+	useRefreshOnFocus(() => loadNotifications(), !authLoading && isAuthenticated);
 
 	const getFilteredNotifications = () => {
 		if (activeFilter === 'unread') {
@@ -115,6 +115,7 @@ export default function NotificationsScreen() {
 		try {
 			await api.markAllNotificationsAsRead();
 			setNotifications(notifications.map((n) => ({ ...n, read: true })));
+			refreshBadges();
 		} catch (error) {
 			console.error('Failed to mark all as read:', error);
 		}
@@ -124,6 +125,7 @@ export default function NotificationsScreen() {
 		try {
 			await api.markNotificationAsRead(id);
 			setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)));
+			refreshBadges();
 		} catch (error) {
 			console.error('Failed to mark as read:', error);
 		}
@@ -133,6 +135,7 @@ export default function NotificationsScreen() {
 		try {
 			await api.deleteNotification(id);
 			setNotifications(notifications.filter((n) => n.id !== id));
+			refreshBadges();
 		} catch (error) {
 			console.error('Failed to delete notification:', error);
 		}

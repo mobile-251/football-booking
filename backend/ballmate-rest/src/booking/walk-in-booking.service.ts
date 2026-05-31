@@ -21,6 +21,7 @@ import {
 } from '../field/booking-pricing.util';
 import { SepayService } from '../sepay/sepay.service';
 import { SepayWebhookService } from '../sepay/sepay-webhook.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class WalkInBookingService {
@@ -28,6 +29,7 @@ export class WalkInBookingService {
     private prisma: PrismaService,
     private sepayService: SepayService,
     private sepayWebhookService: SepayWebhookService,
+    private notificationService: NotificationService,
   ) {}
 
   private generateBookingCode(): string {
@@ -171,6 +173,12 @@ export class WalkInBookingService {
         },
       },
     });
+
+    try {
+      await this.notificationService.dispatchBookingCreated(booking.id);
+    } catch (e) {
+      console.error('Failed to send walk-in notification:', e);
+    }
 
     if (isBankTransfer && booking.payment) {
       return {

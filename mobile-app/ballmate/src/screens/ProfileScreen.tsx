@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -16,6 +16,8 @@ import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import NotificationBell from '../components/NotificationBell';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import * as Sentry from '@sentry/react-native';
 
 interface MenuItem {
@@ -95,16 +97,11 @@ export default function ProfileScreen() {
     const [stats, setStats] = useState<UserStats>({ bookingCount: 0, totalSpent: 0, points: 0 });
     const [statsLoading, setStatsLoading] = useState(true);
 
-    useEffect(() => {
-        if (isAuthenticated) {
-            loadUserStats();
-        } else {
-            setStatsLoading(false);
-        }
-    }, [isAuthenticated]);
+    const hasLoadedRef = useRef(false);
 
-    const loadUserStats = async () => {
+    const loadUserStats = useCallback(async (silent = false) => {
         try {
+            if (!silent) setStatsLoading(true);
             // For now, we'll use placeholder stats since there's no dedicated stats endpoint
             // In a real app, this would fetch from /api/users/me/stats
             const bookings = await api.getBookings();
@@ -118,8 +115,20 @@ export default function ProfileScreen() {
             console.error('Failed to load user stats:', error);
         } finally {
             setStatsLoading(false);
+            hasLoadedRef.current = true;
         }
-    };
+    }, []);
+
+    useRefreshOnFocus(
+        () => loadUserStats(hasLoadedRef.current),
+        isAuthenticated && !authLoading,
+    );
+
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) {
+            setStatsLoading(false);
+        }
+    }, [isAuthenticated, authLoading]);
 
     const handleLogout = async () => {
         try {
@@ -199,9 +208,7 @@ export default function ProfileScreen() {
                 <SafeAreaView style={styles.header} edges={['top']}>
                     <View style={styles.headerTop}>
                         <Text style={styles.title}>Tài khoản</Text>
-                        <TouchableOpacity style={styles.notificationBtn} onPress={() => navigation.navigate('Notifications')}>
-                            <Ionicons name="notifications-outline" size={24} color={theme.colors.white} />
-                        </TouchableOpacity>
+                        <NotificationBell color={theme.colors.white} style={styles.notificationBtn} />
                     </View>
 
                     {/* Profile Card */}
