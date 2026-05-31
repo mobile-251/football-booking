@@ -48,15 +48,19 @@ export class ComboService {
     priceCoin: { toString(): string } | number;
     validityDays: number;
     isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
   }) {
     const priceCoin = decimalToNumber(p.priceCoin);
     return {
-      ...p,
+      id: p.id,
+      venueId: p.venueId,
+      fieldType: p.fieldType,
+      name: p.name,
+      description: p.description ?? undefined,
+      matchCount: p.matchCount,
       priceCoin,
       pricePerMatch: Math.round((priceCoin / p.matchCount) * 100) / 100,
-      description: p.description ?? undefined,
+      validityDays: p.validityDays,
+      isActive: p.isActive,
     };
   }
 
@@ -119,10 +123,17 @@ export class ComboService {
   }
 
   async purchaseAfterTopUp(playerId: number, comboPackageId: number) {
-    const pkg = await this.prisma.comboPackage.findFirstOrThrow({
-      where: { id: comboPackageId, isActive: true },
+    const pkg = await this.prisma.comboPackage.findFirst({
+      where: { id: comboPackageId, isActive: true, deletedAt: null },
     });
+    if (!pkg) {
+      throw new NotFoundException('Combo package not found');
+    }
     const priceCoin = decimalToNumber(pkg.priceCoin);
+    const balance = await this.walletService.getBalance(playerId);
+    if (balance < priceCoin) {
+      throw new BadRequestException('Insufficient balance after top-up');
+    }
     return this.createPlayerCombo(playerId, pkg.id, priceCoin, pkg);
   }
 

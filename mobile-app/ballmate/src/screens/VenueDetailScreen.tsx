@@ -16,6 +16,7 @@ import { theme } from '../constants/theme';
 import { VenueDetail, FIELD_TYPE_LABELS, Review, FieldWithPricing, Field } from '../types/types';
 import { api } from '../services/api';
 import { formatCoin, formatVndAsCoin, vndToCoin } from '../utils/coin';
+import type { ComboPackageItem } from '../utils/combo';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { splitPolicyLines } from '../utils/policyText';
 import { getAmenityLabels } from '../utils/venueDisplay';
@@ -49,24 +50,20 @@ export default function VenueDetailScreen() {
 	const [showBookingModal, setShowBookingModal] = useState(false);
 	const [isFavorite, setIsFavorite] = useState(false);
 	const [favoriteLoading, setFavoriteLoading] = useState(false);
-	const [comboPackages, setComboPackages] = useState<
-		{ id: number; name: string; matchCount: number; priceCoin: number }[]
-	>([]);
+	const [comboPackages, setComboPackages] = useState<ComboPackageItem[]>([]);
 
 	const loadVenue = async (silent = false) => {
 		try {
 			if (!silent) setLoading(true);
 			const [data, combos] = await Promise.all([
 				api.getVenue(venueId),
-				api.getComboPackages(venueId).catch(() => []),
+				api.getComboPackages(venueId).catch((e) => {
+					console.error('[VenueDetail] combo packages', e);
+					return [] as ComboPackageItem[];
+				}),
 			]);
 			setVenue(data);
-			setComboPackages(
-				(combos as { id: number; name: string; matchCount: number; priceCoin: number }[]).slice(
-					0,
-					3,
-				),
-			);
+			setComboPackages(combos.filter((p) => p.isActive !== false));
 		} catch (error) {
 			console.error('Failed to load venue:', error);
 		} finally {

@@ -372,15 +372,6 @@ export default function HomeScreen() {
 							</View>
 							<Text style={styles.quickActionLabel}>Ví coin</Text>
 						</TouchableOpacity>
-						<TouchableOpacity
-							style={styles.quickActionCard}
-							onPress={() => navigation.navigate('MyCombos')}
-						>
-							<View style={[styles.quickActionIcon, { backgroundColor: '#ede9fe' }]}>
-								<Ionicons name='ticket' size={22} color='#7c3aed' />
-							</View>
-							<Text style={styles.quickActionLabel}>Gói combo</Text>
-						</TouchableOpacity>
 					</View>
 
 					{/* Quick Filters */}

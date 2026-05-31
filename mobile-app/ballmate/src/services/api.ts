@@ -1,6 +1,10 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AuthResponse, Field, Venue, VenueDetail, Booking, Review, FieldFilter, ApiError, User, FieldType, FieldTypePricingSummary, FieldSlotInfo } from '../types/types';
 import { Config } from '../config/environment';
+import {
+	normalizeComboPackageList,
+	type ComboPackageItem,
+} from '../utils/combo';
 
 const API_BASE_URL = Config.API_URL;
 
@@ -601,14 +605,15 @@ class ApiService {
 		return response.data;
 	}
 
-	async getComboPackages(venueId: number): Promise<any[]> {
+	async getComboPackages(venueId: number): Promise<ComboPackageItem[]> {
 		const response = await this.client.get(`/combos/venues/${venueId}/packages`);
-		return response.data;
+		return normalizeComboPackageList(response.data);
 	}
 
 	async getMyCombos(): Promise<any[]> {
 		const response = await this.client.get('/combos/my');
-		return response.data;
+		const data = response.data;
+		return Array.isArray(data) ? data : [];
 	}
 
 	async purchaseCombo(packageId: number): Promise<any> {
