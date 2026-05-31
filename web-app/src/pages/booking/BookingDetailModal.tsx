@@ -66,6 +66,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     booking.status,
     booking.paymentMethod,
     paymentStatus,
+    booking.source,
   );
   const statusLabel = getBookingStatusLabel(
     booking.status,
@@ -87,9 +88,9 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     Number(booking.id),
     awaitingPayment,
     (data) => {
-      if (data.paymentStatus === "PAID") {
+      if (data.paymentStatus === "PAID" || data.bookingStatus === "CONFIRMED") {
         setPaymentStatus("PAID");
-        toast.success("Đã nhận chuyển khoản — có thể duyệt booking");
+        toast.success("Đã nhận chuyển khoản — booking đã xác nhận");
         onRefresh?.();
       }
     },
@@ -141,8 +142,8 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     try {
       const data = await bookingApi.getPaymentStatus(Number(booking.id));
       setPaymentStatus(data.paymentStatus);
-      if (data.paymentStatus === "PAID") {
-        toast.success("Đã nhận chuyển khoản — có thể duyệt booking");
+      if (data.paymentStatus === "PAID" || data.bookingStatus === "CONFIRMED") {
+        toast.success("Đã nhận chuyển khoản — booking đã xác nhận");
         onRefresh?.();
       } else {
         toast.error(
@@ -168,7 +169,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     try {
       await bookingApi.markBankTransferPaid(Number(booking.id));
       setPaymentStatus("PAID");
-      toast.success("Đã ghi nhận thanh toán — có thể duyệt booking");
+      toast.success("Đã ghi nhận thanh toán — booking đã xác nhận");
       onRefresh?.();
     } catch {
       toast.error("Không cập nhật được trạng thái thanh toán");
@@ -422,7 +423,8 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
 
           {booking.status === "PENDING" &&
             booking.paymentMethod === "BANK_TRANSFER" &&
-            paymentStatus === "PAID" && (
+            paymentStatus === "PAID" &&
+            !isWalkIn && (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                 <p className="m-0 text-sm font-semibold text-emerald-900">
                   Đã thanh toán chuyển khoản

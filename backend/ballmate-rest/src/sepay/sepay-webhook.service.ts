@@ -3,7 +3,12 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Payment, PaymentStatus } from '@prisma/client';
+import {
+  BookingSource,
+  BookingStatus,
+  Payment,
+  PaymentStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SepayWebhookPayload } from './dto/sepay-webhook-payload.dto';
 import { SepayService } from './sepay.service';
@@ -27,15 +32,43 @@ export class SepayWebhookService {
     paymentId: number,
     sepayTransactionId?: number | string,
   ) {
-    await this.prisma.payment.update({
+    const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      data: {
-        status: PaymentStatus.PAID,
-        paidAt: new Date(),
-        transactionId:
-          sepayTransactionId != null ? String(sepayTransactionId) : undefined,
+      include: {
+        booking: { select: { id: true, source: true, status: true } },
       },
     });
+    if (!payment) return;
+
+    const shouldAutoConfirmWalkIn =
+      payment.booking.source === BookingSource.WEB_WALK_IN &&
+      payment.booking.status === BookingStatus.PENDING;
+
+    await this.prisma.$transaction([
+      this.prisma.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: PaymentStatus.PAID,
+          paidAt: new Date(),
+          transactionId:
+            sepayTransactionId != null ? String(sepayTransactionId) : undefined,
+        },
+      }),
+      ...(shouldAutoConfirmWalkIn
+        ? [
+            this.prisma.booking.update({
+              where: { id: payment.bookingId },
+              data: { status: BookingStatus.CONFIRMED },
+            }),
+          ]
+        : []),
+    ]);
+
+    if (shouldAutoConfirmWalkIn) {
+      this.logger.log(
+        `Walk-in booking ${payment.bookingId} auto-confirmed after payment`,
+      );
+    }
   }
 
   async findPendingBankPayment(

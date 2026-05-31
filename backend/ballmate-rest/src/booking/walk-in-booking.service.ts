@@ -213,12 +213,14 @@ export class WalkInBookingService {
       payment.method === PaymentMethod.BANK_TRANSFER
     ) {
       await this.sepayWebhookService.tryReconcilePendingPayment(payment);
-      const refreshed = await this.prisma.payment.findUnique({
-        where: { id: payment.id },
+      const refreshed = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { payment: true },
       });
-      if (refreshed) {
-        payment.status = refreshed.status;
-        payment.paidAt = refreshed.paidAt;
+      if (refreshed?.payment) {
+        payment.status = refreshed.payment.status;
+        payment.paidAt = refreshed.payment.paidAt;
+        booking.status = refreshed.status;
       }
     }
 
@@ -244,6 +246,17 @@ export class WalkInBookingService {
         paymentStatus: payment.status,
         expired: true,
       };
+    }
+
+    if (
+      booking.status === BookingStatus.PENDING &&
+      payment.status === PaymentStatus.PAID
+    ) {
+      await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: BookingStatus.CONFIRMED },
+      });
+      booking.status = BookingStatus.CONFIRMED;
     }
 
     return {
@@ -278,7 +291,18 @@ export class WalkInBookingService {
       throw new BadRequestException('Not a bank transfer booking');
     }
     if (payment.status === PaymentStatus.PAID) {
-      return { bookingId, paymentStatus: PaymentStatus.PAID, alreadyPaid: true };
+      if (booking.status === BookingStatus.PENDING) {
+        await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: { status: BookingStatus.CONFIRMED },
+        });
+      }
+      return {
+        bookingId,
+        paymentStatus: PaymentStatus.PAID,
+        bookingStatus: BookingStatus.CONFIRMED,
+        alreadyPaid: true,
+      };
     }
     if (booking.status === BookingStatus.CANCELLED) {
       throw new BadRequestException('Booking already cancelled');
@@ -286,10 +310,15 @@ export class WalkInBookingService {
 
     await this.sepayWebhookService.markPaymentAsPaid(payment.id, 'manual');
 
+    const refreshed = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { payment: true },
+    });
+
     return {
       bookingId,
-      bookingStatus: booking.status,
-      paymentStatus: PaymentStatus.PAID,
+      bookingStatus: refreshed?.status ?? booking.status,
+      paymentStatus: refreshed?.payment?.status ?? PaymentStatus.PAID,
       alreadyPaid: false,
     };
   }

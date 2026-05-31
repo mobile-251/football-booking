@@ -52,7 +52,9 @@ export function canConfirmBooking(
   status?: string,
   paymentMethod?: string | null,
   paymentStatus?: string | null,
+  source?: string | null,
 ): boolean {
+  if (source === "WEB_WALK_IN") return false;
   if (status !== "PENDING") return false;
   if (paymentMethod === "BANK_TRANSFER" && paymentStatus !== "PAID") {
     return false;
