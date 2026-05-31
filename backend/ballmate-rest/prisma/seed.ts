@@ -17,6 +17,18 @@ async function main() {
   // CLEAR EXISTING DATA
   console.log('Clearing existing data...');
 
+  await prisma.bookingComboUsage.deleteMany();
+  await prisma.bookingService.deleteMany();
+  await prisma.playerCombo.deleteMany();
+  await prisma.comboPackage.deleteMany();
+  await prisma.coinTransaction.deleteMany();
+  await prisma.topUpOrder.deleteMany();
+  await prisma.bookingHold.deleteMany();
+  await prisma.wallet.deleteMany();
+  await prisma.checkIn.deleteMany();
+  await prisma.checkInRewardConfig.deleteMany();
+  await prisma.topUpPackage.deleteMany();
+  await prisma.venueService.deleteMany();
   await prisma.revenueReport.deleteMany();
   await prisma.review.deleteMany();
   await prisma.payment.deleteMany();
@@ -217,26 +229,31 @@ async function main() {
     { field5: 3, field7: 1, field11: 2 },
   ];
 
-  // Pricing structure - base prices that will be adjusted per field type
-  const basePricing = {
-    weekday: {
-      morning: 200000, // 06:00-16:00
-      evening: 350000, // 16:00-22:00
-      night: 150000, // 22:00-23:00
-    },
-    weekend: {
-      morning: 250000, // 06:00-16:00
-      evening: 400000, // 16:00-22:00
-      night: 150000, // 22:00-23:00
-    },
+  const marketBands: Record<
+    FieldType,
+    { startTime: string; endTime: string; price: number }[]
+  > = {
+    [FieldType.FIELD_5VS5]: [
+      { startTime: '06:00', endTime: '09:00', price: 200000 },
+      { startTime: '09:00', endTime: '17:00', price: 250000 },
+      { startTime: '17:00', endTime: '20:00', price: 400000 },
+      { startTime: '20:00', endTime: '23:00', price: 330000 },
+    ],
+    [FieldType.FIELD_7VS7]: [
+      { startTime: '06:00', endTime: '09:00', price: 350000 },
+      { startTime: '09:00', endTime: '17:00', price: 450000 },
+      { startTime: '17:00', endTime: '20:00', price: 650000 },
+      { startTime: '20:00', endTime: '23:00', price: 550000 },
+    ],
+    [FieldType.FIELD_11VS11]: [
+      { startTime: '06:00', endTime: '09:00', price: 600000 },
+      { startTime: '09:00', endTime: '17:00', price: 800000 },
+      { startTime: '17:00', endTime: '20:00', price: 1200000 },
+      { startTime: '20:00', endTime: '23:00', price: 1000000 },
+    ],
   };
 
-  // Price multipliers per field type
-  const priceMultipliers = {
-    FIELD_5VS5: 1,
-    FIELD_7VS7: 1.3,
-    FIELD_11VS11: 1.8,
-  };
+  let firstVenueId: number | null = null;
 
   for (let i = 0; i < venueNames.length; i++) {
     const venueInfo = venueNames[i];
@@ -269,8 +286,10 @@ async function main() {
       { type: FieldType.FIELD_11VS11, count: config.field11, prefix: '11' },
     ];
 
+    if (firstVenueId === null) firstVenueId = venue.id;
+
     for (const fieldConfig of fieldTypes) {
-      const multiplier = priceMultipliers[fieldConfig.type];
+      const bands = marketBands[fieldConfig.type];
 
       for (let j = 1; j <= fieldConfig.count; j++) {
         const field = await prisma.field.create({
@@ -282,65 +301,99 @@ async function main() {
           },
         });
 
-        // Create pricing for Weekdays (Mon-Fri)
-        await prisma.fieldPricing.createMany({
-          data: [
-            {
+        for (const dayType of ['WEEKDAY', 'WEEKEND'] as const) {
+          await prisma.fieldPricing.createMany({
+            data: bands.map((b) => ({
               fieldId: field.id,
-              dayType: 'WEEKDAY',
-              startTime: '06:00',
-              endTime: '16:00',
-              price: Math.round(basePricing.weekday.morning * multiplier),
-            },
-            {
-              fieldId: field.id,
-              dayType: 'WEEKDAY',
-              startTime: '16:00',
-              endTime: '22:00',
-              price: Math.round(basePricing.weekday.evening * multiplier),
-            },
-            {
-              fieldId: field.id,
-              dayType: 'WEEKDAY',
-              startTime: '22:00',
-              endTime: '23:00',
-              price: Math.round(basePricing.weekday.night * multiplier),
-            },
-          ],
-        });
-
-        // Create pricing for Weekends (Sat-Sun)
-        await prisma.fieldPricing.createMany({
-          data: [
-            {
-              fieldId: field.id,
-              dayType: 'WEEKEND',
-              startTime: '06:00',
-              endTime: '16:00',
-              price: Math.round(basePricing.weekend.morning * multiplier),
-            },
-            {
-              fieldId: field.id,
-              dayType: 'WEEKEND',
-              startTime: '16:00',
-              endTime: '22:00',
-              price: Math.round(basePricing.weekend.evening * multiplier),
-            },
-            {
-              fieldId: field.id,
-              dayType: 'WEEKEND',
-              startTime: '22:00',
-              endTime: '23:00',
-              price: Math.round(basePricing.weekend.night * multiplier),
-            },
-          ],
-        });
+              dayType,
+              startTime: b.startTime,
+              endTime: b.endTime,
+              price: b.price,
+            })),
+          });
+        }
       }
     }
 
     console.log(
       `Created venue: ${venueInfo.name} with ${config.field5 + config.field7 + config.field11} fields`,
     );
+  }
+
+  // Top-up packages (1 coin = 1.000 VND)
+  await prisma.topUpPackage.createMany({
+    data: [
+      { name: '200K', priceVnd: 200000, baseCoin: 200, bonusCoin: 0, sortOrder: 1 },
+      { name: '500K (+10%)', priceVnd: 500000, baseCoin: 500, bonusCoin: 50, sortOrder: 2 },
+      { name: '1M (+15%)', priceVnd: 1000000, baseCoin: 1000, bonusCoin: 150, sortOrder: 3 },
+      { name: '2M (+20%)', priceVnd: 2000000, baseCoin: 2000, bonusCoin: 400, sortOrder: 4 },
+    ],
+  });
+
+  // Check-in rewards 1-30
+  const checkInRewards: { streakDay: number; coinReward: number; isMilestone: boolean; label?: string }[] = [];
+  for (let d = 1; d <= 30; d++) {
+    let coin = 1;
+    if (d <= 2) coin = 1;
+    else coin = Math.min(30, Math.round(1 + ((d - 2) * 29) / 28));
+    checkInRewards.push({
+      streakDay: d,
+      coinReward: coin,
+      isMilestone: d === 7 || d === 14 || d === 30,
+      label: d === 30 ? 'Max streak' : undefined,
+    });
+  }
+  await prisma.checkInRewardConfig.createMany({
+    data: checkInRewards.map((r) => ({
+      streakDay: r.streakDay,
+      coinReward: r.coinReward,
+      isMilestone: r.isMilestone,
+      label: r.label,
+    })),
+  });
+
+  const allPlayers = await prisma.player.findMany();
+  for (const p of allPlayers) {
+    await prisma.wallet.create({ data: { playerId: p.id, coinBalance: 500 } });
+  }
+
+  if (firstVenueId) {
+    await prisma.comboPackage.createMany({
+      data: [
+        {
+          venueId: firstVenueId,
+          fieldType: FieldType.FIELD_5VS5,
+          name: 'Combo 10 sân 5',
+          matchCount: 10,
+          priceCoin: 3100,
+          validityDays: 60,
+        },
+        {
+          venueId: firstVenueId,
+          fieldType: FieldType.FIELD_7VS7,
+          name: 'Combo 10 sân 7',
+          matchCount: 10,
+          priceCoin: 5000,
+          validityDays: 60,
+        },
+        {
+          venueId: firstVenueId,
+          fieldType: FieldType.FIELD_11VS11,
+          name: 'Combo 10 sân 11',
+          matchCount: 10,
+          priceCoin: 9000,
+          validityDays: 60,
+        },
+        {
+          venueId: firstVenueId,
+          fieldType: FieldType.FIELD_11VS11,
+          name: 'Combo 5 sân 11',
+          matchCount: 5,
+          priceCoin: 4700,
+          validityDays: 45,
+        },
+      ],
+    });
   }
 
   console.log('Seed completed successfully!');

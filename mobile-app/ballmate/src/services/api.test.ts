@@ -180,7 +180,7 @@ describe('ApiService', () => {
 
                 const result = await api.refreshAccessToken();
 
-                expect(mockPost).toHaveBeenCalledWith('/auth/refresh', {}, expect.any(Object));
+                expect(mockPost).toHaveBeenCalledWith('/auth/refresh', {});
                 expect(result.access_token).toBe('refreshed-token');
             });
         });

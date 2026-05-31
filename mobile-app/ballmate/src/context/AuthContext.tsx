@@ -56,7 +56,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		}
 	};
 
-	// Handle refresh token failure - show alert and logout
+	const clearStoredAuth = async () => {
+		await Promise.all([
+			AsyncStorage.removeItem(AUTH_TOKEN_KEY),
+			AsyncStorage.removeItem(REFRESH_TOKEN_KEY),
+			AsyncStorage.removeItem(USER_KEY),
+			AsyncStorage.removeItem(SESSION_MODE_KEY),
+		]);
+		api.logout();
+		setUser(null);
+		setIsSessionOnly(false);
+	};
+
+	// Handle refresh token failure — show alert and logout
 	const handleRefreshFailed = useCallback(() => {
 		console.log('[AuthContext] Refresh token failed, showing alert');
 		Alert.alert(
@@ -65,12 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			[
 				{
 					text: 'Đăng nhập lại',
-					onPress: async () => {
-						await logout();
+					onPress: () => {
+						void clearStoredAuth();
 					},
 				},
 			],
-			{ cancelable: false }
+			{ cancelable: false },
 		);
 	}, []);
 
@@ -128,8 +140,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		loadStoredAuth();
 
-		// Set up refresh failed callback
 		api.setOnRefreshFailed(handleRefreshFailed);
+		api.setOnTokenRefreshed(async ({ accessToken, refreshToken }) => {
+			const sessionOnly = (await AsyncStorage.getItem(SESSION_MODE_KEY)) === 'true';
+			if (sessionOnly) return;
+			await AsyncStorage.setItem(AUTH_TOKEN_KEY, accessToken);
+			if (refreshToken) {
+				await AsyncStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+			}
+		});
 	}, [handleRefreshFailed]);
 
 	const loadStoredAuth = async () => {
@@ -194,17 +213,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		} finally {
 			setIsLoading(false);
 		}
-	};
-
-	const clearStoredAuth = async () => {
-		await Promise.all([
-			AsyncStorage.removeItem(AUTH_TOKEN_KEY),
-			AsyncStorage.removeItem(REFRESH_TOKEN_KEY),
-			AsyncStorage.removeItem(USER_KEY),
-			AsyncStorage.removeItem(SESSION_MODE_KEY),
-		]);
-		api.logout();
-		setUser(null);
 	};
 
 	// Legacy login (always persistent for backward compatibility)

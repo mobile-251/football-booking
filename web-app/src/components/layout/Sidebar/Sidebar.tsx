@@ -62,6 +62,7 @@ function Sidebar({
           ownerOnly: true,
         },
         { id: "Quản lý sân", icon: QLSIcon, label: "Quản lý sân" },
+        { id: "Gói combo", icon: BCIcon, label: "Gói combo" },
       ],
     },
     {

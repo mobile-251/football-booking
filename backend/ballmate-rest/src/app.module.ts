@@ -17,6 +17,11 @@ import { NotificationModule } from './notification/notification.module';
 import { MessageModule } from './message/message.module';
 import { VenueManagerModule } from './venue-manager/venue-manager.module';
 import { SepayModule } from './sepay/sepay.module';
+import { WalletModule } from './wallet/wallet.module';
+import { TopUpModule } from './top-up/top-up.module';
+import { CheckInModule } from './check-in/check-in.module';
+import { ComboModule } from './combo/combo.module';
+import { VenueServiceModule } from './venue-service/venue-service.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -41,6 +46,11 @@ import configuration from './config/configuration';
     MessageModule,
     VenueManagerModule,
     SepayModule,
+    WalletModule,
+    TopUpModule,
+    CheckInModule,
+    ComboModule,
+    VenueServiceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

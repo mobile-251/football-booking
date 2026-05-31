@@ -16,9 +16,7 @@ import { theme } from '../constants/theme';
 import {
 	Field,
 	FieldType,
-	PaymentMethod,
 	SelectedSlot,
-	PAYMENT_METHOD_LABELS,
 	FIELD_TYPE_LABELS,
 	FieldTypePricingSummary,
 	FieldSlotInfo,
@@ -26,8 +24,11 @@ import {
 	PricedItem,
 } from '../types/types';
 import { api } from '../services/api';
-import { formatPrice } from '../utils/formatters';
-import { useBadges } from '../navigation/AppNavigator';
+import { formatCoin, formatVndAsCoin, vndToCoin } from '../utils/coin';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useBadges, RootStackParamList } from '../navigation/AppNavigator';
+import QuickTopUpSheet from './QuickTopUpSheet';
 
 const { width, height } = Dimensions.get('window');
 
@@ -59,6 +60,7 @@ type ExtraCategory = 'equipment' | 'canteen';
 const extraItemKey = (category: ExtraCategory, name: string) => `${category}:${name}`;
 
 export default function BookingModal({ visible, onClose, field, onBookingSuccess }: BookingModalProps) {
+	const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 	const { refreshBadges } = useBadges();
 	const venueId = field.venueId ?? field.venue?.id;
 	const [currentStep, setCurrentStep] = useState<BookingStep>('date');
@@ -86,10 +88,13 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const [fullName, setFullName] = useState('');
 	const [phoneNumber, setPhoneNumber] = useState('');
 	const [note, setNote] = useState('');
-	const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
 	const [submitting, setSubmitting] = useState(false);
 	const [showSuccess, setShowSuccess] = useState(false);
-	const [showBankTransfer, setShowBankTransfer] = useState(false);
+	const [walletBalance, setWalletBalance] = useState<number | null>(null);
+	const [quickTopUp, setQuickTopUp] = useState<{
+		missingCoin: number;
+		holdId: number;
+	} | null>(null);
 	const [bookingId, setBookingId] = useState<number | null>(null);
 	const phoneInputRef = useRef<TextInput>(null);
 	const noteInputRef = useRef<TextInput>(null);
@@ -128,14 +133,17 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 
 	useEffect(() => {
 		if (!visible) return;
+		const u = api.currentUser;
+		if (u) {
+			setFullName(u.fullName || '');
+			setPhoneNumber(u.phoneNumber || '');
+		}
 		setCurrentStep('date');
 		setSelectedDates([]);
 		setSelectedSlots([]);
 		setCurrentDateIndex(0);
-		setPaymentMethod('CASH');
 		setSubmitting(false);
 		setShowSuccess(false);
-		setShowBankTransfer(false);
 		setBookingId(null);
 		setFullName('');
 		setPhoneNumber('');
@@ -341,11 +349,11 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		const lines: string[] = [];
 		for (const item of venueEquipment) {
 			const qty = selectedExtras[extraItemKey('equipment', item.name)] ?? 0;
-			if (qty > 0) lines.push(`${item.name} x${qty} (${formatPrice(item.price * qty)}đ)`);
+			if (qty > 0) lines.push(`${item.name} x${qty} (${formatVndAsCoin(item.price * qty)})`);
 		}
 		for (const item of venueCanteen) {
 			const qty = selectedExtras[extraItemKey('canteen', item.name)] ?? 0;
-			if (qty > 0) lines.push(`${item.name} x${qty} (${formatPrice(item.price * qty)}đ)`);
+			if (qty > 0) lines.push(`${item.name} x${qty} (${formatVndAsCoin(item.price * qty)})`);
 		}
 		if (lines.length === 0) return '';
 		return `Tiện ích thêm: ${lines.join('; ')}`;
@@ -363,9 +371,18 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		});
 	};
 
-	const getSlotsTotal = () => selectedSlots.reduce((sum, slot) => sum + slot.price, 0);
+	const getSlotsTotalVnd = () => selectedSlots.reduce((sum, slot) => sum + slot.price, 0);
 
-	const getTotalPrice = () => getSlotsTotal() + getExtrasTotal();
+	const getExtrasTotalVnd = () => getExtrasTotal();
+
+	const getTotalCoin = () => vndToCoin(getSlotsTotalVnd() + getExtrasTotalVnd());
+
+	useEffect(() => {
+		if (currentStep !== 'confirm' || !visible) return;
+		api.getWalletMe()
+			.then((w) => setWalletBalance(w.balance))
+			.catch(() => setWalletBalance(null));
+	}, [currentStep, visible]);
 
 	const getTotalHours = () => {
 		return selectedSlots.length;
@@ -380,48 +397,52 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setSubmitting(true);
 		try {
 			const currentUser = api.currentUser;
-			if (!currentUser || !currentUser.player) {
+			if (!currentUser?.player) {
 				alert('Vui lòng đăng nhập lại để thực hiện đặt sân');
 				return;
 			}
-			console.log("Select date:", selectedDates)
-			console.log("Select slot:", selectedSlots)
 			const extrasNote = buildExtrasNote();
 			const extrasTotal = getExtrasTotal();
 			const combinedNote = [note.trim(), extrasNote].filter(Boolean).join('\n') || undefined;
+			const extrasJson =
+				Object.keys(selectedExtras).length > 0
+					? { selectedExtras, equipment: venueEquipment, canteen: venueCanteen }
+					: undefined;
 
 			for (let i = 0; i < selectedSlots.length; i++) {
 				const slot = selectedSlots[i];
 				const startDateTime = new Date(slot.startTime);
 				const endDateTime = new Date(slot.endTime);
-				const bookingTotal = slot.price + (i === 0 ? extrasTotal : 0);
 
-				const booking = await api.createBooking({
-					fieldId: slot.fieldId,
-					playerId: currentUser.player.id,
-					customerName: fullName,
-					customerPhone: phoneNumber,
-					startTime: startDateTime.toISOString(),
-					endTime: endDateTime.toISOString(),
-					totalPrice: bookingTotal,
-					note: i === 0 ? combinedNote : note.trim() || undefined,
-				});
-				setBookingId(booking.id);
-
-				await api.createPayment({
-					bookingId: booking.id,
-					amount: bookingTotal,
-					method: paymentMethod,
-				});
+				try {
+					const booking = await api.confirmCoinBooking({
+						fieldId: slot.fieldId,
+						playerId: currentUser.player.id,
+						customerName: fullName,
+						customerPhone: phoneNumber,
+						startTime: startDateTime.toISOString(),
+						endTime: endDateTime.toISOString(),
+						note: i === 0 ? combinedNote : note.trim() || undefined,
+						extrasJson: i === 0 ? extrasJson : undefined,
+					});
+					setBookingId(booking.id);
+				} catch (err: any) {
+					if (err?.response?.status === 402) {
+						const body = err.response.data;
+						setQuickTopUp({
+							missingCoin: body.missingCoin ?? 0,
+							holdId: body.holdId,
+						});
+						return;
+					}
+					throw err;
+				}
 			}
 
 			refreshBadges();
-
-			if (paymentMethod === 'BANK_TRANSFER') {
-				setShowBankTransfer(true);
-			} else {
-				setShowSuccess(true);
-			}
+			const w = await api.getWalletMe();
+			setWalletBalance(w.balance);
+			setShowSuccess(true);
 		} catch (error) {
 			console.error('Booking failed:', error);
 			alert('Đặt sân thất bại. Vui lòng thử lại.');
@@ -646,7 +667,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 									<View style={styles.fieldTypePriceBlock}>
 										<Text style={styles.fieldTypePriceLabel}>Chỉ từ</Text>
 										<Text style={styles.fieldTypePriceValue}>
-											{formatPrice(summary.minPrice)}đ<Text style={styles.fieldTypePriceUnit}> / giờ</Text>
+											{formatVndAsCoin(summary.minPrice)}<Text style={styles.fieldTypePriceUnit}> / giờ</Text>
 										</Text>
 									</View>
 								</TouchableOpacity>
@@ -786,7 +807,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 														!slot.isAvailable && styles.timeSlotTextBooked,
 													]}
 												>
-													{slot.price / 1000}k
+													{vndToCoin(slot.price)}
 												</Text>
 											</TouchableOpacity>
 										);
@@ -833,7 +854,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 										<Text style={styles.selectedSlotTime}>
 											{formatSlotTime(slot.startTime)} - {formatSlotTime(slot.endTime)}
 										</Text>
-										<Text style={styles.selectedSlotPrice}>{formatPrice(slot.price)}đ</Text>
+										<Text style={styles.selectedSlotPrice}>{formatVndAsCoin(slot.price)}</Text>
 										<TouchableOpacity onPress={() => setSelectedSlots((prev) => prev.filter((_, i) => i !== index))}>
 											<Ionicons name='trash-outline' size={16} color={theme.colors.accent} />
 										</TouchableOpacity>
@@ -883,20 +904,20 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 								</Text>
 							</View>
 						</View>
-						<Text style={styles.summaryPrice}>{formatPrice(slot.price)}đ</Text>
+						<Text style={styles.summaryPrice}>{formatVndAsCoin(slot.price)}</Text>
 					</View>
 				))}
 				{getExtrasTotal() > 0 && (
 					<View style={styles.summaryItem}>
 						<Text style={styles.summaryDate}>Tiện ích thêm</Text>
-						<Text style={styles.summaryPrice}>{formatPrice(getExtrasTotal())}đ</Text>
+						<Text style={styles.summaryPrice}>{formatVndAsCoin(getExtrasTotal())}</Text>
 					</View>
 				)}
 				<View style={styles.summaryTotal}>
 					<Text style={styles.summaryTotalLabel}>
 						Tổng số giờ: <Text style={styles.summaryTotalValue}>{getTotalHours()} giờ</Text>
 					</Text>
-					<Text style={styles.summaryTotalPrice}>{formatPrice(getTotalPrice())}đ</Text>
+					<Text style={styles.summaryTotalPrice}>{formatCoin(getTotalCoin())}</Text>
 				</View>
 			</View>
 
@@ -912,7 +933,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 							<View key={`eq-${item.name}`} style={styles.extraRow}>
 								<View style={styles.extraInfo}>
 									<Text style={styles.extraName}>{item.name}</Text>
-									<Text style={styles.extraPrice}>{formatPrice(item.price)}đ</Text>
+									<Text style={styles.extraPrice}>{formatVndAsCoin(item.price)}</Text>
 								</View>
 								<View style={styles.extraQtyControls}>
 									<TouchableOpacity
@@ -942,7 +963,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 							<View key={`ct-${item.name}`} style={styles.extraRow}>
 								<View style={styles.extraInfo}>
 									<Text style={styles.extraName}>{item.name}</Text>
-									<Text style={styles.extraPrice}>{formatPrice(item.price)}đ</Text>
+									<Text style={styles.extraPrice}>{formatVndAsCoin(item.price)}</Text>
 								</View>
 								<View style={styles.extraQtyControls}>
 									<TouchableOpacity
@@ -1016,101 +1037,39 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				</View>
 			</View>
 
-			{/* Payment Methods */}
-			<Text style={styles.sectionTitle}>Phương thức thanh toán</Text>
-			{(['CASH', 'MOMO', 'BANK_TRANSFER'] as PaymentMethod[]).map((method) => (
+			<Text style={styles.sectionTitle}>Thanh toán bằng coin</Text>
+			<View style={[styles.paymentOption, styles.paymentOptionSelected]}>
+				<View style={styles.paymentOptionLeft}>
+					<View style={[styles.paymentIcon, { backgroundColor: '#16a34a' }]}>
+						<Ionicons name='wallet' size={20} color={theme.colors.white} />
+					</View>
+					<View>
+						<Text style={styles.paymentLabel}>
+							Số dư ví:{' '}
+							{walletBalance != null ? formatCoin(walletBalance) : '...'}
+						</Text>
+						<Text style={styles.paymentDescription}>
+							Tổng đặt: {formatCoin(getTotalCoin())}
+							{walletBalance != null && walletBalance < getTotalCoin()
+								? ' — sẽ mở nạp coin khi xác nhận'
+								: ''}
+						</Text>
+					</View>
+				</View>
+			</View>
+
+			{walletBalance != null && walletBalance < getTotalCoin() && (
 				<TouchableOpacity
-					key={method}
-					style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected]}
-					onPress={() => setPaymentMethod(method)}
+					style={styles.topUpLink}
+					onPress={() => navigation.navigate('TopUp')}
 				>
-					<View style={styles.paymentOptionLeft}>
-						<View
-							style={[
-								styles.paymentIcon,
-								method === 'CASH' && { backgroundColor: '#4ade80' },
-								method === 'MOMO' && { backgroundColor: '#ec4899' },
-								method === 'BANK_TRANSFER' && { backgroundColor: '#3b82f6' },
-							]}
-						>
-							<Ionicons
-								name={method === 'CASH' ? 'cash' : method === 'MOMO' ? 'wallet' : 'card'}
-								size={20}
-								color={theme.colors.white}
-							/>
-						</View>
-						<View>
-							<Text style={styles.paymentLabel}>{PAYMENT_METHOD_LABELS[method]}</Text>
-							<Text style={styles.paymentDescription}>
-								{method === 'CASH' && 'Thanh toán tiền mặt khi đến sân'}
-								{method === 'MOMO' && 'Thanh toán qua ví điện tử MoMo'}
-								{method === 'BANK_TRANSFER' && 'Chuyển khoản qua tài khoản ngân hàng'}
-							</Text>
-						</View>
-					</View>
-					<View style={[styles.radioOuter, paymentMethod === method && styles.radioOuterSelected]}>
-						{paymentMethod === method && <View style={styles.radioInner} />}
-					</View>
+					<Ionicons name='add-circle' size={18} color={theme.colors.primary} />
+					<Text style={styles.topUpLinkText}>Nạp thêm coin</Text>
 				</TouchableOpacity>
-			))}
+			)}
 
 			<View style={{ height: 100 }} />
 			</KeyboardAwareScrollView>
-	);
-
-	const renderBankTransfer = () => (
-		<View style={styles.bankTransferContainer}>
-			<View style={styles.stepHeader}>
-				<View style={styles.qrPlaceholder}>
-					<Ionicons name='phone-portrait-outline' size={48} color={theme.colors.primary} />
-					<Text style={styles.qrLabel}>QR Code</Text>
-				</View>
-			</View>
-
-			<View style={styles.bankInfo}>
-				<View style={styles.bankInfoRow}>
-					<Text style={styles.bankInfoLabel}>Số điện thoại</Text>
-					<View style={styles.bankInfoValue}>
-						<Text style={styles.bankInfoText}>0123456789</Text>
-						<TouchableOpacity>
-							<Ionicons name='copy-outline' size={20} color={theme.colors.primary} />
-						</TouchableOpacity>
-					</View>
-				</View>
-				<View style={styles.bankInfoRow}>
-					<Text style={styles.bankInfoLabel}>Tên tài khoản</Text>
-					<Text style={styles.bankInfoTextBold}>Sân Bóng Đá</Text>
-				</View>
-				<View style={styles.bankInfoRow}>
-					<Text style={styles.bankInfoLabel}>Nội dung chuyển khoản</Text>
-					<Text style={styles.bankInfoTextBold}>BOOKING{bookingId}</Text>
-				</View>
-				<View style={styles.amountBox}>
-					<Text style={styles.amountLabel}>Số tiền</Text>
-					<Text style={styles.amountValue}>{formatPrice(getTotalPrice())}đ</Text>
-				</View>
-			</View>
-
-			<View style={styles.warningBox}>
-				<Ionicons name='warning' size={20} color='#f59e0b' />
-				<Text style={styles.warningText}>Vui lòng chuyển khoản đúng nội dung để xác nhận đặt sân tự động</Text>
-			</View>
-
-			<TouchableOpacity style={styles.backPaymentLink} onPress={() => setShowBankTransfer(false)}>
-				<Ionicons name='arrow-back' size={16} color={theme.colors.primary} />
-				<Text style={styles.backPaymentText}>Chọn phương thức khác</Text>
-			</TouchableOpacity>
-
-			<TouchableOpacity
-				style={styles.confirmPaymentBtn}
-				onPress={() => {
-					setShowBankTransfer(false);
-					setShowSuccess(true);
-				}}
-			>
-				<Text style={styles.confirmPaymentBtnText}>Tôi đã chuyển khoản</Text>
-			</TouchableOpacity>
-		</View>
 	);
 
 	const renderSuccess = () => (
@@ -1227,8 +1186,6 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 						{/* Content */}
 						{showSuccess
 							? renderSuccess()
-							: showBankTransfer
-							? renderBankTransfer()
 							: currentStep === 'date'
 							? renderDateStep()
 							: currentStep === 'fieldType'
@@ -1238,7 +1195,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 							: renderConfirmStep()}
 
 						{/* Footer Buttons */}
-						{!showSuccess && !showBankTransfer && (
+						{!showSuccess && (
 							<View style={styles.footer}>
 								{currentStepIndex > 0 && (
 									<TouchableOpacity style={styles.backBtn} onPress={handleBack}>
@@ -1266,6 +1223,18 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					</View>
 				</View>
 			</View>
+			{quickTopUp && (
+				<QuickTopUpSheet
+					visible
+					missingCoin={quickTopUp.missingCoin}
+					holdId={quickTopUp.holdId}
+					onClose={() => setQuickTopUp(null)}
+					onSuccess={() => {
+						setQuickTopUp(null);
+						handleSubmitBooking();
+					}}
+				/>
+			)}
 		</Modal>
 	);
 }
@@ -1880,6 +1849,22 @@ const styles = StyleSheet.create({
 	paymentDescription: {
 		fontSize: 12,
 		color: theme.colors.foregroundMuted,
+	},
+	topUpLink: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		gap: 6,
+		marginHorizontal: theme.spacing.lg,
+		marginBottom: 8,
+		paddingVertical: 10,
+		borderRadius: 10,
+		backgroundColor: theme.colors.primary + '12',
+	},
+	topUpLinkText: {
+		color: theme.colors.primary,
+		fontWeight: '600',
+		fontSize: 14,
 	},
 	footer: {
 		flexDirection: 'row',

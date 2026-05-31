@@ -60,6 +60,11 @@ model Player {
   reviews       Review[]
   favorites     Favorite[]
   conversations Conversation[]
+  wallet        Wallet?
+  checkIns      CheckIn[]
+  topUpOrders   TopUpOrder[]
+  playerCombos  PlayerCombo[]
+  bookingHolds  BookingHold[]
   user          User           @relation(fields: [userId], references: [id])
 
   @@map("players")
@@ -121,6 +126,8 @@ model Venue {
   owner         FieldOwner      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   fields        Field[]
   venueManagers VenueManager[]
+  venueServices VenueService[]
+  comboPackages ComboPackage[]
 
   @@map("venues")
 }
@@ -223,16 +230,20 @@ model Booking {
   startTime       DateTime
   endTime         DateTime
   totalPrice      Float
+  totalCoin       Decimal?      @db.Decimal(12, 2)
   status          BookingStatus @default(PENDING)
   note            String?
+  extrasJson      Json?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   // Relations
-  field     Field    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  player    Player?  @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  createdBy User?    @relation("BookingCreatedBy", fields: [createdByUserId], references: [id])
-  payment   Payment?
+  field         Field              @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  player        Player?            @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  createdBy     User?              @relation("BookingCreatedBy", fields: [createdByUserId], references: [id])
+  payment       Payment?
+  bookingServices BookingService[]
+  comboUsage    BookingComboUsage?
 
   @@index([fieldId, startTime, endTime]) // Index để kiểm tra trùng lịch nhanh
   @@index([bookingCode]) // Index cho tra cứu mã đặt sân
@@ -414,4 +425,266 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+// ============================================
+// COIN WALLET & TOP-UP
+// ============================================
+
+enum CoinTransactionType {
+  TOP_UP
+  TOP_UP_BONUS
+  BOOKING_SPEND
+  SERVICE_SPEND
+  COMBO_PURCHASE
+  COMBO_REFUND
+  CHECKIN_REWARD
+  REFUND
+  ADMIN_ADJUST
+}
+
+enum TopUpOrderStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+  REFUNDED
+}
+
+enum TopUpPurpose {
+  WALLET_TOPUP
+  BOOKING_JIT
+  COMBO_JIT
+}
+
+model Wallet {
+  id          Int      @id @default(autoincrement())
+  playerId    Int      @unique
+  coinBalance Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt   DateTime @updatedAt
+
+  player       Player            @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  transactions CoinTransaction[]
+
+  @@map("wallets")
+}
+
+model CoinTransaction {
+  id            Int                 @id @default(autoincrement())
+  walletId      Int
+  type          CoinTransactionType
+  amount        Decimal             @db.Decimal(12, 2)
+  balanceAfter  Decimal             @db.Decimal(12, 2)
+  referenceType String?
+  referenceId   Int?
+  description   String?
+  createdAt     DateTime            @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, createdAt])
+  @@map("coin_transactions")
+}
+
+model TopUpPackage {
+  id        Int      @id @default(autoincrement())
+  name      String
+  priceVnd  Int
+  baseCoin  Decimal  @db.Decimal(12, 2)
+  bonusCoin Decimal  @default(0) @db.Decimal(12, 2)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders TopUpOrder[]
+
+  @@map("top_up_packages")
+}
+
+model TopUpOrder {
+  id            Int              @id @default(autoincrement())
+  playerId      Int
+  packageId     Int?
+  paymentCode   String           @unique
+  priceVnd      Int
+  baseCoin      Decimal          @db.Decimal(12, 2)
+  bonusCoin     Decimal          @default(0) @db.Decimal(12, 2)
+  expectedCoin  Decimal          @db.Decimal(12, 2)
+  purpose       TopUpPurpose     @default(WALLET_TOPUP)
+  holdId        Int?
+  comboPackageId Int?
+  status        TopUpOrderStatus @default(PENDING)
+  sepayQrUrl    String?
+  sepayMeta     Json?
+  expiresAt     DateTime
+  paidAt        DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  player  Player        @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  package TopUpPackage? @relation(fields: [packageId], references: [id])
+  hold    BookingHold?  @relation(fields: [holdId], references: [id])
+
+  @@index([playerId, status])
+  @@map("top_up_orders")
+}
+
+model BookingHold {
+  id           Int      @id @default(autoincrement())
+  fieldId      Int
+  playerId     Int
+  startTime    DateTime
+  endTime      DateTime
+  totalCoin    Decimal  @db.Decimal(12, 2)
+  payload      Json
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  player      Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  topUpOrders TopUpOrder[]
+
+  @@index([fieldId, startTime, endTime])
+  @@map("booking_holds")
+}
+
+// ============================================
+// CHECK-IN
+// ============================================
+
+model CheckIn {
+  id           Int      @id @default(autoincrement())
+  playerId     Int
+  date         DateTime @db.Date
+  streakCount  Int
+  coinRewarded Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, date])
+  @@map("check_ins")
+}
+
+model CheckInRewardConfig {
+  id           Int     @id @default(autoincrement())
+  streakDay    Int     @unique
+  coinReward   Decimal @db.Decimal(12, 2)
+  isMilestone  Boolean @default(false)
+  label        String?
+
+  @@map("check_in_reward_configs")
+}
+
+// ============================================
+// VENUE SERVICES
+// ============================================
+
+enum VenueServiceCategory {
+  REFEREE
+  EQUIPMENT
+  FOOD_DRINK
+  OTHER
+}
+
+enum VenueServiceUnit {
+  PER_MATCH
+  PER_HOUR
+  PER_ITEM
+}
+
+model VenueService {
+  id          Int                  @id @default(autoincrement())
+  venueId     Int
+  name        String
+  description String?
+  category    VenueServiceCategory @default(OTHER)
+  priceCoin   Decimal              @db.Decimal(12, 2)
+  unit        VenueServiceUnit     @default(PER_MATCH)
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  venue            Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  bookingServices  BookingService[]
+
+  @@index([venueId, isActive])
+  @@map("venue_services")
+}
+
+model BookingService {
+  id                 Int     @id @default(autoincrement())
+  bookingId          Int
+  venueServiceId     Int
+  quantity           Int     @default(1)
+  priceCoinAtBooking Decimal @db.Decimal(12, 2)
+  totalCoin          Decimal @db.Decimal(12, 2)
+
+  booking      Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  venueService VenueService @relation(fields: [venueServiceId], references: [id])
+
+  @@map("booking_services")
+}
+
+// ============================================
+// COMBO MEMBERSHIP
+// ============================================
+
+enum PlayerComboStatus {
+  ACTIVE
+  EXPIRED
+  EXHAUSTED
+  REFUNDED
+}
+
+model ComboPackage {
+  id           Int       @id @default(autoincrement())
+  venueId      Int
+  fieldType    FieldType
+  name         String
+  description  String?
+  matchCount   Int
+  priceCoin    Decimal   @db.Decimal(12, 2)
+  validityDays Int
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  venue        Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  playerCombos PlayerCombo[]
+
+  @@index([venueId, fieldType, isActive])
+  @@map("combo_packages")
+}
+
+model PlayerCombo {
+  id               Int               @id @default(autoincrement())
+  playerId         Int
+  comboPackageId   Int
+  purchasedAt      DateTime          @default(now())
+  expiresAt        DateTime
+  matchesTotal     Int
+  matchesRemaining Int
+  status           PlayerComboStatus @default(ACTIVE)
+
+  player       Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  comboPackage ComboPackage        @relation(fields: [comboPackageId], references: [id])
+  usages       BookingComboUsage[]
+
+  @@index([playerId, status])
+  @@map("player_combos")
+}
+
+model BookingComboUsage {
+  id              Int      @id @default(autoincrement())
+  bookingId       Int      @unique
+  playerComboId   Int
+  matchesConsumed Int      @default(1)
+  consumedAt      DateTime @default(now())
+
+  booking     Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  playerCombo PlayerCombo @relation(fields: [playerComboId], references: [id])
+
+  @@map("booking_combo_usages")
 }

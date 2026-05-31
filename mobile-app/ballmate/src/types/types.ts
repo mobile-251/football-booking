@@ -97,6 +97,7 @@ export interface Booking {
     startTime: string;
     endTime: string;
     totalPrice: number;
+    totalCoin?: number;
     status: BookingStatus;
     note?: string;
     createdAt: string;

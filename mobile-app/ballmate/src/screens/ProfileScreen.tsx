@@ -39,6 +39,30 @@ const MENU_ITEMS: MenuItem[] = [
         route: 'PersonalInfo',
     },
     {
+        icon: 'add-circle-outline',
+        iconColor: '#16a34a',
+        iconBg: '#dcfce7',
+        title: 'Nạp coin',
+        subtitle: 'Chọn gói nạp — quét QR SePay',
+        route: 'TopUp',
+    },
+    {
+        icon: 'wallet-outline',
+        iconColor: theme.colors.primary,
+        iconBg: theme.colors.primary + '20',
+        title: 'Ví coin',
+        subtitle: 'Số dư & lịch sử giao dịch',
+        route: 'Wallet',
+    },
+    {
+        icon: 'ticket-outline',
+        iconColor: '#7c3aed',
+        iconBg: '#ede9fe',
+        title: 'Gói combo của tôi',
+        subtitle: 'Lượt đặt sân còn lại — mua thêm tại trang sân',
+        route: 'MyCombos',
+    },
+    {
         icon: 'receipt-outline',
         iconColor: theme.colors.primary,
         iconBg: theme.colors.primary + '20',
@@ -104,12 +128,19 @@ export default function ProfileScreen() {
             if (!silent) setStatsLoading(true);
             // For now, we'll use placeholder stats since there's no dedicated stats endpoint
             // In a real app, this would fetch from /api/users/me/stats
-            const bookings = await api.getBookings();
-            const totalSpent = bookings.reduce((sum: number, b: any) => sum + (b.totalPrice || 0), 0);
+            const [bookings, wallet] = await Promise.all([
+                api.getBookings(),
+                api.getWalletMe().catch(() => ({ balance: 0 })),
+            ]);
+            const totalCoinSpent = bookings.reduce(
+                (sum: number, b: any) =>
+                    sum + (b.totalCoin != null ? Number(b.totalCoin) : Math.ceil((b.totalPrice || 0) / 1000)),
+                0,
+            );
             setStats({
                 bookingCount: bookings.length,
-                totalSpent: totalSpent,
-                points: Math.floor(totalSpent / 10000), // 1 point per 10k spent
+                totalSpent: totalCoinSpent,
+                points: wallet.balance,
             });
         } catch (error) {
             console.error('Failed to load user stats:', error);
@@ -133,10 +164,6 @@ export default function ProfileScreen() {
     const handleLogout = async () => {
         try {
             await logout();
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-            });
         } catch (error) {
             console.error('Failed to logout:', error);
         }
@@ -242,7 +269,7 @@ export default function ProfileScreen() {
                                     </View>
                                     {stats.points > 0 && (
                                         <View style={styles.pointsBadge}>
-                                            <Text style={styles.pointsText}>{stats.points} điểm</Text>
+                                            <Text style={styles.pointsText}>{stats.points} coin</Text>
                                         </View>
                                     )}
                                 </View>
@@ -266,18 +293,18 @@ export default function ProfileScreen() {
                         <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
                             <Ionicons name="wallet-outline" size={24} color="#f59e0b" />
                         </View>
-                        <Text style={styles.statLabel}>Chi tiêu</Text>
+                        <Text style={styles.statLabel}>Đã chi (coin)</Text>
                         <Text style={styles.statValue}>
-                            {statsLoading ? '-' : formatPrice(stats.totalSpent)}
+                            {statsLoading ? '-' : `${stats.totalSpent} coin`}
                         </Text>
                     </View>
                     <View style={styles.statCard}>
                         <View style={[styles.statIcon, { backgroundColor: '#fee2e2' }]}>
                             <Ionicons name="gift-outline" size={24} color="#ef4444" />
                         </View>
-                        <Text style={styles.statLabel}>Điểm</Text>
+                        <Text style={styles.statLabel}>Số dư ví</Text>
                         <Text style={styles.statValue}>
-                            {statsLoading ? '-' : stats.points}
+                            {statsLoading ? '-' : `${stats.points} coin`}
                         </Text>
                     </View>
                 </View>

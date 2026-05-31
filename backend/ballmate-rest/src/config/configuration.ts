@@ -45,6 +45,18 @@ export default () => ({
         /** Mặc định tắt — đồng bộ CK qua poll User API (GET payment-status). */
         enableWebhook: process.env.SEPAY_ENABLE_WEBHOOK === 'true',
     },
+
+    coin: {
+        vndRate: parseInt(process.env.COIN_VND_RATE ?? '1000', 10),
+        bookingHoldTtlMinutes: parseInt(
+            process.env.BOOKING_HOLD_TTL_MINUTES ?? '15',
+            10,
+        ),
+        topUpOrderTtlMinutes: parseInt(
+            process.env.TOP_UP_ORDER_TTL_MINUTES ?? '15',
+            10,
+        ),
+    },
 });
 
 // Type definitions for configuration
@@ -74,5 +86,10 @@ export interface AppConfiguration {
         appPublicUrl: string;
         userApiToken: string;
         enableWebhook: boolean;
+    };
+    coin: {
+        vndRate: number;
+        bookingHoldTtlMinutes: number;
+        topUpOrderTtlMinutes: number;
     };
 }

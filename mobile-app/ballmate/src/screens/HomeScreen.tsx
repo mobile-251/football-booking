@@ -22,7 +22,7 @@ import { api } from '../services/api';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import VenueCard from '../components/VenueCard';
 import NotificationBell from '../components/NotificationBell';
-import { formatPrice } from '../utils/formatters';
+import { formatCoin, formatVndAsCoin } from '../utils/coin';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import * as Location from 'expo-location';
 
@@ -55,8 +55,18 @@ export default function HomeScreen() {
 	const [stats, setStats] = useState<{ total: number; minPrice: number }>({ total: 0, minPrice: 0 });
 	const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 	const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
+	const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
 	const hasLoadedRef = useRef(false);
+
+	const loadWallet = useCallback(async () => {
+		try {
+			const w = await api.getWalletMe();
+			setWalletBalance(w.balance);
+		} catch {
+			setWalletBalance(null);
+		}
+	}, []);
 
 	useEffect(() => {
 		filterVenues();
@@ -82,7 +92,14 @@ export default function HomeScreen() {
 		}
 	}, []);
 
-	useRefreshOnFocus(() => loadInitialData(hasLoadedRef.current));
+	useRefreshOnFocus(() => {
+		loadInitialData(hasLoadedRef.current);
+		loadWallet();
+	}, true);
+
+	useEffect(() => {
+		loadWallet();
+	}, [loadWallet]);
 
 	// const loadFavorites = async () => {
 	//     try {
@@ -253,7 +270,19 @@ export default function HomeScreen() {
 								<Ionicons name='chevron-down' size={16} color={theme.colors.white} />
 							</View>
 						</View>
-						<NotificationBell color={theme.colors.white} style={styles.notificationBtn} />
+						<View style={styles.headerActions}>
+							<TouchableOpacity
+								style={styles.walletChip}
+								onPress={() => navigation.navigate('TopUp')}
+								onLongPress={() => navigation.navigate('Wallet')}
+							>
+								<Ionicons name='add-circle' size={16} color={theme.colors.primary} />
+								<Text style={styles.walletChipText}>
+									{walletBalance != null ? formatCoin(walletBalance) : 'Nạp coin'}
+								</Text>
+							</TouchableOpacity>
+							<NotificationBell color={theme.colors.white} style={styles.notificationBtn} />
+						</View>
 					</View>
 
 					{/* Logo */}
@@ -324,6 +353,36 @@ export default function HomeScreen() {
 
 				{/* Content */}
 				<View style={styles.content}>
+					<View style={styles.quickActionsRow}>
+						<TouchableOpacity
+							style={styles.quickActionCard}
+							onPress={() => navigation.navigate('TopUp')}
+						>
+							<View style={[styles.quickActionIcon, { backgroundColor: '#dcfce7' }]}>
+								<Ionicons name='add-circle' size={22} color='#16a34a' />
+							</View>
+							<Text style={styles.quickActionLabel}>Nạp coin</Text>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={styles.quickActionCard}
+							onPress={() => navigation.navigate('Wallet')}
+						>
+							<View style={[styles.quickActionIcon, { backgroundColor: theme.colors.primary + '20' }]}>
+								<Ionicons name='wallet' size={22} color={theme.colors.primary} />
+							</View>
+							<Text style={styles.quickActionLabel}>Ví coin</Text>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={styles.quickActionCard}
+							onPress={() => navigation.navigate('MyCombos')}
+						>
+							<View style={[styles.quickActionIcon, { backgroundColor: '#ede9fe' }]}>
+								<Ionicons name='ticket' size={22} color='#7c3aed' />
+							</View>
+							<Text style={styles.quickActionLabel}>Gói combo</Text>
+						</TouchableOpacity>
+					</View>
+
 					{/* Quick Filters */}
 					<View style={styles.section}>
 						<Text style={styles.sectionTitle}>Bộ lọc nhanh</Text>
@@ -354,7 +413,7 @@ export default function HomeScreen() {
 						</View>
 						<View style={styles.statsRight}>
 							<Text style={styles.priceRange}>
-								{stats.minPrice > 0 ? `Từ ${formatPrice(stats.minPrice)}đ/giờ` : 'Đang cập nhật'}
+								{stats.minPrice > 0 ? `Từ ${formatVndAsCoin(stats.minPrice)}/giờ` : 'Đang cập nhật'}
 							</Text>
 							<Text style={styles.priceLabel}>Giá thấp nhất</Text>
 						</View>
@@ -457,6 +516,25 @@ const styles = StyleSheet.create({
 		color: theme.colors.white,
 		fontWeight: '600',
 	},
+	headerActions: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	walletChip: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 4,
+		backgroundColor: theme.colors.white,
+		paddingHorizontal: 10,
+		paddingVertical: 6,
+		borderRadius: 20,
+	},
+	walletChipText: {
+		fontSize: 12,
+		fontWeight: '700',
+		color: theme.colors.primary,
+	},
 	notificationBtn: {
 		position: 'relative',
 		padding: 8,
@@ -476,6 +554,25 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		color: 'rgba(255,255,255,0.8)',
 		marginBottom: theme.spacing.lg,
+	},
+	checkInCard: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: 'rgba(255,255,255,0.15)',
+		borderRadius: 12,
+		padding: 12,
+		marginBottom: theme.spacing.md,
+	},
+	checkInTitle: { color: theme.colors.white, fontWeight: '700', fontSize: 14 },
+	checkInSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
+	checkInBtn: {
+		color: theme.colors.white,
+		fontWeight: '700',
+		backgroundColor: theme.colors.accent,
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		borderRadius: 8,
+		overflow: 'hidden',
 	},
 	searchWrapper: {
 		position: 'relative',
@@ -517,6 +614,34 @@ const styles = StyleSheet.create({
 		paddingBottom: 100,
 		position: 'relative',
 		zIndex: 1,
+	},
+	quickActionsRow: {
+		flexDirection: 'row',
+		gap: 10,
+		marginBottom: 20,
+	},
+	quickActionCard: {
+		flex: 1,
+		backgroundColor: theme.colors.white,
+		borderRadius: theme.borderRadius.lg,
+		paddingVertical: 14,
+		paddingHorizontal: 8,
+		alignItems: 'center',
+		...theme.shadows.soft,
+	},
+	quickActionIcon: {
+		width: 44,
+		height: 44,
+		borderRadius: 12,
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginBottom: 8,
+	},
+	quickActionLabel: {
+		fontSize: 12,
+		fontWeight: '600',
+		color: theme.colors.foreground,
+		textAlign: 'center',
 	},
 	section: {
 		marginBottom: theme.spacing.xl,

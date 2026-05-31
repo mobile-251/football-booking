@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { Booking, BookingStatus, PAYMENT_METHOD_LABELS, PaymentMethod } from '../types/types';
 import { api } from '../services/api';
-import { formatPrice } from '../utils/formatters';
+import { formatCoin, vndToCoin } from '../utils/coin';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 
 type TabType = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
@@ -287,7 +287,13 @@ export default function ScheduleScreen() {
 				<View style={styles.cardFooter}>
 					<View>
 						<Text style={styles.priceLabel}>Tổng tiền</Text>
-						<Text style={styles.price}>{formatPrice(item.totalPrice)}đ</Text>
+						<Text style={styles.price}>
+							{formatCoin(
+								item.totalCoin != null
+									? Number(item.totalCoin)
+									: vndToCoin(item.totalPrice),
+							)}
+						</Text>
 					</View>
 					<View style={styles.actionButtons}>
 						<TouchableOpacity style={styles.detailBtn} onPress={() => openDetailModal(item)}>
@@ -396,7 +402,13 @@ export default function ScheduleScreen() {
 							{/* Total */}
 							<View style={styles.totalBox}>
 								<Text style={styles.totalLabel}>Tổng tiền thanh toán</Text>
-								<Text style={styles.totalValue}>{formatPrice(selectedBooking.totalPrice)}đ</Text>
+								<Text style={styles.totalValue}>
+									{formatCoin(
+										selectedBooking.totalCoin != null
+											? Number(selectedBooking.totalCoin)
+											: vndToCoin(selectedBooking.totalPrice),
+									)}
+								</Text>
 							</View>
 						</ScrollView>
 

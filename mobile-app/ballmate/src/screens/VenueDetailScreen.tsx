@@ -15,7 +15,8 @@ import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { VenueDetail, FIELD_TYPE_LABELS, Review, FieldWithPricing, Field } from '../types/types';
 import { api } from '../services/api';
-import { formatPrice } from '../utils/formatters';
+import { formatCoin, formatVndAsCoin, vndToCoin } from '../utils/coin';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { splitPolicyLines } from '../utils/policyText';
 import { getAmenityLabels } from '../utils/venueDisplay';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
@@ -31,7 +32,7 @@ type TabType = 'images' | 'reviews' | 'terms';
 
 export default function VenueDetailScreen() {
 	const route = useRoute<VenueDetailRouteProp>();
-	const navigation = useNavigation();
+	const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 	const { isAuthenticated } = useAuth();
 	const { venueId } = route.params;
 	const [venue, setVenue] = useState<VenueDetail | null>(null);
@@ -48,12 +49,24 @@ export default function VenueDetailScreen() {
 	const [showBookingModal, setShowBookingModal] = useState(false);
 	const [isFavorite, setIsFavorite] = useState(false);
 	const [favoriteLoading, setFavoriteLoading] = useState(false);
+	const [comboPackages, setComboPackages] = useState<
+		{ id: number; name: string; matchCount: number; priceCoin: number }[]
+	>([]);
 
 	const loadVenue = async (silent = false) => {
 		try {
 			if (!silent) setLoading(true);
-			const data = await api.getVenue(venueId);
+			const [data, combos] = await Promise.all([
+				api.getVenue(venueId),
+				api.getComboPackages(venueId).catch(() => []),
+			]);
 			setVenue(data);
+			setComboPackages(
+				(combos as { id: number; name: string; matchCount: number; priceCoin: number }[]).slice(
+					0,
+					3,
+				),
+			);
 		} catch (error) {
 			console.error('Failed to load venue:', error);
 		} finally {
@@ -119,8 +132,8 @@ export default function VenueDetailScreen() {
 								<View style={[styles.tableCell, styles.tableCellFirst]}>
 									<Ionicons name='time-outline' size={16} color={theme.colors.primary} />
 								</View>
-								<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6</Text>
-								<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN</Text>
+								<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6 (coin)</Text>
+								<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN (coin)</Text>
 							</View>
 
 							{/* Rows */}
@@ -128,10 +141,10 @@ export default function VenueDetailScreen() {
 								<View key={index} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
 									<Text style={[styles.tableTime, styles.tableCellFirst]}>{time}</Text>
 									<Text style={styles.tableCellPrice}>
-										{prices.weekday ? `${prices.weekday / 1000}k` : '-'}
+										{prices.weekday ? `${vndToCoin(prices.weekday)}` : '-'}
 									</Text>
 									<Text style={styles.tableCellPrice}>
-										{prices.weekend ? `${prices.weekend / 1000}k` : '-'}
+										{prices.weekend ? `${vndToCoin(prices.weekend)}` : '-'}
 									</Text>
 								</View>
 							))}
@@ -142,6 +155,68 @@ export default function VenueDetailScreen() {
 		);
 	};
 
+
+	const renderMembershipSection = () => (
+		<View style={styles.membershipCard}>
+			<View style={styles.membershipHeader}>
+				<Ionicons name='sparkles' size={22} color='#7c3aed' />
+				<Text style={styles.membershipTitle}>Coin & gói combo</Text>
+			</View>
+			<Text style={styles.membershipSubtitle}>
+				Nạp coin để đặt sân nhanh, hoặc mua gói combo tiết kiệm tại sân này.
+			</Text>
+
+			<TouchableOpacity
+				style={styles.membershipAction}
+				onPress={() => navigation.navigate('TopUp')}
+				activeOpacity={0.85}
+			>
+				<View style={[styles.actionIconWrap, { backgroundColor: '#dcfce7' }]}>
+					<Ionicons name='add-circle' size={24} color='#16a34a' />
+				</View>
+				<View style={styles.actionTextWrap}>
+					<Text style={styles.actionTitle}>Nạp coin</Text>
+					<Text style={styles.actionDesc}>Quét QR SePay — dùng ngay khi đặt sân</Text>
+				</View>
+				<Ionicons name='chevron-forward' size={20} color={theme.colors.foregroundMuted} />
+			</TouchableOpacity>
+
+			<View style={styles.actionDivider} />
+
+			<TouchableOpacity
+				style={styles.membershipAction}
+				onPress={() =>
+					navigation.navigate('ComboMarket', {
+						venueId: venue!.id,
+						venueName: venue!.name,
+					})
+				}
+				activeOpacity={0.85}
+			>
+				<View style={[styles.actionIconWrap, { backgroundColor: '#ede9fe' }]}>
+					<Ionicons name='ticket' size={24} color='#7c3aed' />
+				</View>
+				<View style={styles.actionTextWrap}>
+					<Text style={styles.actionTitle}>Mua gói combo</Text>
+					<Text style={styles.actionDesc}>
+						{comboPackages.length > 0
+							? `${comboPackages.length}+ gói — từ ${formatCoin(
+									Math.min(...comboPackages.map((p) => p.priceCoin)),
+								)}`
+							: 'Xem gói membership tại sân'}
+					</Text>
+				</View>
+				<Ionicons name='chevron-forward' size={20} color={theme.colors.foregroundMuted} />
+			</TouchableOpacity>
+
+			<TouchableOpacity
+				style={styles.myComboLink}
+				onPress={() => navigation.navigate('MyCombos')}
+			>
+				<Text style={styles.myComboLinkText}>Gói combo đang có →</Text>
+			</TouchableOpacity>
+		</View>
+	);
 
 	const renderTabs = () => (
 		<View style={styles.tabContainer}>
@@ -286,7 +361,10 @@ export default function VenueDetailScreen() {
 
 	return (
 		<SafeAreaView style={styles.container} edges={['bottom']}>
-			<ScrollView showsVerticalScrollIndicator={false}>
+			<ScrollView
+				showsVerticalScrollIndicator={false}
+				contentContainerStyle={styles.scrollContent}
+			>
 				{/* Main Image */}
 				<Image
 					source={{ uri: venue.images?.[0] || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=800' }}
@@ -344,6 +422,7 @@ export default function VenueDetailScreen() {
 					{/* Price Table via Field Types */}
 					{renderPriceTable()}
 
+					{renderMembershipSection()}
 
 					{/* Facilities */}
 					<View style={styles.infoCard}>
@@ -379,18 +458,24 @@ export default function VenueDetailScreen() {
 				</View>
 			</ScrollView>
 
-			{/* Bottom Bar */}
+			{/* Bottom CTA */}
 			<View style={styles.bottomBar}>
-				<View style={styles.priceInfo}>
+				<View style={styles.priceCard}>
 					<Text style={styles.priceLabel}>Giá từ</Text>
-					<Text style={styles.price}>
-						{formatPrice(venue.minPrice)}đ<Text style={styles.priceUnit}>/giờ</Text>
-					</Text>
+					<View style={styles.priceValueRow}>
+						<Ionicons name='pricetag' size={15} color={theme.colors.primary} />
+						<Text style={styles.price} numberOfLines={1}>
+							{formatVndAsCoin(venue.minPrice)}
+						</Text>
+					</View>
+					<Text style={styles.priceUnit}>/giờ</Text>
 				</View>
 				<TouchableOpacity
 					style={styles.bookButton}
 					onPress={() => setShowBookingModal(true)}
+					activeOpacity={0.88}
 				>
+					<Ionicons name='calendar' size={20} color={theme.colors.white} />
 					<Text style={styles.bookButtonText}>Đặt lịch ngay</Text>
 				</TouchableOpacity>
 			</View>
@@ -746,42 +831,147 @@ const styles = StyleSheet.create({
 		color: theme.colors.foreground,
 		lineHeight: 20,
 	},
+	scrollContent: {
+		paddingBottom: 8,
+	},
 	// Bottom
 	bottomBar: {
 		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
+		alignItems: 'stretch',
+		gap: 12,
 		backgroundColor: theme.colors.white,
-		padding: theme.spacing.lg,
+		paddingHorizontal: 16,
+		paddingTop: 14,
+		paddingBottom: 10,
+		borderTopLeftRadius: 20,
+		borderTopRightRadius: 20,
 		borderTopWidth: 1,
-		borderTopColor: theme.colors.border,
-		...theme.shadows.medium,
+		borderTopColor: 'rgba(31, 102, 80, 0.08)',
+		shadowColor: '#0f261c',
+		shadowOffset: { width: 0, height: -4 },
+		shadowOpacity: 0.08,
+		shadowRadius: 12,
+		elevation: 12,
 	},
-	priceInfo: {},
+	priceCard: {
+		justifyContent: 'center',
+		paddingVertical: 10,
+		paddingHorizontal: 14,
+		minWidth: 108,
+		backgroundColor: theme.colors.backgroundLight,
+		borderRadius: 14,
+		borderWidth: 1,
+		borderColor: 'rgba(31, 102, 80, 0.12)',
+	},
 	priceLabel: {
-		fontSize: 12,
+		fontSize: 11,
+		fontWeight: '600',
 		color: theme.colors.foregroundMuted,
+		textTransform: 'uppercase',
+		letterSpacing: 0.4,
+		marginBottom: 4,
+	},
+	priceValueRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 4,
 	},
 	price: {
-		fontSize: 20,
-		fontWeight: 'bold',
+		fontSize: 17,
+		fontWeight: '800',
 		color: theme.colors.primary,
 	},
 	priceUnit: {
-		fontSize: 14,
+		fontSize: 12,
 		color: theme.colors.foregroundMuted,
-		fontWeight: 'normal',
+		marginTop: 2,
+		fontWeight: '500',
 	},
 	bookButton: {
-		backgroundColor: theme.colors.primary,
-		paddingVertical: 12,
-		paddingHorizontal: 24,
-		borderRadius: theme.borderRadius.md,
+		flex: 1,
+		flexDirection: 'row',
 		alignItems: 'center',
+		justifyContent: 'center',
+		gap: 8,
+		backgroundColor: theme.colors.primary,
+		paddingVertical: 16,
+		paddingHorizontal: 16,
+		borderRadius: 14,
+		shadowColor: theme.colors.primaryDark,
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.35,
+		shadowRadius: 8,
+		elevation: 6,
 	},
 	bookButtonText: {
 		color: theme.colors.white,
+		fontWeight: '700',
+		fontSize: 16,
+		letterSpacing: 0.2,
+	},
+	membershipCard: {
+		backgroundColor: theme.colors.white,
+		borderRadius: theme.borderRadius.lg,
+		padding: 16,
+		marginBottom: 16,
+		borderWidth: 1,
+		borderColor: '#ede9fe',
+		...theme.shadows.soft,
+	},
+	membershipHeader: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+		marginBottom: 6,
+	},
+	membershipTitle: {
+		fontSize: 17,
+		fontWeight: '700',
+		color: theme.colors.foreground,
+	},
+	membershipSubtitle: {
+		fontSize: 13,
+		color: theme.colors.foregroundMuted,
+		lineHeight: 18,
+		marginBottom: 14,
+	},
+	membershipAction: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		paddingVertical: 10,
+	},
+	actionIconWrap: {
+		width: 44,
+		height: 44,
+		borderRadius: 12,
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginRight: 12,
+	},
+	actionTextWrap: { flex: 1 },
+	actionTitle: {
+		fontSize: 15,
+		fontWeight: '700',
+		color: theme.colors.foreground,
+	},
+	actionDesc: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+		marginTop: 2,
+	},
+	actionDivider: {
+		height: 1,
+		backgroundColor: theme.colors.border,
+		marginVertical: 4,
+	},
+	myComboLink: {
+		marginTop: 12,
+		alignItems: 'center',
+		paddingVertical: 6,
+	},
+	myComboLinkText: {
+		fontSize: 13,
 		fontWeight: '600',
-		fontSize: 14,
+		color: '#7c3aed',
 	},
 });
