@@ -206,6 +206,12 @@ const BookingSchedule: React.FC = () => {
         });
 
         setBookings(mappedBookings);
+
+        setSelectedBooking((prev) => {
+          if (!prev) return prev;
+          const updated = mappedBookings.find((b) => b.id === prev.id);
+          return updated ?? prev;
+        });
       } catch (error) {
         console.error("Error fetching bookings:", error);
         if (!silent) toast.error("Không thể tải lịch đặt sân");
