@@ -50,15 +50,9 @@ const WalkInPaymentQrModal: React.FC<WalkInPaymentQrModalProps> = ({
   }, [current?.expiresAt]);
 
   usePaymentStatusPoll(current?.bookingId, Boolean(current), (status) => {
-    if (status.paymentStatus === "PAID") {
-      if (index < items.length - 1) {
-        toast.success(`Đã nhận tiền — chuyển sang QR ${index + 2}/${items.length}`);
-        setIndex((i) => i + 1);
-      } else {
-        toast.success("Đã nhận tiền — chờ chủ sân duyệt");
-        onAllPaid();
-      }
-    } else if (status.bookingStatus === "CONFIRMED") {
+    const done =
+      status.bookingStatus === "CONFIRMED" || status.paymentStatus === "PAID";
+    if (done) {
       if (index < items.length - 1) {
         toast.success(`Đã xác nhận — chuyển sang QR ${index + 2}/${items.length}`);
         setIndex((i) => i + 1);
