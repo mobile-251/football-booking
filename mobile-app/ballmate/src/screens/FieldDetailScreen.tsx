@@ -14,9 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
-import { Field, FIELD_TYPE_LABELS, Review } from '../types/types';
+import { Field, FIELD_TYPE_LABELS, Review, VenueDetail, FieldPricing } from '../types/types';
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
+import { splitPolicyLines } from '../utils/policyText';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import BookingModal from '../components/BookingModal';
 import { useAuth } from '../context/AuthContext';
@@ -27,36 +28,53 @@ const { width } = Dimensions.get('window');
 
 type TabType = 'images' | 'reviews' | 'terms';
 
-interface PriceRow {
-	time: string;
-	weekday: number;
-	friday: number;
-	saturday: number;
-	sunday: number;
+function buildPriceRows(pricings: FieldPricing[]) {
+	const priceMap = new Map<string, { weekday?: number; weekend?: number }>();
+
+	pricings
+		.filter((p) => p.dayType === 'WEEKDAY')
+		.forEach((p) => {
+			const key = `${p.startTime.substring(0, 5)} - ${p.endTime.substring(0, 5)}`;
+			const current = priceMap.get(key) || {};
+			priceMap.set(key, { ...current, weekday: p.price });
+		});
+
+	pricings
+		.filter((p) => p.dayType === 'WEEKEND')
+		.forEach((p) => {
+			const key = `${p.startTime.substring(0, 5)} - ${p.endTime.substring(0, 5)}`;
+			const current = priceMap.get(key) || {};
+			priceMap.set(key, { ...current, weekend: p.price });
+		});
+
+	return Array.from(priceMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-const PRICE_TABLE: PriceRow[] = [
-	{ time: '05h - 08h', weekday: 300000, friday: 350000, saturday: 400000, sunday: 400000 },
-	{ time: '08h - 15h', weekday: 250000, friday: 300000, saturday: 350000, sunday: 350000 },
-	{ time: '15h - 17h', weekday: 350000, friday: 400000, saturday: 450000, sunday: 450000 },
-	{ time: '17h - 22h', weekday: 500000, friday: 550000, saturday: 600000, sunday: 600000 },
-	{ time: '22h - 24h', weekday: 350000, friday: 400000, saturday: 450000, sunday: 450000 },
-];
+function renderPolicySection(
+	title: string,
+	icon: keyof typeof Ionicons.glyphMap,
+	text: string | undefined,
+) {
+	const lines = splitPolicyLines(text);
+	if (lines.length === 0) return null;
 
-const TERMS = {
-	booking: [
-		'Đặt cọc trước 30% giá trị sân',
-		'Hủy trong vòng 24h mất cọc',
-		'Đến muộn quá 15 phút mất quyền sử dụng sân',
-		'Hủy trước 24h được hoàn 100% cọc',
-	],
-	usage: [
-		'Giữ gìn sạch sẽ khu vực sân',
-		'Không mang đồ ăn có mùi lên sân',
-		'Báo cáo nếu phát hiện hư hỏng',
-		'Trả lại thiết bị mượn trước khi rời sân',
-	],
-};
+	return (
+		<View style={styles.termsSection}>
+			<View style={styles.termsSectionHeader}>
+				<View style={styles.termsIcon}>
+					<Ionicons name={icon} size={20} color={theme.colors.primary} />
+				</View>
+				<Text style={styles.termsSectionTitle}>{title}</Text>
+			</View>
+			{lines.map((line, index) => (
+				<View key={index} style={styles.termItem}>
+					<Ionicons name='checkmark-circle' size={18} color={theme.colors.primary} />
+					<Text style={styles.termText}>{line}</Text>
+				</View>
+			))}
+		</View>
+	);
+}
 
 export default function FieldDetailScreen() {
 	const route = useRoute<FieldDetailRouteProp>();
@@ -64,6 +82,7 @@ export default function FieldDetailScreen() {
 	const { isAuthenticated } = useAuth();
 	const { fieldId } = route.params;
 	const [field, setField] = useState<Field | null>(null);
+	const [venueDetail, setVenueDetail] = useState<VenueDetail | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [activeTab, setActiveTab] = useState<TabType>('images');
 	const [reviews, setReviews] = useState<Review[]>([]);
@@ -88,9 +107,21 @@ export default function FieldDetailScreen() {
 			setLoading(true);
 			const data = await api.getField(fieldId);
 			setField(data);
+			const venueId = data.venueId ?? data.venue?.id;
+			if (venueId) {
+				try {
+					const venue = await api.getVenue(venueId);
+					setVenueDetail(venue);
+				} catch (venueError) {
+					console.error('Failed to load venue detail:', venueError);
+					setVenueDetail(null);
+				}
+			} else {
+				setVenueDetail(null);
+			}
 		} catch (error) {
 			console.error('Failed to load field:', error);
-			// No mock data - let field remain null to show error state
+			setVenueDetail(null);
 		} finally {
 			setLoading(false);
 		}
@@ -162,36 +193,52 @@ export default function FieldDetailScreen() {
 		);
 	}
 
-	const renderPriceTable = () => (
-		<View style={styles.priceTableContainer}>
-			<View style={styles.sectionHeader}>
-				<Ionicons name='pricetag' size={20} color={theme.colors.primary} />
-				<Text style={styles.sectionTitle}>Bảng giá</Text>
-			</View>
+	const fieldPricing =
+		venueDetail?.fieldsPricings?.find((f) => f.id === field.id)?.pricings ?? [];
+	const priceRows = buildPriceRows(fieldPricing);
+	const minPriceFromDb =
+		fieldPricing.length > 0
+			? Math.min(...fieldPricing.map((p) => p.price))
+			: venueDetail?.minPrice ?? field.pricePerHour;
 
-			{/* Table Header */}
-			<View style={styles.tableHeader}>
-				<View style={[styles.tableCell, styles.tableCellFirst]}>
-					<Ionicons name='time-outline' size={16} color={theme.colors.primary} />
+	const renderPriceTable = () => {
+		if (priceRows.length === 0) {
+			return (
+				<View style={styles.priceTableContainer}>
+					<Text style={styles.noPriceText}>Chưa có bảng giá cho sân này</Text>
 				</View>
-				<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6</Text>
-				{/* <Text style={[styles.tableHeaderText, styles.tableCell]}>T6</Text>
-				<Text style={[styles.tableHeaderText, styles.tableCell]}>T7</Text> */}
-				<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN</Text>
-			</View>
+			);
+		}
 
-			{/* Table Rows */}
-			{PRICE_TABLE.map((row, index) => (
-				<View key={index} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
-					<Text style={[styles.tableTime, styles.tableCellFirst]}>{row.time}</Text>
-					<Text style={styles.tableCellPrice}>{row.weekday / 1000}k</Text>
-					<Text style={styles.tableCellPrice}>{row.friday / 1000}k</Text>
-					<Text style={styles.tableCellPrice}>{row.saturday / 1000}k</Text>
-					<Text style={styles.tableCellPrice}>{row.sunday / 1000}k</Text>
+		return (
+			<View style={styles.priceTableContainer}>
+				<View style={styles.sectionHeader}>
+					<Ionicons name='pricetag' size={20} color={theme.colors.primary} />
+					<Text style={styles.sectionTitle}>Bảng giá</Text>
 				</View>
-			))}
-		</View>
-	);
+
+				<View style={styles.tableHeader}>
+					<View style={[styles.tableCell, styles.tableCellFirst]}>
+						<Ionicons name='time-outline' size={16} color={theme.colors.primary} />
+					</View>
+					<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6</Text>
+					<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN</Text>
+				</View>
+
+				{priceRows.map(([time, prices], index) => (
+					<View key={index} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
+						<Text style={[styles.tableTime, styles.tableCellFirst]}>{time}</Text>
+						<Text style={styles.tableCellPrice}>
+							{prices.weekday ? `${prices.weekday / 1000}k` : '-'}
+						</Text>
+						<Text style={styles.tableCellPrice}>
+							{prices.weekend ? `${prices.weekend / 1000}k` : '-'}
+						</Text>
+					</View>
+				))}
+			</View>
+		);
+	};
 
 	const renderTabs = () => (
 		<View style={styles.tabContainer}>
@@ -283,41 +330,24 @@ export default function FieldDetailScreen() {
 		</View>
 	);
 
-	const renderTerms = () => (
-		<View style={styles.termsContainer}>
-			{/* Booking Terms */}
-			<View style={styles.termsSection}>
-				<View style={styles.termsSectionHeader}>
-					<View style={styles.termsIcon}>
-						<Ionicons name='clipboard-outline' size={20} color={theme.colors.primary} />
-					</View>
-					<Text style={styles.termsSectionTitle}>Quy định đặt sân</Text>
+	const renderTerms = () => {
+		const policies = venueDetail?.policies;
+		if (!policies) {
+			return (
+				<View style={styles.termsContainer}>
+					<Text style={styles.noPriceText}>Chưa có điều khoản</Text>
 				</View>
-				{TERMS.booking.map((term, index) => (
-					<View key={index} style={styles.termItem}>
-						<Ionicons name='checkmark-circle' size={18} color={theme.colors.primary} />
-						<Text style={styles.termText}>{term}</Text>
-					</View>
-				))}
-			</View>
+			);
+		}
 
-			{/* Usage Terms */}
-			<View style={styles.termsSection}>
-				<View style={styles.termsSectionHeader}>
-					<View style={styles.termsIcon}>
-						<Ionicons name='document-text-outline' size={20} color={theme.colors.primary} />
-					</View>
-					<Text style={styles.termsSectionTitle}>Quy định sử dụng sân</Text>
-				</View>
-				{TERMS.usage.map((term, index) => (
-					<View key={index} style={styles.termItem}>
-						<Ionicons name='checkmark-circle' size={18} color={theme.colors.primary} />
-						<Text style={styles.termText}>{term}</Text>
-					</View>
-				))}
+		return (
+			<View style={styles.termsContainer}>
+				{renderPolicySection('Quy định đặt sân', 'clipboard-outline', policies.booking)}
+				{renderPolicySection('Quy định sử dụng sân', 'document-text-outline', policies.usage)}
+				{renderPolicySection('Bảo hiểm & trách nhiệm', 'shield-checkmark-outline', policies.insurance)}
 			</View>
-		</View>
-	);
+		);
+	};
 
 	const renderTabContent = () => {
 		switch (activeTab) {
@@ -386,7 +416,9 @@ export default function FieldDetailScreen() {
 						<View style={styles.contactRow}>
 							<View style={styles.contactItem}>
 								<Ionicons name='call-outline' size={18} color={theme.colors.primary} />
-								<Text style={styles.contactText}>0123 456 789</Text>
+								<Text style={styles.contactText}>
+									{venueDetail?.phoneNumber || field.venue?.phoneNumber || '—'}
+								</Text>
 							</View>
 							<View style={styles.contactItem}>
 								<Ionicons name='time-outline' size={18} color={theme.colors.primary} />
@@ -435,7 +467,7 @@ export default function FieldDetailScreen() {
 				<View style={styles.priceInfo}>
 					<Text style={styles.priceLabel}>Giá từ</Text>
 					<Text style={styles.price}>
-						{formatPrice(field.pricePerHour)}đ<Text style={styles.priceUnit}>/giờ</Text>
+						{formatPrice(minPriceFromDb)}đ<Text style={styles.priceUnit}>/giờ</Text>
 					</Text>
 				</View>
 				<TouchableOpacity style={styles.bookButton} onPress={() => setShowBookingModal(true)}>
@@ -563,6 +595,11 @@ const styles = StyleSheet.create({
 		padding: theme.spacing.lg,
 		marginBottom: theme.spacing.md,
 		...theme.shadows.soft,
+	},
+	noPriceText: {
+		fontSize: 14,
+		color: theme.colors.foregroundMuted,
+		textAlign: 'center',
 	},
 	sectionHeader: {
 		flexDirection: 'row',

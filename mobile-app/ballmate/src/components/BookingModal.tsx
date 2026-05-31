@@ -53,6 +53,7 @@ interface TimeSlotData {
 }
 
 export default function BookingModal({ visible, onClose, field, onBookingSuccess }: BookingModalProps) {
+	const venueId = field.venueId ?? field.venue?.id;
 	const [currentStep, setCurrentStep] = useState<BookingStep>('date');
 	const [selectedDates, setSelectedDates] = useState<string[]>([]);
 	// Step 2: Field type summaries with minPrice per date
@@ -101,7 +102,11 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const loadFieldTypePricing = useCallback(async (date: string) => {
 		setLoadingFields(true);
 		try {
-			const summaries = await api.getFieldTypePricing(field.venueId, date);
+			if (!venueId) {
+				setFieldTypeSummaries([]);
+				return;
+			}
+			const summaries = await api.getFieldTypePricing(venueId, date);
 			setFieldTypeSummaries(summaries);
 		} catch (error) {
 			console.error('Failed to load field type pricing:', error);
@@ -109,7 +114,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		} finally {
 			setLoadingFields(false);
 		}
-	}, [field.venueId]);
+	}, [venueId]);
 
 	useEffect(() => {
 		if (!visible) return;
@@ -134,7 +139,11 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const loadFieldSlots = useCallback(async (fieldType: FieldType, date: string) => {
 		setLoadingSlots(true);
 		try {
-			const slots = await api.getFieldTypeSlots(field.venueId, fieldType, date);
+			if (!venueId) {
+				setFieldSlots([]);
+				return;
+			}
+			const slots = await api.getFieldTypeSlots(venueId, fieldType, date);
 			setFieldSlots(slots);
 		} catch (error) {
 			console.error('Failed to load field slots:', error);
@@ -142,7 +151,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		} finally {
 			setLoadingSlots(false);
 		}
-	}, [field.venueId]);
+	}, [venueId]);
 
 	// Effect: Load field type pricing when entering Step 2
 	useEffect(() => {
@@ -152,13 +161,40 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		void loadFieldTypePricing(currentDate);
 	}, [currentStep, currentDateIndex, selectedDates, loadFieldTypePricing]);
 
+	// Effect: Tự chọn loại sân khi mở từ chi tiết sân (đã biết field.id)
+	useEffect(() => {
+		if (currentStep !== 'fieldType') return;
+		const currentDate = selectedDates[currentDateIndex];
+		if (!currentDate || fieldTypeSummaries.length === 0) return;
+		if (selectedFields[currentDate] !== undefined) return;
+
+		const preferred = fieldTypeSummaries.find((s) =>
+			s.availableFieldIds.includes(field.id),
+		);
+		const target = preferred ?? (fieldTypeSummaries.length === 1 ? fieldTypeSummaries[0] : null);
+		if (!target?.availableFieldIds[0]) return;
+
+		setSelectedFields((prev) => ({
+			...prev,
+			[currentDate]: target.availableFieldIds.includes(field.id)
+				? field.id
+				: target.availableFieldIds[0],
+		}));
+	}, [
+		currentStep,
+		currentDateIndex,
+		selectedDates,
+		fieldTypeSummaries,
+		selectedFields,
+		field.id,
+	]);
+
 	// Effect: Load field slots when entering Step 3
 	useEffect(() => {
 		if (currentStep !== 'timeSlot') return;
 		const currentDate = selectedDates[currentDateIndex];
-		const selectedFieldId = selectedFields[currentDate];
-		if (!currentDate || !selectedFieldId) return;
-		
+		if (!currentDate) return;
+
 		const fieldType = getCurrentFieldType();
 		void loadFieldSlots(fieldType, currentDate);
 	}, [currentStep, currentDateIndex, selectedDates, selectedFields, loadFieldSlots, getCurrentFieldType]);
@@ -592,6 +628,16 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				{/* Time Slots Grid - Grouped by Field */}
 				{loadingSlots ? (
 					<ActivityIndicator size='large' color={theme.colors.primary} style={{ marginTop: 40 }} />
+				) : fieldSlots.length === 0 || fieldSlots.every((fs) => fs.slots.length === 0) ? (
+					<View style={styles.emptySlotsBox}>
+						<Ionicons name='calendar-outline' size={40} color={theme.colors.foregroundMuted} />
+						<Text style={styles.emptySlotsTitle}>Không có khung giờ</Text>
+						<Text style={styles.emptySlotsText}>
+							{!venueId
+								? 'Thiếu thông tin cụm sân. Vui lòng thử lại sau.'
+								: 'Sân chưa cấu hình giá hoặc đã hết chỗ trong ngày này.'}
+						</Text>
+					</View>
 				) : (
 					<ScrollView style={styles.timeSlotsContainer} showsVerticalScrollIndicator={false}>
 						{fieldSlots.map((fieldSlot) => (
@@ -1363,6 +1409,23 @@ const styles = StyleSheet.create({
 	dateNavSubtitle: {
 		fontSize: 12,
 		color: theme.colors.foregroundMuted,
+	},
+	emptySlotsBox: {
+		alignItems: 'center',
+		paddingVertical: 40,
+		paddingHorizontal: theme.spacing.lg,
+	},
+	emptySlotsTitle: {
+		fontSize: 16,
+		fontWeight: '600',
+		color: theme.colors.foreground,
+		marginTop: theme.spacing.md,
+	},
+	emptySlotsText: {
+		fontSize: 14,
+		color: theme.colors.foregroundMuted,
+		textAlign: 'center',
+		marginTop: theme.spacing.sm,
 	},
 	timeSlotsContainer: {
 		flex: 1,

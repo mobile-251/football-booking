@@ -140,8 +140,15 @@ export interface FieldWithPricing extends Omit<Field, 'pricePerHour' | 'descript
     bookingCount: number;
 }
 
+export interface VenuePolicies {
+    booking: string;
+    usage: string;
+    insurance: string;
+}
+
 // Venue Detail response from API
 export interface VenueDetail extends Venue {
+    policies?: VenuePolicies;
     owner: {
         id: number;
         user: {
