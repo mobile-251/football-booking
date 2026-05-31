@@ -6,10 +6,12 @@ import { WalletModule } from '../wallet/wallet.module';
 import { SepayModule } from '../sepay/sepay.module';
 import { BookingModule } from '../booking/booking.module';
 import { ComboModule } from '../combo/combo.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     WalletModule,
+    NotificationModule,
     forwardRef(() => SepayModule),
     forwardRef(() => BookingModule),
     forwardRef(() => ComboModule),

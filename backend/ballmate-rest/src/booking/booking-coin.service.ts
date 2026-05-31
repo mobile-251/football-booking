@@ -386,6 +386,7 @@ export class BookingCoinService {
 
       try {
         await this.notificationService.dispatchBookingConfirmed(booking.id);
+        await this.notificationService.dispatchVenueCoinBooking(booking.id);
       } catch {
         /* non-fatal */
       }

@@ -39,8 +39,14 @@ export default function RevenueChart({ data }: RevenueChartProps) {
           Doanh thu 7 ngày
         </h3>
         <p className="mt-1 text-sm text-slate-500">
-          Biểu đồ doanh thu tuần này
+          Đặt sân + bán gói combo (không gồm lượt đặt trừ gói)
         </p>
+        <div className="mt-2 flex flex-wrap gap-3 text-[11px] font-medium text-slate-500">
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-primary" />
+            Tổng
+          </span>
+        </div>
       </div>
 
       <div className="relative flex-1 min-h-[200px]">

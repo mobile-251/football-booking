@@ -51,7 +51,19 @@ export default function RecentBookings({
             Chưa có đơn đặt sân nào
           </p>
         ) : (
-          bookings.map((b) => (
+          bookings.map((b) => {
+            const isCombo =
+              b.usedCombo ||
+              (b.paymentLabel?.startsWith('Gói combo') ?? false);
+            const label =
+              isCombo
+                ? b.paymentLabel?.startsWith('Gói combo')
+                  ? b.paymentLabel
+                  : 'Gói combo'
+                : b.paymentLabel ??
+                  (b.isPaid ? 'Đã thanh toán' : 'Chờ thanh toán');
+
+            return (
             <div
               key={b.id}
               className="flex items-center gap-4 py-4 first:pt-0 last:pb-0"
@@ -69,25 +81,26 @@ export default function RecentBookings({
               </div>
               <div className="shrink-0 text-right">
                 <p className="m-0 font-semibold text-primary-dark">
-                  {formatPrice(b.totalPrice)}
+                  {isCombo && b.totalPrice === 0
+                    ? 'Đã trả qua gói'
+                    : formatPrice(b.totalPrice)}
                 </p>
                 <span
                   className={cn(
                     'mt-1 inline-flex items-center gap-1 text-xs font-medium',
-                    b.isPaid ? 'text-primary' : 'text-amber-600',
+                    isCombo && 'text-violet-600',
+                    !isCombo && b.isPaid && 'text-primary',
+                    !isCombo && !b.isPaid && 'text-amber-600',
+                    b.paymentLabel === 'Ví coin' && 'text-emerald-700',
                   )}
                 >
-                  {b.isPaid ? (
-                    <>
-                      <span aria-hidden>✓</span> Đã thanh toán
-                    </>
-                  ) : (
-                    'Chờ thanh toán'
-                  )}
+                  {(b.isPaid || isCombo) && <span aria-hidden>✓</span>}
+                  {label}
                 </span>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

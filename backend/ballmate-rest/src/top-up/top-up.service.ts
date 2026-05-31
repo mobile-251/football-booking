@@ -25,6 +25,7 @@ import {
 import { CreateTopUpOrderDto } from './dto/create-top-up-order.dto';
 import { BookingCoinService } from '../booking/booking-coin.service';
 import { ComboService } from '../combo/combo.service';
+import { NotificationService } from '../notification/notification.service';
 import { DEFAULT_TOP_UP_PACKAGES } from './default-top-up-packages';
 
 @Injectable()
@@ -39,6 +40,7 @@ export class TopUpService {
     private bookingCoinService: BookingCoinService,
     @Inject(forwardRef(() => ComboService))
     private comboService: ComboService,
+    private notificationService: NotificationService,
     configService: ConfigService,
   ) {
     const coin = configService.get<AppConfiguration['coin']>('coin');
@@ -263,6 +265,12 @@ export class TopUpService {
         );
       }
     });
+
+    try {
+      await this.notificationService.dispatchVenueTopUpPaid(orderId);
+    } catch {
+      /* non-fatal */
+    }
 
     if (order.purpose === TopUpPurpose.BOOKING_JIT && order.holdId) {
       await this.bookingCoinService.fulfillHoldAfterTopUp(

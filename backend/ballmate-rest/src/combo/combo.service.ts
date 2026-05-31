@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { NotificationService } from '../notification/notification.service';
 import { decimalToNumber, toDecimal, coinToVnd } from '../common/coin.util';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class ComboService {
   constructor(
     private prisma: PrismaService,
     private walletService: WalletService,
+    private notificationService: NotificationService,
   ) {}
 
   async listByVenue(venueId: number) {
@@ -110,7 +112,13 @@ export class ComboService {
       );
     }
 
-    return this.createPlayerCombo(playerId, pkg.id, priceCoin, pkg);
+    const created = await this.createPlayerCombo(playerId, pkg.id, priceCoin, pkg);
+    try {
+      await this.notificationService.dispatchVenueComboPurchased(created.id);
+    } catch {
+      /* non-fatal */
+    }
+    return created;
   }
 
   async purchaseAfterTopUp(playerId: number, comboPackageId: number) {

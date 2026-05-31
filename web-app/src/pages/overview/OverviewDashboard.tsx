@@ -5,8 +5,10 @@ import { isOwner } from "../../types/auth";
 import dashboardApi, { type VenueDashboardData } from "../../api/dashboardApi";
 import StatCard from "./components/StatCard";
 import RevenueChart from "./components/RevenueChart";
+import RevenueSummaryCard from "./components/RevenueSummaryCard";
 import TodaySchedule from "./components/TodaySchedule";
 import RecentBookings from "./components/RecentBookings";
+import RecentCoinActivity from "./components/RecentCoinActivity";
 
 interface OverviewDashboardProps {
   onNavigateRegister?: () => void;
@@ -108,7 +110,7 @@ function OverviewDashboard({
   return (
     <PageShell
       title="Tổng quan"
-      subtitle="Chào mừng trở lại! Đây là tổng quan hoạt động của sân bạn hôm nay."
+      subtitle="Doanh thu gồm đặt sân và bán gói combo. Đặt bằng gói không cộng thêm tiền sân."
     >
       {dashboardError && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -132,13 +134,13 @@ function OverviewDashboard({
       ) : stats ? (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              icon={<span className="text-lg font-bold text-primary">₫</span>}
-              iconBg="bg-primary-light"
-              label="Doanh thu tháng này"
-              value={formatCurrency(stats.monthlyRevenue)}
-              badge={formatPercentChange(stats.monthlyRevenueChangePercent)}
-              badgeTone="positive"
+            <RevenueSummaryCard
+              total={stats.monthlyRevenue}
+              bookingRevenue={stats.monthlyBookingRevenue}
+              comboRevenue={stats.monthlyComboRevenue}
+              comboBookings={stats.comboBookingsThisMonth}
+              changePercent={stats.monthlyRevenueChangePercent}
+              formatCurrency={formatCurrency}
             />
             <StatCard
               icon={
@@ -219,6 +221,10 @@ function OverviewDashboard({
               <TodaySchedule slots={dashboard.todaySchedule} />
             )}
           </div>
+
+          {dashboard?.recentActivity && dashboard.recentActivity.length > 0 && (
+            <RecentCoinActivity items={dashboard.recentActivity} />
+          )}
 
           {dashboard?.recentBookings && (
             <RecentBookings
