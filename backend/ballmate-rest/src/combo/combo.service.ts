@@ -24,13 +24,40 @@ export class ComboService {
   async listByVenue(venueId: number) {
     const packages = await this.prisma.comboPackage.findMany({
       where: { venueId, isActive: true, deletedAt: null },
-      orderBy: { fieldType: 'asc' },
+      orderBy: [{ fieldType: 'asc' }, { priceCoin: 'asc' }],
     });
-    return packages.map((p) => ({
+    return packages.map((p) => this.mapPackage(p));
+  }
+
+  /** Owner/manager: all packages including inactive (not soft-deleted). */
+  async listByVenueForManagement(venueId: number) {
+    const packages = await this.prisma.comboPackage.findMany({
+      where: { venueId, deletedAt: null },
+      orderBy: [{ fieldType: 'asc' }, { isActive: 'desc' }, { priceCoin: 'asc' }],
+    });
+    return packages.map((p) => this.mapPackage(p));
+  }
+
+  private mapPackage(p: {
+    id: number;
+    venueId: number;
+    fieldType: string;
+    name: string;
+    description: string | null;
+    matchCount: number;
+    priceCoin: { toString(): string } | number;
+    validityDays: number;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    const priceCoin = decimalToNumber(p.priceCoin);
+    return {
       ...p,
-      priceCoin: decimalToNumber(p.priceCoin),
-      pricePerMatch: decimalToNumber(p.priceCoin) / p.matchCount,
-    }));
+      priceCoin,
+      pricePerMatch: Math.round((priceCoin / p.matchCount) * 100) / 100,
+      description: p.description ?? undefined,
+    };
   }
 
   async listMyCombos(playerId: number) {
@@ -146,17 +173,18 @@ export class ComboService {
       validityDays: number;
     },
   ) {
-    return this.prisma.comboPackage.create({
+    const created = await this.prisma.comboPackage.create({
       data: {
         venueId,
         fieldType: data.fieldType as never,
-        name: data.name,
-        description: data.description,
+        name: data.name.trim(),
+        description: data.description?.trim() || null,
         matchCount: data.matchCount,
         priceCoin: toDecimal(data.priceCoin),
         validityDays: data.validityDays,
       },
     });
+    return this.mapPackage(created);
   }
 
   async updatePackage(
@@ -175,17 +203,28 @@ export class ComboService {
       where: { id, venueId },
     });
     if (!pkg) throw new NotFoundException('Combo package not found');
-    return this.prisma.comboPackage.update({
+    const updated = await this.prisma.comboPackage.update({
       where: { id },
       data: {
-        ...data,
+        ...(data.name != null ? { name: data.name.trim() } : {}),
+        ...(data.description !== undefined
+          ? { description: data.description?.trim() || null }
+          : {}),
+        matchCount: data.matchCount,
         priceCoin:
           data.priceCoin != null ? toDecimal(data.priceCoin) : undefined,
+        validityDays: data.validityDays,
+        isActive: data.isActive,
       },
     });
+    return this.mapPackage(updated);
   }
 
   async deletePackage(id: number, venueId: number) {
+    const pkg = await this.prisma.comboPackage.findFirst({
+      where: { id, venueId, deletedAt: null },
+    });
+    if (!pkg) throw new NotFoundException('Combo package not found');
     return this.prisma.comboPackage.update({
       where: { id },
       data: { deletedAt: new Date(), isActive: false },

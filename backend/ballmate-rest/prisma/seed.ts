@@ -354,7 +354,7 @@ async function main() {
 
   const allPlayers = await prisma.player.findMany();
   for (const p of allPlayers) {
-    await prisma.wallet.create({ data: { playerId: p.id, coinBalance: 500 } });
+    await prisma.wallet.create({ data: { playerId: p.id, coinBalance: 0 } });
   }
 
   if (firstVenueId) {

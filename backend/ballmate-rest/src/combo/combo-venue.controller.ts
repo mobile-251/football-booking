@@ -15,6 +15,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { VenueAccessGuard } from '../auth/guards/venue-access.guard';
 import { ComboService } from './combo.service';
+import { CreateComboPackageDto } from './dto/create-combo-package.dto';
+import { UpdateComboPackageDto } from './dto/update-combo-package.dto';
 
 @Controller('venues/:venueId/combo-packages')
 @UseGuards(JwtAuthGuard, RolesGuard, VenueAccessGuard)
@@ -24,21 +26,13 @@ export class ComboVenueController {
 
   @Get()
   list(@Param('venueId', ParseIntPipe) venueId: number) {
-    return this.comboService.listByVenue(venueId);
+    return this.comboService.listByVenueForManagement(venueId);
   }
 
   @Post()
   create(
     @Param('venueId', ParseIntPipe) venueId: number,
-    @Body()
-    body: {
-      fieldType: string;
-      name: string;
-      description?: string;
-      matchCount: number;
-      priceCoin: number;
-      validityDays: number;
-    },
+    @Body() body: CreateComboPackageDto,
   ) {
     return this.comboService.createPackage(venueId, body);
   }
@@ -47,15 +41,7 @@ export class ComboVenueController {
   update(
     @Param('venueId', ParseIntPipe) venueId: number,
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: Partial<{
-      name: string;
-      description: string;
-      matchCount: number;
-      priceCoin: number;
-      validityDays: number;
-      isActive: boolean;
-    }>,
+    @Body() body: UpdateComboPackageDto,
   ) {
     return this.comboService.updatePackage(id, venueId, body);
   }
