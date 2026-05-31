@@ -27,6 +27,7 @@ import RegisterScreen from '../screens/RegisterScreen';
 import VenueDetailScreen from '../screens/VenueDetailScreen';
 import CheckInModal, { type CheckInStatusData } from '../components/CheckInModal';
 import WalletScreen from '../screens/WalletScreen';
+import { WalletProvider } from '../context/WalletContext';
 import TopUpScreen from '../screens/TopUpScreen';
 import ComboMarketScreen from '../screens/ComboMarketScreen';
 import MyCombosScreen from '../screens/MyCombosScreen';
@@ -437,6 +438,7 @@ function LoadingScreen() {
 // Authenticated Stack - screens available after login
 function AuthenticatedStack() {
 	return (
+		<WalletProvider>
 		<Stack.Navigator
 			screenOptions={{
 				headerShown: false,
@@ -507,6 +509,7 @@ function AuthenticatedStack() {
 			<Stack.Screen name='ComboMarket' component={ComboMarketScreen} options={{ headerShown: false }} />
 			<Stack.Screen name='MyCombos' component={MyCombosScreen} options={{ headerShown: false }} />
 		</Stack.Navigator>
+		</WalletProvider>
 	);
 }
 

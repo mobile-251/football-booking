@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import NotificationBell from '../components/NotificationBell';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
+import { useWallet } from '../context/WalletContext';
 import * as Sentry from '@sentry/react-native';
 
 interface MenuItem {
@@ -122,15 +123,14 @@ export default function ProfileScreen() {
     const [statsLoading, setStatsLoading] = useState(true);
 
     const hasLoadedRef = useRef(false);
+    const { balance: walletBalance, refreshWallet } = useWallet();
 
     const loadUserStats = useCallback(async (silent = false) => {
         try {
             if (!silent) setStatsLoading(true);
-            // For now, we'll use placeholder stats since there's no dedicated stats endpoint
-            // In a real app, this would fetch from /api/users/me/stats
-            const [bookings, wallet] = await Promise.all([
+            const [bookings, coinBalance] = await Promise.all([
                 api.getBookings(),
-                api.getWalletMe().catch(() => ({ balance: 0 })),
+                refreshWallet(true),
             ]);
             const totalCoinSpent = bookings.reduce(
                 (sum: number, b: any) =>
@@ -140,7 +140,7 @@ export default function ProfileScreen() {
             setStats({
                 bookingCount: bookings.length,
                 totalSpent: totalCoinSpent,
-                points: wallet.balance,
+                points: coinBalance ?? walletBalance ?? 0,
             });
         } catch (error) {
             console.error('Failed to load user stats:', error);
@@ -148,7 +148,7 @@ export default function ProfileScreen() {
             setStatsLoading(false);
             hasLoadedRef.current = true;
         }
-    }, []);
+    }, [refreshWallet, walletBalance]);
 
     useRefreshOnFocus(
         () => loadUserStats(hasLoadedRef.current),

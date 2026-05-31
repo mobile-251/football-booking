@@ -30,6 +30,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useBadges, RootStackParamList } from '../navigation/AppNavigator';
 import QuickTopUpSheet from './QuickTopUpSheet';
+import { useWallet } from '../context/WalletContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -103,7 +104,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const [note, setNote] = useState('');
 	const [submitting, setSubmitting] = useState(false);
 	const [showSuccess, setShowSuccess] = useState(false);
-	const [walletBalance, setWalletBalance] = useState<number | null>(null);
+	const { balance: walletBalance, refreshWallet } = useWallet();
 	const [eligibleCombos, setEligibleCombos] = useState<EligiblePlayerCombo[]>([]);
 	const [loadingEligibleCombos, setLoadingEligibleCombos] = useState(false);
 	const [selectedPlayerComboId, setSelectedPlayerComboId] = useState<number | null>(null);
@@ -170,7 +171,6 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setVenueEquipment([]);
 		setVenueCanteen([]);
 		setSelectedExtras({});
-		setWalletBalance(null);
 		setEligibleCombos([]);
 		setSelectedPlayerComboId(null);
 		setLoadingEligibleCombos(false);
@@ -424,10 +424,8 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 
 	useEffect(() => {
 		if (currentStep !== 'confirm' || !visible) return;
-		api.getWalletMe()
-			.then((w) => setWalletBalance(w.balance))
-			.catch(() => setWalletBalance(null));
-	}, [currentStep, visible, selectedPlayerComboId, selectedExtras]);
+		void refreshWallet(true);
+	}, [currentStep, visible, selectedPlayerComboId, selectedExtras, refreshWallet]);
 
 	useEffect(() => {
 		if (currentStep !== 'confirm' || !visible || !venueId) return;
@@ -520,8 +518,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 			}
 
 			refreshBadges();
-			const w = await api.getWalletMe();
-			setWalletBalance(w.balance);
+			await refreshWallet(true);
 			setShowSuccess(true);
 		} catch (error) {
 			console.error('Booking failed:', error);

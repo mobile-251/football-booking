@@ -23,6 +23,7 @@ import {
 	type TopUpPackageItem,
 } from '../utils/coin';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
+import { useWallet } from '../context/WalletContext';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 type TopUpOrder = {
@@ -49,7 +50,7 @@ function formatCountdown(expiresAt?: string): string | null {
 export default function TopUpScreen() {
 	const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 	const [packages, setPackages] = useState<TopUpPackageItem[]>([]);
-	const [balance, setBalance] = useState<number | null>(null);
+	const { balance, refreshWallet } = useWallet();
 	const [order, setOrder] = useState<TopUpOrder | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState<string | null>(null);
@@ -64,8 +65,13 @@ export default function TopUpScreen() {
 			if (u.status === 'PAID') {
 				if (pollRef.current) clearInterval(pollRef.current);
 				setOrder(null);
+				const freshBalance = await refreshWallet(true);
 				const bal =
-					u.balance != null ? `\nSố dư mới: ${formatCoin(u.balance)}` : '';
+					freshBalance != null
+						? `\nSố dư mới: ${formatCoin(freshBalance)}`
+						: u.balance != null
+							? `\nSố dư mới: ${formatCoin(u.balance)}`
+							: '';
 				Alert.alert('Nạp coin thành công', `Coin đã vào ví.${bal}`, [
 					{ text: 'OK', onPress: () => navigation.goBack() },
 				]);
@@ -77,16 +83,16 @@ export default function TopUpScreen() {
 				setOrder(null);
 			}
 		},
-		[navigation],
+		[navigation, refreshWallet],
 	);
 
 	const load = useCallback(async () => {
 		try {
 			setLoadError(null);
 			setLoading(true);
-			const [list, wallet] = await Promise.all([
+			const [list] = await Promise.all([
 				api.getTopUpPackages(),
-				api.getWalletMe().catch(() => ({ balance: 0 })),
+				refreshWallet(true),
 			]);
 			const normalized: TopUpPackageItem[] = (list ?? []).map((p: any) => ({
 				id: p.id,
@@ -98,7 +104,6 @@ export default function TopUpScreen() {
 				sortOrder: p.sortOrder,
 			}));
 			setPackages(normalized);
-			setBalance(wallet.balance);
 			if (normalized.length === 0) {
 				setLoadError('Chưa có gói nạp trên server. Khởi động lại backend hoặc chạy seed.');
 			}
@@ -111,7 +116,7 @@ export default function TopUpScreen() {
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [refreshWallet]);
 
 	useRefreshOnFocus(load, true);
 

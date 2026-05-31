@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
@@ -30,6 +31,7 @@ import { DEFAULT_TOP_UP_PACKAGES } from './default-top-up-packages';
 
 @Injectable()
 export class TopUpService {
+  private readonly logger = new Logger(TopUpService.name);
   private readonly topUpTtlMinutes: number;
 
   constructor(
@@ -103,7 +105,27 @@ export class TopUpService {
     let baseCoin: number;
     let bonusCoin = 0;
 
-    if (dto.packageId) {
+    if (
+      dto.purpose === TopUpPurpose.COMBO_JIT &&
+      dto.comboPackageId
+    ) {
+      const pkg = await this.prisma.comboPackage.findFirst({
+        where: { id: dto.comboPackageId, isActive: true, deletedAt: null },
+      });
+      if (!pkg) throw new NotFoundException('Combo package not found');
+
+      const priceCoin = decimalToNumber(pkg.priceCoin);
+      const balance = await this.walletService.getBalance(playerId);
+      const needCoin = Math.max(0, priceCoin - balance);
+      if (needCoin <= 0) {
+        throw new BadRequestException(
+          'Số dư đủ mua gói. Vui lòng bấm Mua lại.',
+        );
+      }
+      priceVnd = coinToVnd(needCoin);
+      baseCoin = needCoin;
+      bonusCoin = 0;
+    } else if (dto.packageId) {
       const pkg = await this.prisma.topUpPackage.findFirst({
         where: { id: dto.packageId, isActive: true },
       });
@@ -178,6 +200,63 @@ export class TopUpService {
     }
   }
 
+  private async ensureComboJitFulfilled(order: {
+    id: number;
+    playerId: number;
+    comboPackageId: number | null;
+    purpose: TopUpPurpose;
+    status: TopUpOrderStatus;
+    sepayMeta: unknown;
+  }): Promise<void> {
+    if (
+      order.purpose !== TopUpPurpose.COMBO_JIT ||
+      !order.comboPackageId ||
+      order.status !== TopUpOrderStatus.PAID
+    ) {
+      return;
+    }
+
+    const meta = (order.sepayMeta as Record<string, unknown> | null) ?? {};
+    const existing = meta.comboFulfillment as { ok?: boolean } | undefined;
+    if (existing?.ok === true) return;
+
+    try {
+      const pc = await this.comboService.purchaseAfterTopUp(
+        order.playerId,
+        order.comboPackageId,
+      );
+      await this.prisma.topUpOrder.update({
+        where: { id: order.id },
+        data: {
+          sepayMeta: {
+            ...meta,
+            comboFulfillment: { ok: true, playerComboId: pc.id },
+          },
+        },
+      });
+      try {
+        await this.notificationService.dispatchVenueComboPurchased(pc.id);
+      } catch {
+        /* non-fatal */
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Mua gói combo thất bại';
+      await this.prisma.topUpOrder.update({
+        where: { id: order.id },
+        data: {
+          sepayMeta: {
+            ...meta,
+            comboFulfillment: { ok: false, error: message },
+          },
+        },
+      });
+      this.logger.warn(
+        `COMBO_JIT ensure failed for order ${order.id}: ${message}`,
+      );
+    }
+  }
+
   async getOrder(playerId: number, orderId: number) {
     let order = await this.prisma.topUpOrder.findFirst({
       where: { id: orderId, playerId },
@@ -190,7 +269,16 @@ export class TopUpService {
         where: { id: orderId, playerId },
       })) ?? order;
 
+    if (order.status === TopUpOrderStatus.PAID) {
+      await this.ensureComboJitFulfilled(order);
+      order =
+        (await this.prisma.topUpOrder.findFirst({
+          where: { id: orderId, playerId },
+        })) ?? order;
+    }
+
     const balance = await this.walletService.getBalance(playerId);
+    const meta = order.sepayMeta as { comboFulfillment?: { ok: boolean; error?: string } } | null;
     return {
       id: order.id,
       status: order.status,
@@ -201,6 +289,7 @@ export class TopUpService {
       expiresAt: order.expiresAt,
       paidAt: order.paidAt,
       balance,
+      comboFulfillment: meta?.comboFulfillment ?? null,
     };
   }
 
@@ -227,15 +316,20 @@ export class TopUpService {
     const baseCoin = decimalToNumber(order.baseCoin);
     const bonusCoin = decimalToNumber(order.bonusCoin);
 
+    const prevMeta = (order.sepayMeta as Record<string, unknown> | null) ?? {};
+
     await this.prisma.$transaction(async (tx) => {
       await tx.topUpOrder.update({
         where: { id: orderId },
         data: {
           status: TopUpOrderStatus.PAID,
           paidAt: new Date(),
-          sepayMeta: sepayTransactionId
-            ? { sepayTransactionId: String(sepayTransactionId) }
-            : undefined,
+          sepayMeta: {
+            ...prevMeta,
+            ...(sepayTransactionId
+              ? { sepayTransactionId: String(sepayTransactionId) }
+              : {}),
+          },
         },
       });
 
@@ -273,18 +367,26 @@ export class TopUpService {
     }
 
     if (order.purpose === TopUpPurpose.BOOKING_JIT && order.holdId) {
-      await this.bookingCoinService.fulfillHoldAfterTopUp(
-        order.holdId,
-        order.playerId,
-      );
+      try {
+        await this.bookingCoinService.fulfillHoldAfterTopUp(
+          order.holdId,
+          order.playerId,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `BOOKING_JIT fulfill failed for order ${orderId}: ${String(err)}`,
+        );
+      }
     } else if (
       order.purpose === TopUpPurpose.COMBO_JIT &&
       order.comboPackageId
     ) {
-      await this.comboService.purchaseAfterTopUp(
-        order.playerId,
-        order.comboPackageId,
-      );
+      const refreshed = await this.prisma.topUpOrder.findUnique({
+        where: { id: orderId },
+      });
+      if (refreshed) {
+        await this.ensureComboJitFulfilled(refreshed);
+      }
     }
   }
 

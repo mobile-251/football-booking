@@ -158,7 +158,12 @@ class ApiService {
 					}
 				}
 
-				console.error('API Error:', error.response?.data || error.message);
+				const errData = error.response?.data as { error?: string } | undefined;
+				if (error.response?.status === 402 && errData?.error === 'NEED_TOPUP') {
+					console.log('[API] NEED_TOPUP (expected):', error.response?.data);
+				} else {
+					console.error('API Error:', error.response?.data || error.message);
+				}
 				return Promise.reject(error);
 			}
 		);
@@ -533,8 +538,21 @@ class ApiService {
 
 	// Wallet & coin
 	async getWalletMe(): Promise<{ playerId: number; balance: number }> {
-		const response = await this.client.get('/wallet/me');
-		return response.data;
+		const response = await this.client.get('/wallet/me', {
+			params: { _t: Date.now() },
+			headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+		});
+		const raw = response.data as Record<string, unknown> | null;
+		const body =
+			raw && typeof raw === 'object' && raw.data != null && typeof raw.data === 'object'
+				? (raw.data as Record<string, unknown>)
+				: raw;
+		const balance = Number(body?.balance ?? body?.coinBalance ?? 0);
+		const playerId = Number(body?.playerId ?? 0);
+		return {
+			playerId: Number.isFinite(playerId) ? playerId : 0,
+			balance: Number.isFinite(balance) ? balance : 0,
+		};
 	}
 
 	async getWalletTransactions(page = 1, limit = 20): Promise<any> {

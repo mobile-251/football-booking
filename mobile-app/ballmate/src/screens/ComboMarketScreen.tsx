@@ -20,6 +20,7 @@ import {
 	comboPerMatchCoin,
 	extractNeedTopUp,
 	fieldTypeLabel,
+	hasActiveComboForPackage,
 	type ComboPackageItem,
 } from '../utils/combo';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
@@ -33,7 +34,11 @@ export default function ComboMarketScreen() {
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [purchasingId, setPurchasingId] = useState<number | null>(null);
-	const [jit, setJit] = useState<{ missingCoin: number; comboPackageId: number } | null>(null);
+	const [jit, setJit] = useState<{
+		missingCoin: number;
+		missingVnd?: number;
+		comboPackageId: number;
+	} | null>(null);
 
 	const load = useCallback(async (silent = false) => {
 		try {
@@ -57,6 +62,7 @@ export default function ComboMarketScreen() {
 	};
 
 	const purchase = async (pkg: ComboPackageItem) => {
+		if (jit) return;
 		setPurchasingId(pkg.id);
 		try {
 			await api.purchaseCombo(pkg.id);
@@ -73,6 +79,7 @@ export default function ComboMarketScreen() {
 			if (topUp) {
 				setJit({
 					missingCoin: topUp.missingCoin,
+					missingVnd: topUp.missingVnd,
 					comboPackageId: topUp.comboPackageId ?? pkg.id,
 				});
 			} else {
@@ -119,9 +126,9 @@ export default function ComboMarketScreen() {
 				</View>
 
 				<TouchableOpacity
-					style={[styles.btn, isBuying && styles.btnDisabled]}
+					style={[styles.btn, (isBuying || !!jit) && styles.btnDisabled]}
 					onPress={() => purchase(item)}
-					disabled={isBuying}
+					disabled={isBuying || !!jit}
 				>
 					{isBuying ? (
 						<ActivityIndicator color='#fff' />
@@ -180,23 +187,42 @@ export default function ComboMarketScreen() {
 				<QuickTopUpSheet
 					visible
 					missingCoin={jit.missingCoin}
+					missingVnd={jit.missingVnd}
 					comboPackageId={jit.comboPackageId}
 					purpose='COMBO_JIT'
 					onClose={() => setJit(null)}
-					onSuccess={() => {
+					onSuccess={async () => {
+						const packageId = jit.comboPackageId;
 						setJit(null);
-						Alert.alert(
-							'Thành công',
-							'Đã nạp coin và mua gói combo. Xem trong Gói combo của tôi.',
-							[
-								{ text: 'OK' },
-								{
-									text: 'Xem gói',
-									onPress: () => navigation.navigate('MyCombos'),
-								},
-							],
-						);
-						load(true);
+						try {
+							const combos = await api.getMyCombos();
+							if (!hasActiveComboForPackage(combos, packageId)) {
+								Alert.alert(
+									'Đã nạp coin',
+									'Coin đã vào ví. Bấm «Mua ngay» lại để hoàn tất (không cần nạp thêm nếu đủ coin).',
+								);
+								return;
+							}
+							Alert.alert(
+								'Thành công',
+								'Đã nạp coin và mua gói combo. Xem trong Gói combo của tôi.',
+								[
+									{ text: 'OK' },
+									{
+										text: 'Xem gói',
+										onPress: () => navigation.navigate('MyCombos'),
+									},
+								],
+							);
+							load(true);
+						} catch {
+							Alert.alert(
+								'Thành công',
+								'Đã nạp coin và mua gói combo.',
+								[{ text: 'OK' }],
+							);
+							load(true);
+						}
 					}}
 				/>
 			)}

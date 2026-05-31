@@ -6,6 +6,7 @@ import {
 	TouchableOpacity,
 	FlatList,
 	ActivityIndicator,
+	RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -14,31 +15,38 @@ import { theme } from '../constants/theme';
 import { api } from '../services/api';
 import { formatCoin } from '../utils/coin';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
+import { useWallet } from '../context/WalletContext';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 export default function WalletScreen() {
 	const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-	const [balance, setBalance] = useState(0);
+	const { balance, refreshWallet } = useWallet();
 	const [transactions, setTransactions] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
 
-	const load = useCallback(async () => {
+	const loadTransactions = useCallback(async (silent = false) => {
 		try {
-			setLoading(true);
-			const [w, tx] = await Promise.all([
-				api.getWalletMe(),
-				api.getWalletTransactions(1, 30),
-			]);
-			setBalance(w.balance);
+			if (!silent) setLoading(true);
+			await refreshWallet(true);
+			const tx = await api.getWalletTransactions(1, 30);
 			setTransactions(tx.transactions ?? []);
 		} catch (e) {
 			console.error(e);
 		} finally {
 			setLoading(false);
+			setRefreshing(false);
 		}
-	}, []);
+	}, [refreshWallet]);
 
-	useRefreshOnFocus(load, true);
+	useRefreshOnFocus(() => loadTransactions(true), true);
+
+	const onRefresh = () => {
+		setRefreshing(true);
+		void loadTransactions(true);
+	};
+
+	const displayBalance = balance ?? 0;
 
 	return (
 		<View style={styles.container}>
@@ -47,15 +55,17 @@ export default function WalletScreen() {
 					<Ionicons name='arrow-back' size={24} color={theme.colors.foreground} />
 				</TouchableOpacity>
 				<Text style={styles.headerTitle}>Ví coin</Text>
-				<View style={{ width: 24 }} />
+				<TouchableOpacity onPress={onRefresh} hitSlop={12}>
+					<Ionicons name='refresh' size={22} color={theme.colors.primary} />
+				</TouchableOpacity>
 			</View>
-			{loading ? (
+			{loading && balance == null ? (
 				<ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
 			) : (
 				<>
 					<View style={styles.balanceCard}>
 						<Text style={styles.balanceLabel}>Số dư</Text>
-						<Text style={styles.balanceValue}>{formatCoin(balance)}</Text>
+						<Text style={styles.balanceValue}>{formatCoin(displayBalance)}</Text>
 						<TouchableOpacity
 							style={styles.topUpBtn}
 							onPress={() => navigation.navigate('TopUp')}
@@ -77,6 +87,9 @@ export default function WalletScreen() {
 					<FlatList
 						data={transactions}
 						keyExtractor={(item) => String(item.id)}
+						refreshControl={
+							<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+						}
 						renderItem={({ item }) => (
 							<View style={styles.txRow}>
 								<View>

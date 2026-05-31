@@ -60,15 +60,61 @@ export function comboPerMatchCoin(pkg: ComboPackageItem): number {
 	return Math.round((pkg.priceCoin / pkg.matchCount) * 100) / 100;
 }
 
-export function extractNeedTopUp(err: unknown): { missingCoin: number; comboPackageId?: number } | null {
+export function hasActiveComboForPackage(
+	combos: unknown[],
+	packageId: number,
+): boolean {
+	if (!Array.isArray(combos)) return false;
+	return combos.some((raw) => {
+		if (!raw || typeof raw !== 'object') return false;
+		const row = raw as {
+			matchesRemaining?: number;
+			comboPackageId?: number;
+			comboPackage?: { id?: number };
+		};
+		const pkgId = row.comboPackage?.id ?? row.comboPackageId;
+		return (
+			pkgId === packageId &&
+			(row.matchesRemaining == null || row.matchesRemaining > 0)
+		);
+	});
+}
+
+export function extractNeedTopUp(
+	err: unknown,
+): { missingCoin: number; missingVnd?: number; comboPackageId?: number } | null {
 	const ax = err as {
-		response?: { status?: number; data?: { missingCoin?: number; comboPackageId?: number } };
+		response?: {
+			status?: number;
+			data?: Record<string, unknown>;
+		};
 	};
-	const status = ax.response?.status;
-	const data = ax.response?.data;
-	if (status !== 402 || data?.missingCoin == null) return null;
+	if (ax.response?.status !== 402) return null;
+
+	const raw = ax.response.data;
+	if (!raw || typeof raw !== 'object') return null;
+
+	const nested =
+		typeof raw.message === 'object' && raw.message != null
+			? (raw.message as Record<string, unknown>)
+			: raw;
+
+	const missingCoin = Number(nested.missingCoin ?? raw.missingCoin);
+	if (!Number.isFinite(missingCoin) || missingCoin <= 0) return null;
+
+	const missingVndRaw = nested.missingVnd ?? raw.missingVnd;
+	const missingVnd =
+		missingVndRaw != null && Number.isFinite(Number(missingVndRaw))
+			? Number(missingVndRaw)
+			: undefined;
+
+	const comboIdRaw = nested.comboPackageId ?? raw.comboPackageId;
 	return {
-		missingCoin: Number(data.missingCoin),
-		comboPackageId: data.comboPackageId != null ? Number(data.comboPackageId) : undefined,
+		missingCoin,
+		missingVnd,
+		comboPackageId:
+			comboIdRaw != null && Number.isFinite(Number(comboIdRaw))
+				? Number(comboIdRaw)
+				: undefined,
 	};
 }

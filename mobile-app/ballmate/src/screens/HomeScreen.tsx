@@ -25,6 +25,7 @@ import NotificationBell from '../components/NotificationBell';
 import { formatCoin, formatVndAsCoin } from '../utils/coin';
 import { fieldTypeLabel } from '../utils/combo';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
+import { useWallet } from '../context/WalletContext';
 import * as Location from 'expo-location';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -69,20 +70,11 @@ export default function HomeScreen() {
 	const [stats, setStats] = useState<{ total: number; minPrice: number }>({ total: 0, minPrice: 0 });
 	const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 	const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
-	const [walletBalance, setWalletBalance] = useState<number | null>(null);
+	const { balance: walletBalance, refreshWallet } = useWallet();
 	const [myCombos, setMyCombos] = useState<PlayerComboRow[]>([]);
 	const [loadingCombos, setLoadingCombos] = useState(false);
 
 	const hasLoadedRef = useRef(false);
-
-	const loadWallet = useCallback(async () => {
-		try {
-			const w = await api.getWalletMe();
-			setWalletBalance(w.balance);
-		} catch {
-			setWalletBalance(null);
-		}
-	}, []);
 
 	const loadMyCombos = useCallback(async (silent = false) => {
 		if (!api.currentUser) {
@@ -126,14 +118,13 @@ export default function HomeScreen() {
 
 	useRefreshOnFocus(() => {
 		loadInitialData(hasLoadedRef.current);
-		loadWallet();
+		void refreshWallet(true);
 		loadMyCombos(hasLoadedRef.current);
 	}, true);
 
 	useEffect(() => {
-		loadWallet();
 		loadMyCombos();
-	}, [loadWallet, loadMyCombos]);
+	}, [loadMyCombos]);
 
 	// const loadFavorites = async () => {
 	//     try {
@@ -253,7 +244,7 @@ export default function HomeScreen() {
 
 	const onRefresh = async () => {
 		setRefreshing(true);
-		await Promise.all([loadInitialData(), loadWallet(), loadMyCombos(true)]);
+		await Promise.all([loadInitialData(), refreshWallet(true), loadMyCombos(true)]);
 		setRefreshing(false);
 	};
 
