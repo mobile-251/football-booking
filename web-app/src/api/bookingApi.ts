@@ -100,6 +100,7 @@ const bookingApi = {
     markBankTransferPaid: (bookingId: number) => {
         return AxiosClient.patch(`/bookings/${bookingId}/mark-bank-paid`) as Promise<{
             bookingId: number;
+            bookingStatus: string;
             paymentStatus: string;
             alreadyPaid?: boolean;
         }>;

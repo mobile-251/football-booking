@@ -55,7 +55,13 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("idle");
   const [fetchingCode, setFetchingCode] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState(booking.paymentStatus);
+  const [bookingStatus, setBookingStatus] = useState(booking.status);
   const [qrItem, setQrItem] = useState<WalkInQrQueueItem | null>(null);
+
+  useEffect(() => {
+    setPaymentStatus(booking.paymentStatus);
+    setBookingStatus(booking.status);
+  }, [booking.id, booking.paymentStatus, booking.status]);
 
   const isWalkIn = booking.source === "WEB_WALK_IN";
   const awaitingPayment = isAwaitingBankPayment(
@@ -63,13 +69,13 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     paymentStatus,
   );
   const canConfirm = canConfirmBooking(
-    booking.status,
+    bookingStatus,
     booking.paymentMethod,
     paymentStatus,
     booking.source,
   );
   const statusLabel = getBookingStatusLabel(
-    booking.status,
+    bookingStatus,
     booking.paymentMethod,
     paymentStatus,
   );
@@ -80,7 +86,10 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     if (!isWalkIn || booking.paymentMethod !== "BANK_TRANSFER") return;
     bookingApi
       .getPaymentStatus(Number(booking.id))
-      .then((data) => setPaymentStatus(data.paymentStatus))
+      .then((data) => {
+        setPaymentStatus(data.paymentStatus);
+        setBookingStatus(data.bookingStatus);
+      })
       .catch(() => {});
   }, [booking.id, booking.paymentMethod, isWalkIn]);
 
@@ -89,7 +98,8 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     awaitingPayment,
     (data) => {
       if (data.paymentStatus === "PAID" || data.bookingStatus === "CONFIRMED") {
-        setPaymentStatus("PAID");
+        setPaymentStatus(data.paymentStatus);
+        setBookingStatus(data.bookingStatus);
         toast.success("Đã nhận chuyển khoản — booking đã xác nhận");
         onRefresh?.();
       }
@@ -109,6 +119,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
       const data = await bookingApi.getPaymentStatus(Number(booking.id));
       if (data.paymentStatus === "PAID") {
         setPaymentStatus("PAID");
+        setBookingStatus(data.bookingStatus);
         toast.success("SePay đã ghi nhận thanh toán");
         onRefresh?.();
         return;
@@ -142,6 +153,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     try {
       const data = await bookingApi.getPaymentStatus(Number(booking.id));
       setPaymentStatus(data.paymentStatus);
+      setBookingStatus(data.bookingStatus);
       if (data.paymentStatus === "PAID" || data.bookingStatus === "CONFIRMED") {
         toast.success("Đã nhận chuyển khoản — booking đã xác nhận");
         onRefresh?.();
@@ -167,8 +179,9 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     }
     setLoading(true);
     try {
-      await bookingApi.markBankTransferPaid(Number(booking.id));
-      setPaymentStatus("PAID");
+      const data = await bookingApi.markBankTransferPaid(Number(booking.id));
+      setPaymentStatus(data.paymentStatus);
+      setBookingStatus(data.bookingStatus ?? "CONFIRMED");
       toast.success("Đã ghi nhận thanh toán — booking đã xác nhận");
       onRefresh?.();
     } catch {
@@ -421,7 +434,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
             </div>
           )}
 
-          {booking.status === "PENDING" &&
+          {bookingStatus === "PENDING" &&
             booking.paymentMethod === "BANK_TRANSFER" &&
             paymentStatus === "PAID" &&
             !isWalkIn && (
@@ -471,7 +484,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
         </div>
 
         <div className="space-y-3 border-t border-gray-100 px-6 py-4">
-          {booking.status === "PENDING" && checkInStep === "idle" && (
+          {bookingStatus === "PENDING" && checkInStep === "idle" && (
             <div className="flex flex-col gap-3">
               <div className="flex gap-3">
                 <button
@@ -522,14 +535,14 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
                     onClick={markPaidManually}
                     disabled={loading}
                   >
-                    Xác nhận đã nhận tiền (đối sao kê)
+                    Xác nhận đã nhận tiền
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {booking.status === "CONFIRMED" && checkInStep === "idle" && (
+          {bookingStatus === "CONFIRMED" && checkInStep === "idle" && (
             <button
               type="button"
               className="btn-primary w-full"
@@ -540,7 +553,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
             </button>
           )}
 
-          {booking.status === "CONFIRMED" && checkInStep !== "idle" && (
+          {bookingStatus === "CONFIRMED" && checkInStep !== "idle" && (
             <div className="flex gap-3">
               <button
                 type="button"
@@ -574,6 +587,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
           onAllPaid={() => {
             setQrItem(null);
             setPaymentStatus("PAID");
+            setBookingStatus("CONFIRMED");
             onRefresh?.();
           }}
         />
