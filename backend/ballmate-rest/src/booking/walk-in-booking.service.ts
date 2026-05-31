@@ -207,13 +207,19 @@ export class WalkInBookingService {
       throw new NotFoundException(`Booking with ID ${bookingId} not found`);
     }
 
-    if (booking.source !== BookingSource.WEB_WALK_IN) {
-      throw new BadRequestException('Not a walk-in booking');
-    }
-
     const payment = booking.payment;
     if (!payment) {
       throw new NotFoundException('Payment not found for this booking');
+    }
+    if (payment.method !== PaymentMethod.BANK_TRANSFER) {
+      throw new BadRequestException('Not a bank transfer booking');
+    }
+
+    if (
+      booking.source !== BookingSource.WEB_WALK_IN &&
+      booking.source !== BookingSource.MOBILE_APP
+    ) {
+      throw new BadRequestException('Unsupported booking source for payment status');
     }
 
     if (
@@ -291,12 +297,17 @@ export class WalkInBookingService {
     if (!booking) {
       throw new NotFoundException(`Booking with ID ${bookingId} not found`);
     }
-    if (booking.source !== BookingSource.WEB_WALK_IN) {
-      throw new BadRequestException('Not a walk-in booking');
-    }
     const payment = booking.payment;
     if (!payment || payment.method !== PaymentMethod.BANK_TRANSFER) {
       throw new BadRequestException('Not a bank transfer booking');
+    }
+    if (
+      booking.source !== BookingSource.WEB_WALK_IN &&
+      booking.source !== BookingSource.MOBILE_APP
+    ) {
+      throw new BadRequestException(
+        'Chỉ hỗ trợ xác nhận CK cho booking walk-in hoặc mobile app',
+      );
     }
     if (payment.status === PaymentStatus.PAID) {
       if (booking.status === BookingStatus.PENDING) {
@@ -305,10 +316,13 @@ export class WalkInBookingService {
           data: { status: BookingStatus.CONFIRMED },
         });
       }
+      const refreshed = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+      });
       return {
         bookingId,
         paymentStatus: PaymentStatus.PAID,
-        bookingStatus: BookingStatus.CONFIRMED,
+        bookingStatus: refreshed?.status ?? BookingStatus.CONFIRMED,
         alreadyPaid: true,
       };
     }

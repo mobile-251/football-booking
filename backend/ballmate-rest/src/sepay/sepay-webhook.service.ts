@@ -42,9 +42,10 @@ export class SepayWebhookService {
     });
     if (!payment) return;
 
-    const shouldAutoConfirmWalkIn =
-      payment.booking.source === BookingSource.WEB_WALK_IN &&
-      payment.booking.status === BookingStatus.PENDING;
+    const shouldAutoConfirm =
+      payment.booking.status === BookingStatus.PENDING &&
+      (payment.booking.source === BookingSource.WEB_WALK_IN ||
+        payment.booking.source === BookingSource.MOBILE_APP);
 
     await this.prisma.$transaction([
       this.prisma.payment.update({
@@ -56,7 +57,7 @@ export class SepayWebhookService {
             sepayTransactionId != null ? String(sepayTransactionId) : undefined,
         },
       }),
-      ...(shouldAutoConfirmWalkIn
+      ...(shouldAutoConfirm
         ? [
             this.prisma.booking.update({
               where: { id: payment.bookingId },
@@ -66,18 +67,21 @@ export class SepayWebhookService {
         : []),
     ]);
 
-    if (shouldAutoConfirmWalkIn) {
+    if (shouldAutoConfirm) {
       this.logger.log(
-        `Walk-in booking ${payment.bookingId} auto-confirmed after payment`,
+        `Booking ${payment.bookingId} (${payment.booking.source}) auto-confirmed after bank payment`,
       );
       try {
         await this.notificationService.dispatchBookingConfirmed(
           payment.bookingId,
-          { walkInBankPaid: true },
+          {
+            walkInBankPaid:
+              payment.booking.source === BookingSource.WEB_WALK_IN,
+          },
         );
       } catch (err) {
         this.logger.warn(
-          `Walk-in confirm notification failed: ${String(err)}`,
+          `Confirm notification failed: ${String(err)}`,
         );
       }
     }

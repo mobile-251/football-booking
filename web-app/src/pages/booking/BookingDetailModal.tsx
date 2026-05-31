@@ -64,6 +64,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
   }, [booking.id, booking.paymentStatus, booking.status]);
 
   const isWalkIn = booking.source === "WEB_WALK_IN";
+  const isBankTransferBooking = booking.paymentMethod === "BANK_TRANSFER";
   const awaitingPayment = isAwaitingBankPayment(
     booking.paymentMethod,
     paymentStatus,
@@ -83,7 +84,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     statusBadgeClass[statusLabel] ?? "bg-slate-400";
 
   useEffect(() => {
-    if (!isWalkIn || booking.paymentMethod !== "BANK_TRANSFER") return;
+    if (!isBankTransferBooking) return;
     bookingApi
       .getPaymentStatus(Number(booking.id))
       .then((data) => {
@@ -91,7 +92,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
         setBookingStatus(data.bookingStatus);
       })
       .catch(() => {});
-  }, [booking.id, booking.paymentMethod, isWalkIn]);
+  }, [booking.id, isBankTransferBooking]);
 
   usePaymentStatusPoll(
     Number(booking.id),
@@ -181,7 +182,7 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
     try {
       const data = await bookingApi.markBankTransferPaid(Number(booking.id));
       setPaymentStatus(data.paymentStatus);
-      setBookingStatus(data.bookingStatus ?? "CONFIRMED");
+      setBookingStatus(data.bookingStatus ?? bookingStatus);
       toast.success("Đã ghi nhận thanh toán — booking đã xác nhận");
       onRefresh?.();
     } catch {
@@ -427,9 +428,10 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
                 Chưa nhận chuyển khoản
               </p>
               <p className="m-0 mt-1 text-xs text-violet-800/90">
-                Khách cần quét QR và chuyển khoản đúng nội dung mã BM… Nếu đã
-                chuyển mà chưa đổi trạng thái, bấm &quot;Kiểm tra lại SePay&quot;
-                hoặc xác nhận thủ công sau khi đối sao kê.
+                Khách chuyển khoản đúng số tiền và nội dung mã BM… (mã booking).
+                {isWalkIn
+                  ? " Có thể quét QR tại quầy."
+                  : " Đơn từ app — kiểm tra SePay hoặc xác nhận thủ công sau khi đối sao kê."}
               </p>
             </div>
           )}
@@ -496,16 +498,14 @@ const BookingDetailModal: React.FC<BookingDetailModalProps> = ({
                   Hủy đơn
                 </button>
                 {awaitingPayment ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn-primary flex-1"
-                      onClick={openPaymentQr}
-                      disabled={loading}
-                    >
-                      Xem QR thanh toán
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="btn-primary flex-1"
+                    onClick={openPaymentQr}
+                    disabled={loading}
+                  >
+                    Xem QR thanh toán
+                  </button>
                 ) : (
                   canConfirm && (
                     <button

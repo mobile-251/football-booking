@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentService } from './payment.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SepayService } from '../sepay/sepay.service';
 import { NotFoundException } from '@nestjs/common';
 import { PaymentStatus } from '@prisma/client';
 
@@ -11,10 +12,17 @@ describe('PaymentService', () => {
     // Mock data
     const mockBooking = {
         id: 1,
+        bookingCode: 'BM1A2B3C',
         fieldId: 1,
         playerId: 1,
         field: { id: 1, name: 'Sân 1' },
         player: { id: 1 },
+    };
+
+    const mockSepayService = {
+        getPaymentCode: jest.fn((code: string) => code.toUpperCase()),
+        buildQrImageUrl: jest.fn(() => 'https://qr.sepay.vn/img?test=1'),
+        getExpiresAt: jest.fn(() => new Date(Date.now() + 300000)),
     };
 
     const mockPayment = {
@@ -38,7 +46,7 @@ describe('PaymentService', () => {
             payment: {
                 create: jest.fn(),
                 findMany: jest.fn(),
-                findUnique: jest.fn(),
+                findUnique: jest.fn().mockResolvedValue(null),
                 update: jest.fn(),
                 delete: jest.fn(),
             },
@@ -48,6 +56,7 @@ describe('PaymentService', () => {
             providers: [
                 PaymentService,
                 { provide: PrismaService, useValue: mockPrismaService },
+                { provide: SepayService, useValue: mockSepayService },
             ],
         }).compile();
 
