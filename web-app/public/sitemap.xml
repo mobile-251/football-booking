@@ -10,13 +10,14 @@
     <xhtml:link rel="alternate" hreflang="vi-VN" href="https://ballmate.vn/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://ballmate.vn/" />
     <image:image>
-      <image:loc>https://ballmate.vn/landing/hero-pitch.jpg</image:loc>
-      <image:title>Sân bóng đá cỏ nhân tạo tại Việt Nam quản lý bởi Ballmate</image:title>
-      <image:caption>Hệ thống Ballmate quản lý sân bóng đá hiện đại cho chủ sân Việt Nam.</image:caption>
+      <image:loc>https://ballmate.vn/landing/hero-phone.jpg</image:loc>
+      <image:title>App Ballmate đặt sân bóng đá trên điện thoại</image:title>
+      <image:caption>Giao diện app Ballmate giúp cầu thủ tìm và đặt sân cỏ nhân tạo gần bạn.</image:caption>
     </image:image>
     <image:image>
       <image:loc>https://ballmate.vn/landing/og-image.jpg</image:loc>
-      <image:title>Ballmate - Quản lý sân bóng đá thông minh</image:title>
+      <image:title>Ballmate - App đặt sân bóng đá thông minh</image:title>
+      <image:caption>Landing page giới thiệu app Ballmate cho cầu thủ phong trào Việt Nam.</image:caption>
     </image:image>
   </url>
   <url>
