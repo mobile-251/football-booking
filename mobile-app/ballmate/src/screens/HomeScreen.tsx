@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
 	View,
 	Text,
@@ -21,7 +21,9 @@ import { Venue } from '../types/types';
 import { api } from '../services/api';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import VenueCard from '../components/VenueCard';
+import NotificationBell from '../components/NotificationBell';
 import { formatPrice } from '../utils/formatters';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import * as Location from 'expo-location';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -54,17 +56,15 @@ export default function HomeScreen() {
 	const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 	const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
 
-	useEffect(() => {
-		loadInitialData();
-	}, []);
+	const hasLoadedRef = useRef(false);
 
 	useEffect(() => {
 		filterVenues();
 	}, [selectedFilter, appliedSearch, allVenues, userLocation]);
 
-	const loadInitialData = async () => {
+	const loadInitialData = useCallback(async (silent = false) => {
 		try {
-			setLoading(true);
+			if (!silent) setLoading(true);
 			const venuesData = await api.getVenues();
 			setAllVenues(venuesData as (Venue & { minPrice?: number })[]);
 
@@ -78,8 +78,11 @@ export default function HomeScreen() {
 			setAllVenues([]);
 		} finally {
 			setLoading(false);
+			hasLoadedRef.current = true;
 		}
-	};
+	}, []);
+
+	useRefreshOnFocus(() => loadInitialData(hasLoadedRef.current));
 
 	// const loadFavorites = async () => {
 	//     try {
@@ -250,9 +253,7 @@ export default function HomeScreen() {
 								<Ionicons name='chevron-down' size={16} color={theme.colors.white} />
 							</View>
 						</View>
-						<TouchableOpacity style={styles.notificationBtn} onPress={() => navigation.navigate('Notifications')}>
-							<Ionicons name='notifications-outline' size={24} color={theme.colors.white} />
-						</TouchableOpacity>
+						<NotificationBell color={theme.colors.white} style={styles.notificationBtn} />
 					</View>
 
 					{/* Logo */}

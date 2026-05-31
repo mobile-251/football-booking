@@ -17,6 +17,8 @@ import { VenueDetail, FIELD_TYPE_LABELS, Review, FieldWithPricing, Field } from 
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
 import { splitPolicyLines } from '../utils/policyText';
+import { getAmenityLabels } from '../utils/venueDisplay';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import BookingModal from '../components/BookingModal';
 import { useAuth } from '../context/AuthContext';
@@ -47,13 +49,9 @@ export default function VenueDetailScreen() {
 	const [isFavorite, setIsFavorite] = useState(false);
 	const [favoriteLoading, setFavoriteLoading] = useState(false);
 
-	useEffect(() => {
-		loadVenue();
-	}, [venueId]);
-
-	const loadVenue = async () => {
+	const loadVenue = async (silent = false) => {
 		try {
-			setLoading(true);
+			if (!silent) setLoading(true);
 			const data = await api.getVenue(venueId);
 			setVenue(data);
 		} catch (error) {
@@ -62,6 +60,8 @@ export default function VenueDetailScreen() {
 			setLoading(false);
 		}
 	};
+
+	useRefreshOnFocus(() => loadVenue(!!venue));
 
 	const getUniqueFieldTypes = () => {
 		if (!venue?.fields) return [];
@@ -352,10 +352,10 @@ export default function VenueDetailScreen() {
 							<Text style={styles.infoTitle}>Tiện ích</Text>
 						</View>
 						<View style={styles.facilitiesRow}>
-							{venue.facilities?.length > 0 ? (
-								venue.facilities.map((facility, index) => (
+							{getAmenityLabels(venue.amenities).length > 0 ? (
+								getAmenityLabels(venue.amenities).map((label, index) => (
 									<View key={index} style={styles.facilityTag}>
-										<Text style={styles.facilityText}>{facility}</Text>
+										<Text style={styles.facilityText}>{label}</Text>
 									</View>
 								))
 							) : (

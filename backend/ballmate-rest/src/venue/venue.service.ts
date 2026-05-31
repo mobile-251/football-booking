@@ -23,6 +23,29 @@ const DEFAULT_VENUE_POLICIES = {
     'Khách hàng tự bảo đảm an toàn khi thi đấu. Sân không chịu trách nhiệm với tư trang để ngoài khu vực quản lý.',
 };
 
+type PricedItem = { name: string; price: number };
+
+function parseVenuePricedItems(raw: Prisma.JsonValue | null): PricedItem[] {
+  if (raw === null || raw === undefined || !Array.isArray(raw) || raw.length === 0) {
+    return [];
+  }
+  return raw
+    .filter(
+      (item): item is PricedItem =>
+        typeof item === 'object' &&
+        item !== null &&
+        'name' in item &&
+        typeof (item as PricedItem).name === 'string' &&
+        (item as PricedItem).name.trim().length > 0 &&
+        'price' in item,
+    )
+    .map((item) => ({
+      name: String((item as PricedItem).name).trim(),
+      price: Number((item as PricedItem).price),
+    }))
+    .filter((item) => Number.isFinite(item.price) && item.price >= 0);
+}
+
 function parseVenuePolicies(raw: Prisma.JsonValue | null) {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const p = raw as Record<string, string>;
@@ -345,6 +368,8 @@ export class VenueService {
       fields: transformedFields, // deprecated
       fieldsPricings: transformedFields,
       policies: parseVenuePolicies(venue.policies),
+      equipment: parseVenuePricedItems(venue.equipment),
+      canteenItems: parseVenuePricedItems(venue.canteenItems),
       minPrice,
       averageRating,
       totalBookings,

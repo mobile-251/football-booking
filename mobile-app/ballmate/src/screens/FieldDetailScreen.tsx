@@ -18,6 +18,8 @@ import { Field, FIELD_TYPE_LABELS, Review, VenueDetail, FieldPricing } from '../
 import { api } from '../services/api';
 import { formatPrice } from '../utils/formatters';
 import { splitPolicyLines } from '../utils/policyText';
+import { getAmenityLabels } from '../utils/venueDisplay';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import BookingModal from '../components/BookingModal';
 import { useAuth } from '../context/AuthContext';
@@ -91,9 +93,10 @@ export default function FieldDetailScreen() {
 	const [favoriteLoading, setFavoriteLoading] = useState(false);
 
 	useEffect(() => {
-		loadField();
 		loadReviews();
 	}, [fieldId]);
+
+	useRefreshOnFocus(() => loadField(!!field));
 
 	// Separate effect for checking favorite status when auth changes
 	useEffect(() => {
@@ -102,9 +105,9 @@ export default function FieldDetailScreen() {
 		}
 	}, [fieldId, isAuthenticated]);
 
-	const loadField = async () => {
+	const loadField = async (silent = false) => {
 		try {
-			setLoading(true);
+			if (!silent) setLoading(true);
 			const data = await api.getField(fieldId);
 			setField(data);
 			const venueId = data.venueId ?? data.venue?.id;
@@ -439,11 +442,15 @@ export default function FieldDetailScreen() {
 							<Text style={styles.infoTitle}>Tiện ích</Text>
 						</View>
 						<View style={styles.facilitiesRow}>
-							{field.venue?.facilities?.map((facility, index) => (
-								<View key={index} style={styles.facilityTag}>
-									<Text style={styles.facilityText}>{facility}</Text>
-								</View>
-							))}
+							{getAmenityLabels(venueDetail?.amenities ?? field.venue?.amenities).length > 0 ? (
+								getAmenityLabels(venueDetail?.amenities ?? field.venue?.amenities).map((label, index) => (
+									<View key={index} style={styles.facilityTag}>
+										<Text style={styles.facilityText}>{label}</Text>
+									</View>
+								))
+							) : (
+								<Text style={styles.infoValue}>Đang cập nhật...</Text>
+							)}
 						</View>
 					</View>
 

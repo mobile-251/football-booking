@@ -18,6 +18,11 @@ export interface User {
     };
 }
 
+export interface PricedItem {
+    name: string;
+    price: number;
+}
+
 export interface Venue {
     id: number;
     name: string;
@@ -30,7 +35,11 @@ export interface Venue {
     openTime: string;
     closeTime: string;
     phoneNumber?: string;
-    facilities: string[];
+    /** @deprecated API trả `amenities` */
+    facilities?: string[];
+    amenities?: string[];
+    equipment?: PricedItem[];
+    canteenItems?: PricedItem[];
     images: string[];
     ownerId: number;
     isActive: boolean;
