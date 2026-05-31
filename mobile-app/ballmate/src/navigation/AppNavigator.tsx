@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
-import { View, Text, StyleSheet, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Platform, useWindowDimensions, ActivityIndicator, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -25,6 +25,12 @@ import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import VenueDetailScreen from '../screens/VenueDetailScreen';
+import CheckInModal, { type CheckInStatusData } from '../components/CheckInModal';
+import WalletScreen from '../screens/WalletScreen';
+import { WalletProvider } from '../context/WalletContext';
+import TopUpScreen from '../screens/TopUpScreen';
+import ComboMarketScreen from '../screens/ComboMarketScreen';
+import MyCombosScreen from '../screens/MyCombosScreen';
 
 export type RootStackParamList = {
 	Welcome: undefined;
@@ -39,6 +45,10 @@ export type RootStackParamList = {
 	TransactionHistory: undefined;
 	Favorites: undefined;
 	PersonalInfo: undefined;
+	Wallet: undefined;
+	TopUp: undefined;
+	ComboMarket: { venueId: number; venueName?: string };
+	MyCombos: undefined;
 };
 
 export type MainTabParamList = {
@@ -248,6 +258,41 @@ function MainTabsContent() {
 	const insets = useSafeAreaInsets();
 	const { width: windowWidth } = useWindowDimensions();
 	const { unreadMessages, upcomingBookings, refreshBadges } = useBadges();
+	const [checkInStatus, setCheckInStatus] = useState<CheckInStatusData | null>(null);
+	const [showCheckInModal, setShowCheckInModal] = useState(false);
+	const [checkInLoading, setCheckInLoading] = useState(false);
+
+	const loadCheckInPrompt = useCallback(async () => {
+		try {
+			const s = await api.getCheckInStatus();
+			setCheckInStatus(s);
+			if (!s.checkedInToday) {
+				setShowCheckInModal(true);
+			}
+		} catch {
+			setCheckInStatus(null);
+		}
+	}, []);
+
+	useEffect(() => {
+		loadCheckInPrompt();
+	}, [loadCheckInPrompt]);
+
+	const handleCheckIn = async () => {
+		setCheckInLoading(true);
+		try {
+			const r = await api.postCheckIn();
+			setShowCheckInModal(false);
+			const s = await api.getCheckInStatus();
+			setCheckInStatus(s);
+			refreshBadges();
+			Alert.alert('Điểm danh thành công', r.message || `+${r.coinRewarded} coin vào ví`);
+		} catch {
+			/* CheckInModal stays open; user can dismiss */
+		} finally {
+			setCheckInLoading(false);
+		}
+	};
 	// Keep the whole bar (including icons) closer to the bottom on iOS.
 	// Use insets.bottom to avoid being covered by system navigation bar (edge-to-edge mode)
 	const tabBarBottom = Platform.OS === 'web' ? theme.spacing.sm : insets.bottom;
@@ -259,6 +304,14 @@ function MainTabsContent() {
 	const tabButtonWidth = Math.max(56, Math.min(100, rawTabWidth));
 
 	return (
+		<>
+		<CheckInModal
+			visible={showCheckInModal}
+			status={checkInStatus}
+			loading={checkInLoading}
+			onCheckIn={handleCheckIn}
+			onDismiss={() => setShowCheckInModal(false)}
+		/>
 		<Tab.Navigator
 			screenOptions={{
 				headerShown: false,
@@ -360,6 +413,7 @@ function MainTabsContent() {
 				listeners={{ focus: refreshBadges }}
 			/>
 		</Tab.Navigator>
+		</>
 	);
 }
 
@@ -384,6 +438,7 @@ function LoadingScreen() {
 // Authenticated Stack - screens available after login
 function AuthenticatedStack() {
 	return (
+		<WalletProvider>
 		<Stack.Navigator
 			screenOptions={{
 				headerShown: false,
@@ -449,7 +504,12 @@ function AuthenticatedStack() {
 					headerShown: false,
 				}}
 			/>
+			<Stack.Screen name='Wallet' component={WalletScreen} options={{ headerShown: false }} />
+			<Stack.Screen name='TopUp' component={TopUpScreen} options={{ headerShown: false }} />
+			<Stack.Screen name='ComboMarket' component={ComboMarketScreen} options={{ headerShown: false }} />
+			<Stack.Screen name='MyCombos' component={MyCombosScreen} options={{ headerShown: false }} />
 		</Stack.Navigator>
+		</WalletProvider>
 	);
 }
 

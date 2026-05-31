@@ -1,21 +1,62 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
-import { PaymentStatus } from '@prisma/client';
+import { PaymentMethod, PaymentStatus } from '@prisma/client';
+import { SepayService } from '../sepay/sepay.service';
 
 @Injectable()
 export class PaymentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private sepayService: SepayService,
+  ) {}
 
   async create(createPaymentDto: CreatePaymentDto) {
-    // Check if booking exists
-    await this.prisma.booking.findUniqueOrThrow({
+    const booking = await this.prisma.booking.findUniqueOrThrow({
       where: { id: createPaymentDto.bookingId },
     });
 
+    const existing = await this.prisma.payment.findUnique({
+      where: { bookingId: createPaymentDto.bookingId },
+    });
+    if (existing) {
+      throw new ConflictException('Payment already exists for this booking');
+    }
+
+    const method =
+      createPaymentDto.method ?? PaymentMethod.CASH;
+    const isBankTransfer = method === PaymentMethod.BANK_TRANSFER;
+
+    const sepayPaymentCode = isBankTransfer
+      ? this.sepayService.getPaymentCode(booking.bookingCode)
+      : null;
+    const sepayQrUrl =
+      isBankTransfer && sepayPaymentCode
+        ? this.sepayService.buildQrImageUrl(
+            createPaymentDto.amount,
+            sepayPaymentCode,
+          )
+        : null;
+
     return this.prisma.payment.create({
-      data: createPaymentDto,
+      data: {
+        bookingId: createPaymentDto.bookingId,
+        amount: createPaymentDto.amount,
+        method,
+        status:
+          createPaymentDto.status ??
+          (isBankTransfer ? PaymentStatus.PENDING : PaymentStatus.PAID),
+        transactionId: createPaymentDto.transactionId,
+        sepayPaymentCode,
+        sepayQrUrl,
+        expiresAt: isBankTransfer ? this.sepayService.getExpiresAt() : null,
+        paidAt: isBankTransfer ? null : new Date(),
+      },
       include: {
         booking: {
           include: {

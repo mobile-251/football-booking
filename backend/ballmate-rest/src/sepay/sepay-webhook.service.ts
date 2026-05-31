@@ -1,7 +1,9 @@
 import {
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import {
   BookingSource,
@@ -13,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SepayWebhookPayload } from './dto/sepay-webhook-payload.dto';
 import { SepayService } from './sepay.service';
 import { NotificationService } from '../notification/notification.service';
+import { TopUpService } from '../top-up/top-up.service';
 
 @Injectable()
 export class SepayWebhookService {
@@ -22,6 +25,8 @@ export class SepayWebhookService {
     private prisma: PrismaService,
     private sepayService: SepayService,
     private notificationService: NotificationService,
+    @Inject(forwardRef(() => TopUpService))
+    private topUpService: TopUpService,
   ) {}
 
   verifyRequest(authHeader?: string) {
@@ -42,9 +47,10 @@ export class SepayWebhookService {
     });
     if (!payment) return;
 
-    const shouldAutoConfirmWalkIn =
-      payment.booking.source === BookingSource.WEB_WALK_IN &&
-      payment.booking.status === BookingStatus.PENDING;
+    const shouldAutoConfirm =
+      payment.booking.status === BookingStatus.PENDING &&
+      (payment.booking.source === BookingSource.WEB_WALK_IN ||
+        payment.booking.source === BookingSource.MOBILE_APP);
 
     await this.prisma.$transaction([
       this.prisma.payment.update({
@@ -56,7 +62,7 @@ export class SepayWebhookService {
             sepayTransactionId != null ? String(sepayTransactionId) : undefined,
         },
       }),
-      ...(shouldAutoConfirmWalkIn
+      ...(shouldAutoConfirm
         ? [
             this.prisma.booking.update({
               where: { id: payment.bookingId },
@@ -66,18 +72,21 @@ export class SepayWebhookService {
         : []),
     ]);
 
-    if (shouldAutoConfirmWalkIn) {
+    if (shouldAutoConfirm) {
       this.logger.log(
-        `Walk-in booking ${payment.bookingId} auto-confirmed after payment`,
+        `Booking ${payment.bookingId} (${payment.booking.source}) auto-confirmed after bank payment`,
       );
       try {
         await this.notificationService.dispatchBookingConfirmed(
           payment.bookingId,
-          { walkInBankPaid: true },
+          {
+            walkInBankPaid:
+              payment.booking.source === BookingSource.WEB_WALK_IN,
+          },
         );
       } catch (err) {
         this.logger.warn(
-          `Walk-in confirm notification failed: ${String(err)}`,
+          `Confirm notification failed: ${String(err)}`,
         );
       }
     }
@@ -176,9 +185,26 @@ export class SepayWebhookService {
       return { success: true, skipped: 'duplicate' };
     }
 
+    const codes = this.sepayService.collectPaymentCodeCandidates(payload);
+    for (const code of codes) {
+      const topUpOrder = await this.topUpService.findPendingByPaymentCode(code);
+      if (topUpOrder) {
+        if (payload.transferAmount < topUpOrder.priceVnd) {
+          this.logger.warn(
+            `Webhook ${payload.id}: top-up amount ${payload.transferAmount} < ${topUpOrder.priceVnd}`,
+          );
+          return { success: true, skipped: 'amount_insufficient' };
+        }
+        await this.topUpService.markOrderPaid(topUpOrder.id, payload.id);
+        this.logger.log(
+          `Top-up order ${topUpOrder.id} paid via SePay webhook ${payload.id}`,
+        );
+        return { success: true, topUpOrderId: topUpOrder.id };
+      }
+    }
+
     const payment = await this.findPendingBankPaymentFromPayload(payload);
     if (!payment) {
-      const codes = this.sepayService.collectPaymentCodeCandidates(payload);
       this.logger.warn(
         `Webhook ${payload.id}: no pending payment for codes [${codes.join(', ')}] content="${payload.content ?? ''}"`,
       );

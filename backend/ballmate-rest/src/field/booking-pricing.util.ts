@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { DayType, FieldPricing } from '@prisma/client';
+import { vndToCoin } from '../common/coin.util';
 import { parseExclusiveEndHour } from './venue-hours.util';
 
 export function getDayTypeForDate(date: Date): DayType {
@@ -77,4 +78,8 @@ export function calculateBookingPriceVnd(
   }
 
   return { totalPrice, breakdown };
+}
+
+export function calculateBookingCoinFromVnd(totalPriceVnd: number): number {
+  return vndToCoin(totalPriceVnd);
 }

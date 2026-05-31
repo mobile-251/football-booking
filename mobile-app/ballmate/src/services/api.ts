@@ -1,6 +1,10 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AuthResponse, Field, Venue, VenueDetail, Booking, Review, FieldFilter, ApiError, User, FieldType, FieldTypePricingSummary, FieldSlotInfo } from '../types/types';
 import { Config } from '../config/environment';
+import {
+	normalizeComboPackageList,
+	type ComboPackageItem,
+} from '../utils/combo';
 
 const API_BASE_URL = Config.API_URL;
 
@@ -24,8 +28,11 @@ class ApiService {
 	private isRefreshing = false;
 	private refreshQueue: QueuedRequest[] = [];
 
-	// Callback when refresh fails (set by AuthContext)
+	// Callbacks (set by AuthContext)
 	private onRefreshFailedCallback: (() => void) | null = null;
+	private onTokenRefreshedCallback:
+		| ((tokens: { accessToken: string; refreshToken?: string }) => void)
+		| null = null;
 
 	constructor() {
 		console.log('🚀 Initializing API Service with URL:', API_BASE_URL);
@@ -39,15 +46,23 @@ class ApiService {
 
 		// Add auth interceptor (request)
 		this.client.interceptors.request.use((config) => {
-			console.log('[API] Request to:', config.url, 'Token exists:', !!this.accessToken);
+			const url = config.url ?? '';
+			console.log('[API] Request to:', url, 'Token exists:', !!this.accessToken);
 
-			// List of public endpoints that don't need access token
-			const publicEndpoints = ['/auth/login', '/auth/register'];
-			const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint));
+			if (url.includes('/auth/login') || url.includes('/auth/register')) {
+				return config;
+			}
 
-			if (this.accessToken && !isPublicEndpoint) {
+			// Refresh must use refresh token — never the (possibly expired) access token
+			if (url.includes('/auth/refresh')) {
+				if (this.refreshToken) {
+					config.headers.Authorization = `Bearer ${this.refreshToken}`;
+				}
+				return config;
+			}
+
+			if (this.accessToken) {
 				config.headers.Authorization = `Bearer ${this.accessToken}`;
-				console.log('[API] Added Authorization header');
 			}
 			return config;
 		});
@@ -107,13 +122,18 @@ class ApiService {
 						);
 
 						const newAccessToken = response.data.accessToken || response.data.access_token;
-						const newRefreshToken = response.data.refreshToken || response.data.refresh_token;
+						const newRefreshToken =
+							response.data.refreshToken || response.data.refresh_token;
 
 						console.log('[API] Token refresh successful');
 						this.accessToken = newAccessToken;
 						if (newRefreshToken) {
 							this.refreshToken = newRefreshToken;
 						}
+						this.onTokenRefreshedCallback?.({
+							accessToken: newAccessToken,
+							refreshToken: newRefreshToken,
+						});
 
 						// Process queued requests
 						this.refreshQueue.forEach(({ resolve }) => resolve(newAccessToken));
@@ -138,15 +158,25 @@ class ApiService {
 					}
 				}
 
-				console.error('API Error:', error.response?.data || error.message);
+				const errData = error.response?.data as { error?: string } | undefined;
+				if (error.response?.status === 402 && errData?.error === 'NEED_TOPUP') {
+					console.log('[API] NEED_TOPUP (expected):', error.response?.data);
+				} else {
+					console.error('API Error:', error.response?.data || error.message);
+				}
 				return Promise.reject(error);
 			}
 		);
 	}
 
-	// Set callback for when token refresh fails
 	setOnRefreshFailed(callback: () => void) {
 		this.onRefreshFailedCallback = callback;
+	}
+
+	setOnTokenRefreshed(
+		callback: (tokens: { accessToken: string; refreshToken?: string }) => void,
+	) {
+		this.onTokenRefreshedCallback = callback;
 	}
 
 	setAccessToken(token: string | null) {
@@ -211,15 +241,23 @@ class ApiService {
 	}
 
 	async refreshAccessToken(): Promise<AuthResponse> {
-		const response = await this.client.post<AuthResponse>(
-			'/auth/refresh',
-			{},
-			{
-				headers: { Authorization: `Bearer ${this.refreshToken}` },
-			}
-		);
-		this.accessToken = response.data.access_token;
-		return response.data;
+		if (!this.refreshToken) {
+			throw new Error('No refresh token');
+		}
+		const response = await this.client.post<any>('/auth/refresh', {});
+		const accessToken = response.data.accessToken || response.data.access_token;
+		const refreshToken =
+			response.data.refreshToken || response.data.refresh_token || this.refreshToken;
+
+		this.accessToken = accessToken;
+		this.refreshToken = refreshToken;
+		this.onTokenRefreshedCallback?.({ accessToken, refreshToken });
+
+		return {
+			access_token: accessToken,
+			refresh_token: refreshToken,
+			user: this.currentUser!,
+		};
 	}
 
 	async getProfile(): Promise<User> {
@@ -495,6 +533,122 @@ class ApiService {
 
 	async startConversation(fieldId: number, message?: string): Promise<any> {
 		const response = await this.client.post('/conversations/start', { fieldId, message });
+		return response.data;
+	}
+
+	// Wallet & coin
+	async getWalletMe(): Promise<{ playerId: number; balance: number }> {
+		const response = await this.client.get('/wallet/me', {
+			params: { _t: Date.now() },
+			headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+		});
+		const raw = response.data as Record<string, unknown> | null;
+		const body =
+			raw && typeof raw === 'object' && raw.data != null && typeof raw.data === 'object'
+				? (raw.data as Record<string, unknown>)
+				: raw;
+		const balance = Number(body?.balance ?? body?.coinBalance ?? 0);
+		const playerId = Number(body?.playerId ?? 0);
+		return {
+			playerId: Number.isFinite(playerId) ? playerId : 0,
+			balance: Number.isFinite(balance) ? balance : 0,
+		};
+	}
+
+	async getWalletTransactions(page = 1, limit = 20): Promise<any> {
+		const response = await this.client.get('/wallet/transactions', {
+			params: { page, limit },
+		});
+		return response.data;
+	}
+
+	async getTopUpPackages(): Promise<any[]> {
+		const response = await this.client.get('/top-up/packages');
+		const data = response.data;
+		if (Array.isArray(data)) return data;
+		if (Array.isArray(data?.data)) return data.data;
+		return [];
+	}
+
+	async createTopUpOrder(data: {
+		packageId?: number;
+		amountVnd?: number;
+		purpose?: string;
+		holdId?: number;
+		comboPackageId?: number;
+	}): Promise<any> {
+		const response = await this.client.post('/top-up/orders', data);
+		return response.data;
+	}
+
+	async getTopUpOrder(id: number): Promise<any> {
+		const response = await this.client.get(`/top-up/orders/${id}`);
+		return response.data;
+	}
+
+	async previewCoinBooking(data: {
+		fieldId: number;
+		startTime: string;
+		endTime: string;
+		playerComboId?: number;
+		services?: { venueServiceId: number; quantity: number }[];
+	}): Promise<any> {
+		const response = await this.client.post('/bookings/preview-coin', data);
+		return response.data;
+	}
+
+	async confirmCoinBooking(data: {
+		fieldId: number;
+		playerId: number;
+		customerName: string;
+		customerPhone: string;
+		startTime: string;
+		endTime: string;
+		note?: string;
+		playerComboId?: number;
+		services?: { venueServiceId: number; quantity: number }[];
+		extrasJson?: Record<string, unknown>;
+	}): Promise<any> {
+		const response = await this.client.post('/bookings/confirm-coin', data);
+		return response.data;
+	}
+
+	async getCheckInStatus(): Promise<any> {
+		const response = await this.client.get('/check-in/status');
+		return response.data;
+	}
+
+	async postCheckIn(): Promise<any> {
+		const response = await this.client.post('/check-in');
+		return response.data;
+	}
+
+	async getComboPackages(venueId: number): Promise<ComboPackageItem[]> {
+		const response = await this.client.get(`/combos/venues/${venueId}/packages`);
+		return normalizeComboPackageList(response.data);
+	}
+
+	async getMyCombos(): Promise<any[]> {
+		const response = await this.client.get('/combos/my');
+		const data = response.data;
+		return Array.isArray(data) ? data : [];
+	}
+
+	async getEligibleCombos(venueId: number, fieldType: string): Promise<any[]> {
+		const response = await this.client.get('/combos/eligible', {
+			params: { venueId, fieldType },
+		});
+		const data = response.data;
+		return Array.isArray(data) ? data : [];
+	}
+
+	async purchaseCombo(packageId: number): Promise<any> {
+		const response = await this.client.post(`/combos/packages/${packageId}/purchase`);
+		return response.data;
+	}
+
+	async getVenueServices(venueId: number): Promise<any[]> {
+		const response = await this.client.get(`/venues/${venueId}/services`);
 		return response.data;
 	}
 

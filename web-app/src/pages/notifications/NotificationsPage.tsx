@@ -23,6 +23,7 @@ function typeLabel(type: string) {
     case "BOOKING_CANCELLED":
       return "Đã hủy";
     case "PAYMENT_SUCCESS":
+      return "Thanh toán / Coin";
     case "PAYMENT_PENDING":
       return "Thanh toán";
     default:

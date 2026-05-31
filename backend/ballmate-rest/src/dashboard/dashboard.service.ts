@@ -1,6 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { BookingStatus, PaymentStatus, Prisma } from '@prisma/client';
+import {
+  BookingSource,
+  BookingStatus,
+  CoinTransactionType,
+  PaymentStatus,
+  Prisma,
+  TopUpOrderStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { coinToVnd, decimalToNumber } from '../common/coin.util';
 
 const ACTIVE_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -14,6 +22,8 @@ const REVENUE_STATUSES: BookingStatus[] = [
 ];
 
 const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+type ComboTxRow = { amount: Prisma.Decimal; createdAt: Date };
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -49,6 +59,23 @@ function formatTimeHHmm(d: Date): string {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async getVenueComboPackageIds(venueId: number): Promise<number[]> {
+    const pkgs = await this.prisma.comboPackage.findMany({
+      where: { venueId, deletedAt: null },
+      select: { id: true },
+    });
+    return pkgs.map((p) => p.id);
+  }
+
+  private sumComboPurchaseVnd(
+    txs: { amount: Prisma.Decimal }[],
+  ): number {
+    return txs.reduce(
+      (s, t) => s + coinToVnd(Math.abs(decimalToNumber(t.amount))),
+      0,
+    );
+  }
+
   async getVenueDashboard(venueId: number, userId: number) {
     const venue = await this.prisma.venue.findUnique({
       where: { id: venueId },
@@ -60,6 +87,9 @@ export class DashboardService {
     if (!venue) {
       throw new NotFoundException('Venue not found');
     }
+
+    const comboPackageIds = await this.getVenueComboPackageIds(venueId);
+    const fieldIds = venue.fields.map((f) => f.id);
 
     const now = new Date();
     const todayStart = startOfDay(now);
@@ -79,22 +109,41 @@ export class DashboardService {
       status: { in: REVENUE_STATUSES },
     };
 
+    const comboTxWhere: Prisma.CoinTransactionWhereInput = {
+      type: CoinTransactionType.COMBO_PURCHASE,
+      referenceType: 'COMBO_PACKAGE',
+      ...(comboPackageIds.length > 0
+        ? { referenceId: { in: comboPackageIds } }
+        : { referenceId: -1 }),
+    };
+
     const [
       monthBookings,
       prevMonthBookings,
+      monthComboTxs,
+      prevMonthComboTxs,
+      chartBookings,
+      chartComboTxs,
+      comboBookingsMonth,
       todayBookings,
       yesterdayBookings,
-      chartBookings,
       todayActiveBookings,
       recentBookings,
       unreadNotifications,
+      recentTopUps,
+      recentComboTxs,
     ] = await Promise.all([
       this.prisma.booking.findMany({
         where: {
           ...venueWhere,
           startTime: { gte: monthStart, lte: monthEnd },
         },
-        select: { totalPrice: true, startTime: true, endTime: true },
+        select: {
+          totalPrice: true,
+          startTime: true,
+          endTime: true,
+          comboUsage: { select: { id: true } },
+        },
       }),
       this.prisma.booking.findMany({
         where: {
@@ -102,6 +151,48 @@ export class DashboardService {
           startTime: { gte: prevMonthStart, lte: prevMonthEnd },
         },
         select: { totalPrice: true, startTime: true, endTime: true },
+      }),
+      comboPackageIds.length > 0
+        ? this.prisma.coinTransaction.findMany({
+            where: {
+              ...comboTxWhere,
+              createdAt: { gte: monthStart, lte: monthEnd },
+            },
+            select: { amount: true, createdAt: true },
+          })
+        : Promise.resolve([] as ComboTxRow[]),
+      comboPackageIds.length > 0
+        ? this.prisma.coinTransaction.findMany({
+            where: {
+              ...comboTxWhere,
+              createdAt: { gte: prevMonthStart, lte: prevMonthEnd },
+            },
+            select: { amount: true, createdAt: true },
+          })
+        : Promise.resolve([] as ComboTxRow[]),
+      this.prisma.booking.findMany({
+        where: {
+          ...venueWhere,
+          startTime: { gte: chartStart, lte: todayEnd },
+        },
+        select: { totalPrice: true, startTime: true },
+      }),
+      comboPackageIds.length > 0
+        ? this.prisma.coinTransaction.findMany({
+            where: {
+              ...comboTxWhere,
+              createdAt: { gte: chartStart, lte: todayEnd },
+            },
+            select: { amount: true, createdAt: true },
+          })
+        : Promise.resolve([] as ComboTxRow[]),
+      this.prisma.booking.count({
+        where: {
+          field: { venueId },
+          status: { in: REVENUE_STATUSES },
+          comboUsage: { isNot: null },
+          startTime: { gte: monthStart, lte: monthEnd },
+        },
       }),
       this.prisma.booking.count({
         where: {
@@ -121,13 +212,6 @@ export class DashboardService {
       }),
       this.prisma.booking.findMany({
         where: {
-          ...venueWhere,
-          startTime: { gte: chartStart, lte: todayEnd },
-        },
-        select: { totalPrice: true, startTime: true },
-      }),
-      this.prisma.booking.findMany({
-        where: {
           field: { venueId },
           status: { in: ACTIVE_STATUSES },
           startTime: { lte: todayEnd },
@@ -142,9 +226,18 @@ export class DashboardService {
       }),
       this.prisma.booking.findMany({
         where: { field: { venueId } },
-        include: {
+        select: {
+          id: true,
+          customerName: true,
+          startTime: true,
+          endTime: true,
+          totalPrice: true,
+          totalCoin: true,
+          status: true,
+          source: true,
           field: { select: { name: true } },
           payment: { select: { status: true } },
+          comboUsage: { select: { id: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -152,13 +245,73 @@ export class DashboardService {
       this.prisma.notification.count({
         where: { userId, isRead: false },
       }),
+      fieldIds.length > 0 || comboPackageIds.length > 0
+        ? this.prisma.topUpOrder.findMany({
+            where: {
+              status: TopUpOrderStatus.PAID,
+              paidAt: { not: null },
+              OR: [
+                ...(comboPackageIds.length > 0
+                  ? [{ comboPackageId: { in: comboPackageIds } }]
+                  : []),
+                ...(fieldIds.length > 0
+                  ? [
+                      {
+                        hold: { fieldId: { in: fieldIds } },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            include: {
+              player: {
+                include: { user: { select: { fullName: true } } },
+              },
+            },
+            orderBy: { paidAt: 'desc' },
+            take: 5,
+          })
+        : Promise.resolve([]),
+      comboPackageIds.length > 0
+        ? this.prisma.coinTransaction.findMany({
+            where: comboTxWhere,
+            include: {
+              wallet: {
+                include: {
+                  player: {
+                    include: { user: { select: { fullName: true } } },
+                  },
+                },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+          })
+        : Promise.resolve([] as {
+            id: number;
+            referenceId: number | null;
+            amount: Prisma.Decimal;
+            createdAt: Date;
+            wallet: {
+              player?: { user?: { fullName?: string | null } | null } | null;
+            } | null;
+          }[]),
     ]);
 
-    const monthlyRevenue = monthBookings.reduce((s, b) => s + b.totalPrice, 0);
-    const prevMonthlyRevenue = prevMonthBookings.reduce(
+    const monthlyBookingRevenue = monthBookings.reduce(
       (s, b) => s + b.totalPrice,
       0,
     );
+    const monthlyComboRevenue = this.sumComboPurchaseVnd(monthComboTxs);
+    const monthlyRevenue = monthlyBookingRevenue + monthlyComboRevenue;
+
+    const prevBookingRevenue = prevMonthBookings.reduce(
+      (s, b) => s + b.totalPrice,
+      0,
+    );
+    const prevComboRevenue = this.sumComboPurchaseVnd(prevMonthComboTxs);
+    const prevMonthlyRevenue = prevBookingRevenue + prevComboRevenue;
+
     const monthlyRevenueChangePercent =
       prevMonthlyRevenue > 0
         ? ((monthlyRevenue - prevMonthlyRevenue) / prevMonthlyRevenue) * 100
@@ -200,13 +353,21 @@ export class DashboardService {
     const revenueChart = Array.from({ length: 7 }, (_, i) => {
       const day = startOfDay(new Date(chartStart.getTime() + i * 86400000));
       const dayEnd = endOfDay(day);
-      const revenue = chartBookings
+      const bookingRevenue = chartBookings
         .filter((b) => b.startTime >= day && b.startTime <= dayEnd)
         .reduce((s, b) => s + b.totalPrice, 0);
+      const comboRevenue = chartComboTxs
+        .filter((t) => t.createdAt >= day && t.createdAt <= dayEnd)
+        .reduce(
+          (s, t) => s + coinToVnd(Math.abs(decimalToNumber(t.amount))),
+          0,
+        );
       return {
         date: day.toISOString().slice(0, 10),
         label: DAY_LABELS[day.getDay()],
-        revenue,
+        revenue: bookingRevenue + comboRevenue,
+        bookingRevenue,
+        comboRevenue,
       };
     });
 
@@ -248,10 +409,78 @@ export class DashboardService {
       };
     });
 
+    type ActivityItem = {
+      id: string;
+      type: 'top_up' | 'combo_purchase' | 'booking';
+      title: string;
+      subtitle: string;
+      amountVnd: number;
+      createdAt: string;
+    };
+
+    const activity: ActivityItem[] = [];
+
+    for (const order of recentTopUps) {
+      if (!order.paidAt) continue;
+      const name = order.player?.user?.fullName?.trim() || 'Khách';
+      activity.push({
+        id: `topup-${order.id}`,
+        type: 'top_up',
+        title: `${name} nạp coin`,
+        subtitle: order.paymentCode,
+        amountVnd: order.priceVnd,
+        createdAt: order.paidAt.toISOString(),
+      });
+    }
+
+    const comboPkgIds = [
+      ...new Set(
+        recentComboTxs
+          .map((t) => t.referenceId)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+    const comboPkgNames = new Map<number, string>();
+    if (comboPkgIds.length > 0) {
+      const pkgs = await this.prisma.comboPackage.findMany({
+        where: { id: { in: comboPkgIds } },
+        select: { id: true, name: true },
+      });
+      for (const p of pkgs) comboPkgNames.set(p.id, p.name);
+    }
+
+    for (const tx of recentComboTxs) {
+      const coin = Math.abs(decimalToNumber(tx.amount));
+      const name =
+        tx.wallet?.player?.user?.fullName?.trim() || 'Khách';
+      activity.push({
+        id: `combo-tx-${tx.id}`,
+        type: 'combo_purchase',
+        title: `${name} mua gói`,
+        subtitle:
+          (tx.referenceId != null
+            ? comboPkgNames.get(tx.referenceId)
+            : undefined) ?? 'Gói combo',
+        amountVnd: coinToVnd(coin),
+        createdAt: tx.createdAt.toISOString(),
+      });
+    }
+
+    activity.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    const recentActivity = activity.slice(0, 6);
+
     return {
       stats: {
         monthlyRevenue,
-        monthlyRevenueChangePercent: Math.round(monthlyRevenueChangePercent * 10) / 10,
+        monthlyBookingRevenue,
+        monthlyComboRevenue,
+        monthlyRevenueChangePercent:
+          Math.round(monthlyRevenueChangePercent * 10) / 10,
+        comboBookingsThisMonth: comboBookingsMonth,
         todayBookings,
         todayBookingsChange: todayBookings - yesterdayBookings,
         occupancyRate,
@@ -260,19 +489,55 @@ export class DashboardService {
       },
       revenueChart,
       todaySchedule,
-      recentBookings: recentBookings.map((b) => ({
-        id: b.id,
-        customerName: b.customerName,
-        fieldName: b.field.name,
-        startTime: formatTimeHHmm(b.startTime),
-        endTime: formatTimeHHmm(b.endTime),
-        totalPrice: b.totalPrice,
-        status: b.status,
-        paymentStatus: b.payment?.status ?? PaymentStatus.PENDING,
-        isPaid:
+      recentActivity,
+      recentBookings: recentBookings.map((b) => {
+        const totalCoin = decimalToNumber(b.totalCoin ?? 0);
+        const hasComboUsage = !!b.comboUsage;
+        const isComboRedemption =
+          hasComboUsage ||
+          (b.source === BookingSource.MOBILE_APP &&
+            b.status === BookingStatus.CONFIRMED &&
+            !b.payment &&
+            b.totalPrice === 0 &&
+            totalCoin === 0);
+        const isCoinApp =
+          b.source === BookingSource.MOBILE_APP &&
+          totalCoin > 0 &&
+          b.status === BookingStatus.CONFIRMED;
+        const isPaid =
           b.payment?.status === PaymentStatus.PAID ||
-          b.status === BookingStatus.COMPLETED,
-      })),
+          b.status === BookingStatus.COMPLETED ||
+          isComboRedemption ||
+          isCoinApp;
+
+        let paymentLabel = 'Chờ thanh toán';
+        if (isComboRedemption) {
+          paymentLabel =
+            totalCoin > 0 ? 'Gói combo + coin' : 'Gói combo';
+        } else if (isCoinApp) paymentLabel = 'Ví coin';
+        else if (b.payment?.status === PaymentStatus.PAID)
+          paymentLabel = 'Đã thanh toán';
+        else if (
+          b.source === BookingSource.MOBILE_APP &&
+          b.status === BookingStatus.CONFIRMED
+        ) {
+          paymentLabel = 'Đã thanh toán (app)';
+        }
+
+        return {
+          id: b.id,
+          customerName: b.customerName,
+          fieldName: b.field.name,
+          startTime: formatTimeHHmm(b.startTime),
+          endTime: formatTimeHHmm(b.endTime),
+          totalPrice: b.totalPrice,
+          status: b.status,
+          paymentStatus: b.payment?.status ?? PaymentStatus.PENDING,
+          isPaid,
+          paymentLabel,
+          usedCombo: isComboRedemption,
+        };
+      }),
     };
   }
 }

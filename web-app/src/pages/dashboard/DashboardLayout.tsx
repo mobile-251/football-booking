@@ -7,6 +7,7 @@ import BookingSchedule from "../booking/BookingSchedule";
 import OverviewDashboard from "../overview/OverviewDashboard";
 import VenueManagerList from "../venue-managers/VenueManagerList";
 import VenueManagementPage from "../venue-management/VenueManagementPage";
+import ComboPackageManagementPage from "../combo/ComboPackageManagementPage";
 import NotificationsPage from "../notifications/NotificationsPage";
 import { useCurrentVenue } from "../../hooks/useCurrentVenue";
 import { getStoredUser, isOwner } from "../../types/auth";
@@ -20,6 +21,7 @@ const IMPLEMENTED_MENUS = [
   "Đăng ký sân",
   "Lịch đặt sân",
   "Quản lý nhân viên",
+  "Gói combo",
   "Thông báo",
 ];
 
@@ -112,6 +114,8 @@ export default function DashboardLayout() {
         return <BookingSchedule key={currentVenueId ?? "none"} />;
       case "Quản lý nhân viên":
         return <VenueManagerList />;
+      case "Gói combo":
+        return <ComboPackageManagementPage key={currentVenueId ?? "none"} />;
       case "Thông báo":
         return (
           <NotificationsPage

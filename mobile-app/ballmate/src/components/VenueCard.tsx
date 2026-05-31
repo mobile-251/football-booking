@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { Venue } from '../types/types';
-import { formatPrice } from '../utils/formatters';
+import { formatVndAsCoin } from '../utils/coin';
 
 interface VenueCardProps {
 	venue: Venue & { minPrice?: number };
@@ -64,7 +64,7 @@ export default function VenueCard({ venue, onPress, distance }: VenueCardProps) 
 				<View style={styles.bottomRow}>
 					<View>
 						<Text style={styles.priceLabel}>
-							Chỉ từ {formatPrice(venue.minPrice || 0)}đ/giờ
+							Chỉ từ {formatVndAsCoin(venue.minPrice || 0)}/giờ
 						</Text>
 					</View>
 					{distance && <Text style={styles.distance}>{distance}</Text>}

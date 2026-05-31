@@ -5,8 +5,10 @@ import {
   NotificationType,
   PaymentMethod,
   PaymentStatus,
+  TopUpPurpose,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { coinToVnd, decimalToNumber } from '../common/coin.util';
 
 @Injectable()
 export class NotificationService {
@@ -297,6 +299,125 @@ export class NotificationService {
         type: NotificationType.BOOKING_CONFIRMED,
         title: 'Đã nhận chuyển khoản',
         message: `${booking.customerName} — ${fieldName}, ${time} ngày ${date}. Booking đã xác nhận.`,
+        data: meta,
+      });
+    }
+  }
+
+  /** Khách nạp coin (SePay) liên quan đặt sân / mua gói tại sân. */
+  async dispatchVenueTopUpPaid(orderId: number) {
+    const order = await this.prisma.topUpOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        player: { include: { user: { select: { fullName: true } } } },
+        hold: { select: { fieldId: true } },
+      },
+    });
+    if (!order?.paidAt) return;
+    if (
+      order.purpose !== TopUpPurpose.BOOKING_JIT &&
+      order.purpose !== TopUpPurpose.COMBO_JIT
+    ) {
+      return;
+    }
+
+    let venueId: number | null = null;
+    let context = 'đặt sân';
+
+    if (order.comboPackageId) {
+      const pkg = await this.prisma.comboPackage.findUnique({
+        where: { id: order.comboPackageId },
+        select: { venueId: true, name: true },
+      });
+      if (pkg) {
+        venueId = pkg.venueId;
+        context = `mua gói "${pkg.name}"`;
+      }
+    } else if (order.hold?.fieldId) {
+      const field = await this.prisma.field.findUnique({
+        where: { id: order.hold.fieldId },
+        select: { venueId: true },
+      });
+      venueId = field?.venueId ?? null;
+      context = 'hoàn tất đặt sân';
+    }
+
+    if (!venueId) return;
+
+    const name =
+      order.player?.user?.fullName?.trim() || 'Khách';
+    await this.notifyVenueStaff(venueId, {
+      type: NotificationType.PAYMENT_SUCCESS,
+      title: 'Khách đã nạp coin',
+      message: `${name} chuyển ${order.priceVnd.toLocaleString('vi-VN')}đ — ${context}.`,
+      data: {
+        topUpOrderId: order.id,
+        venueId,
+        amountVnd: order.priceVnd,
+        purpose: order.purpose,
+      },
+    });
+  }
+
+  /** Mua gói combo bằng số dư ví (không qua nạp JIT). */
+  async dispatchVenueComboPurchased(playerComboId: number) {
+    const pc = await this.prisma.playerCombo.findUnique({
+      where: { id: playerComboId },
+      include: {
+        comboPackage: { select: { venueId: true, name: true, priceCoin: true } },
+        player: { include: { user: { select: { fullName: true } } } },
+      },
+    });
+    if (!pc?.comboPackage) return;
+
+    const priceCoin = decimalToNumber(pc.comboPackage.priceCoin);
+    const name = pc.player?.user?.fullName?.trim() || 'Khách';
+    await this.notifyVenueStaff(pc.comboPackage.venueId, {
+      type: NotificationType.PAYMENT_SUCCESS,
+      title: 'Mua gói combo',
+      message: `${name} mua "${pc.comboPackage.name}" — ${priceCoin} coin (${coinToVnd(priceCoin).toLocaleString('vi-VN')}đ).`,
+      data: { playerComboId: pc.id, venueId: pc.comboPackage.venueId },
+    });
+  }
+
+  /** Đặt sân app bằng coin hoặc gói combo — báo chủ sân. */
+  async dispatchVenueCoinBooking(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        comboUsage: true,
+        field: { include: { venue: { select: { id: true } } } },
+      },
+    });
+    if (!booking?.field?.venue) return;
+    if (booking.source !== BookingSource.MOBILE_APP) return;
+    if (booking.status !== BookingStatus.CONFIRMED) return;
+
+    const { date, time } = this.formatSchedule(
+      booking.startTime,
+      booking.endTime,
+    );
+    const name = booking.customerName;
+    const fieldName = booking.field.name;
+    const venueId = booking.field.venue.id;
+    const meta = { bookingId: booking.id, venueId };
+
+    if (booking.comboUsage) {
+      await this.notifyVenueStaff(venueId, {
+        type: NotificationType.BOOKING_CONFIRMED,
+        title: 'Đặt sân bằng gói combo',
+        message: `${name} — ${fieldName}, ${time} ngày ${date}. Trừ 1 lượt gói (không thu thêm tiền sân).`,
+        data: meta,
+      });
+      return;
+    }
+
+    const totalCoin = decimalToNumber(booking.totalCoin ?? 0);
+    if (totalCoin > 0) {
+      await this.notifyVenueStaff(venueId, {
+        type: NotificationType.BOOKING_CONFIRMED,
+        title: 'Đặt sân thanh toán coin',
+        message: `${name} — ${fieldName}, ${time} ngày ${date}. Thu ${totalCoin} coin (${coinToVnd(totalCoin).toLocaleString('vi-VN')}đ).`,
         data: meta,
       });
     }

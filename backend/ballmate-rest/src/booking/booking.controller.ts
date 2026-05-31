@@ -12,8 +12,13 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { BookingService } from './booking.service';
+import { BookingCoinService } from './booking-coin.service';
 import { WalkInBookingService } from './walk-in-booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import {
+  ConfirmCoinBookingDto,
+  PreviewCoinBookingDto,
+} from './dto/confirm-coin-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CompleteBookingDto } from './dto/complete-booking.dto';
 import { BookingStatus } from '@prisma/client';
@@ -25,8 +30,19 @@ import { Roles } from '../auth/decorators/roles.decorator';
 export class BookingController {
   constructor(
     private readonly bookingService: BookingService,
+    private readonly bookingCoinService: BookingCoinService,
     private readonly walkInBookingService: WalkInBookingService,
   ) { }
+
+  @Post('preview-coin')
+  previewCoin(@Body() dto: PreviewCoinBookingDto) {
+    return this.bookingCoinService.preview(dto);
+  }
+
+  @Post('confirm-coin')
+  confirmCoin(@Body() dto: ConfirmCoinBookingDto) {
+    return this.bookingCoinService.confirm(dto);
+  }
 
   @Post()
   create(@Body() createBookingDto: CreateBookingDto) {

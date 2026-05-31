@@ -16,7 +16,7 @@ import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { Field, FIELD_TYPE_LABELS, Review, VenueDetail, FieldPricing } from '../types/types';
 import { api } from '../services/api';
-import { formatPrice } from '../utils/formatters';
+import { formatVndAsCoin, vndToCoin } from '../utils/coin';
 import { splitPolicyLines } from '../utils/policyText';
 import { getAmenityLabels } from '../utils/venueDisplay';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
@@ -224,18 +224,18 @@ export default function FieldDetailScreen() {
 					<View style={[styles.tableCell, styles.tableCellFirst]}>
 						<Ionicons name='time-outline' size={16} color={theme.colors.primary} />
 					</View>
-					<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6</Text>
-					<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN</Text>
+					<Text style={[styles.tableHeaderText, styles.tableCell]}>T2-T6 (coin)</Text>
+					<Text style={[styles.tableHeaderText, styles.tableCell]}>T7-CN (coin)</Text>
 				</View>
 
 				{priceRows.map(([time, prices], index) => (
 					<View key={index} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
 						<Text style={[styles.tableTime, styles.tableCellFirst]}>{time}</Text>
 						<Text style={styles.tableCellPrice}>
-							{prices.weekday ? `${prices.weekday / 1000}k` : '-'}
+							{prices.weekday ? `${vndToCoin(prices.weekday)}` : '-'}
 						</Text>
 						<Text style={styles.tableCellPrice}>
-							{prices.weekend ? `${prices.weekend / 1000}k` : '-'}
+							{prices.weekend ? `${vndToCoin(prices.weekend)}` : '-'}
 						</Text>
 					</View>
 				))}
@@ -474,7 +474,7 @@ export default function FieldDetailScreen() {
 				<View style={styles.priceInfo}>
 					<Text style={styles.priceLabel}>Giá từ</Text>
 					<Text style={styles.price}>
-						{formatPrice(minPriceFromDb)}đ<Text style={styles.priceUnit}>/giờ</Text>
+						{formatVndAsCoin(minPriceFromDb)}<Text style={styles.priceUnit}>/giờ</Text>
 					</Text>
 				</View>
 				<TouchableOpacity style={styles.bookButton} onPress={() => setShowBookingModal(true)}>

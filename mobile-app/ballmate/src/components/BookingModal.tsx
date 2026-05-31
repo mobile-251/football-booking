@@ -16,9 +16,7 @@ import { theme } from '../constants/theme';
 import {
 	Field,
 	FieldType,
-	PaymentMethod,
 	SelectedSlot,
-	PAYMENT_METHOD_LABELS,
 	FIELD_TYPE_LABELS,
 	FieldTypePricingSummary,
 	FieldSlotInfo,
@@ -26,8 +24,13 @@ import {
 	PricedItem,
 } from '../types/types';
 import { api } from '../services/api';
-import { formatPrice } from '../utils/formatters';
-import { useBadges } from '../navigation/AppNavigator';
+import { formatCoin, formatVndAsCoin, vndToCoin } from '../utils/coin';
+import { fieldTypeLabel } from '../utils/combo';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useBadges, RootStackParamList } from '../navigation/AppNavigator';
+import QuickTopUpSheet from './QuickTopUpSheet';
+import { useWallet } from '../context/WalletContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,9 +59,22 @@ interface TimeSlotData {
 
 type ExtraCategory = 'equipment' | 'canteen';
 
+type EligiblePlayerCombo = {
+	id: number;
+	matchesRemaining: number;
+	matchesTotal: number;
+	expiresAt: string;
+	comboPackage?: {
+		name?: string;
+		fieldType?: string;
+		venue?: { name?: string };
+	};
+};
+
 const extraItemKey = (category: ExtraCategory, name: string) => `${category}:${name}`;
 
 export default function BookingModal({ visible, onClose, field, onBookingSuccess }: BookingModalProps) {
+	const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 	const { refreshBadges } = useBadges();
 	const venueId = field.venueId ?? field.venue?.id;
 	const [currentStep, setCurrentStep] = useState<BookingStep>('date');
@@ -86,10 +102,16 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 	const [fullName, setFullName] = useState('');
 	const [phoneNumber, setPhoneNumber] = useState('');
 	const [note, setNote] = useState('');
-	const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
 	const [submitting, setSubmitting] = useState(false);
 	const [showSuccess, setShowSuccess] = useState(false);
-	const [showBankTransfer, setShowBankTransfer] = useState(false);
+	const { balance: walletBalance, refreshWallet } = useWallet();
+	const [eligibleCombos, setEligibleCombos] = useState<EligiblePlayerCombo[]>([]);
+	const [loadingEligibleCombos, setLoadingEligibleCombos] = useState(false);
+	const [selectedPlayerComboId, setSelectedPlayerComboId] = useState<number | null>(null);
+	const [quickTopUp, setQuickTopUp] = useState<{
+		missingCoin: number;
+		holdId: number;
+	} | null>(null);
 	const [bookingId, setBookingId] = useState<number | null>(null);
 	const phoneInputRef = useRef<TextInput>(null);
 	const noteInputRef = useRef<TextInput>(null);
@@ -128,14 +150,17 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 
 	useEffect(() => {
 		if (!visible) return;
+		const u = api.currentUser;
+		if (u) {
+			setFullName(u.fullName || '');
+			setPhoneNumber(u.phoneNumber || '');
+		}
 		setCurrentStep('date');
 		setSelectedDates([]);
 		setSelectedSlots([]);
 		setCurrentDateIndex(0);
-		setPaymentMethod('CASH');
 		setSubmitting(false);
 		setShowSuccess(false);
-		setShowBankTransfer(false);
 		setBookingId(null);
 		setFullName('');
 		setPhoneNumber('');
@@ -146,6 +171,9 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setVenueEquipment([]);
 		setVenueCanteen([]);
 		setSelectedExtras({});
+		setEligibleCombos([]);
+		setSelectedPlayerComboId(null);
+		setLoadingEligibleCombos(false);
 	}, [visible, field.id]);
 
 	useEffect(() => {
@@ -341,11 +369,11 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		const lines: string[] = [];
 		for (const item of venueEquipment) {
 			const qty = selectedExtras[extraItemKey('equipment', item.name)] ?? 0;
-			if (qty > 0) lines.push(`${item.name} x${qty} (${formatPrice(item.price * qty)}đ)`);
+			if (qty > 0) lines.push(`${item.name} x${qty} (${formatVndAsCoin(item.price * qty)})`);
 		}
 		for (const item of venueCanteen) {
 			const qty = selectedExtras[extraItemKey('canteen', item.name)] ?? 0;
-			if (qty > 0) lines.push(`${item.name} x${qty} (${formatPrice(item.price * qty)}đ)`);
+			if (qty > 0) lines.push(`${item.name} x${qty} (${formatVndAsCoin(item.price * qty)})`);
 		}
 		if (lines.length === 0) return '';
 		return `Tiện ích thêm: ${lines.join('; ')}`;
@@ -363,9 +391,70 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		});
 	};
 
-	const getSlotsTotal = () => selectedSlots.reduce((sum, slot) => sum + slot.price, 0);
+	const getSlotsTotalVnd = () => selectedSlots.reduce((sum, slot) => sum + slot.price, 0);
 
-	const getTotalPrice = () => getSlotsTotal() + getExtrasTotal();
+	const getExtrasTotalVnd = () => getExtrasTotal();
+
+	const getSelectedCombo = () =>
+		selectedPlayerComboId != null
+			? eligibleCombos.find((c) => c.id === selectedPlayerComboId)
+			: undefined;
+
+	const getFieldCoinAfterCombo = () => {
+		const combo = getSelectedCombo();
+		if (!combo) return vndToCoin(getSlotsTotalVnd());
+		const freeSlots = Math.min(combo.matchesRemaining, selectedSlots.length);
+		const slotsVnd = selectedSlots.reduce(
+			(sum, slot, index) => (index >= freeSlots ? sum + slot.price : sum),
+			0,
+		);
+		return vndToCoin(slotsVnd);
+	};
+
+	const getPayableCoinTotal = () => getFieldCoinAfterCombo() + vndToCoin(getExtrasTotalVnd());
+
+	const getTotalCoin = () => vndToCoin(getSlotsTotalVnd() + getExtrasTotalVnd());
+
+	const handleOpenTopUp = () => {
+		onClose();
+		requestAnimationFrame(() => {
+			navigation.navigate('TopUp');
+		});
+	};
+
+	useEffect(() => {
+		if (currentStep !== 'confirm' || !visible) return;
+		void refreshWallet(true);
+	}, [currentStep, visible, selectedPlayerComboId, selectedExtras, refreshWallet]);
+
+	useEffect(() => {
+		if (currentStep !== 'confirm' || !visible || !venueId) return;
+		const fieldType = getCurrentFieldType();
+		let cancelled = false;
+		setLoadingEligibleCombos(true);
+		api.getEligibleCombos(venueId, fieldType)
+			.then((list) => {
+				if (cancelled) return;
+				const combos = Array.isArray(list) ? list : [];
+				setEligibleCombos(combos);
+				setSelectedPlayerComboId((prev) => {
+					if (prev != null && combos.some((c) => c.id === prev)) return prev;
+					return combos.length > 0 ? combos[0].id : null;
+				});
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setEligibleCombos([]);
+					setSelectedPlayerComboId(null);
+				}
+			})
+			.finally(() => {
+				if (!cancelled) setLoadingEligibleCombos(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [currentStep, visible, venueId, selectedSlots, getCurrentFieldType]);
 
 	const getTotalHours = () => {
 		return selectedSlots.length;
@@ -380,48 +469,57 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 		setSubmitting(true);
 		try {
 			const currentUser = api.currentUser;
-			if (!currentUser || !currentUser.player) {
+			if (!currentUser?.player) {
 				alert('Vui lòng đăng nhập lại để thực hiện đặt sân');
 				return;
 			}
-			console.log("Select date:", selectedDates)
-			console.log("Select slot:", selectedSlots)
 			const extrasNote = buildExtrasNote();
 			const extrasTotal = getExtrasTotal();
 			const combinedNote = [note.trim(), extrasNote].filter(Boolean).join('\n') || undefined;
+			const extrasJson =
+				Object.keys(selectedExtras).length > 0
+					? { selectedExtras, equipment: venueEquipment, canteen: venueCanteen }
+					: undefined;
+
+			let comboUsesLeft = getSelectedCombo()?.matchesRemaining ?? 0;
 
 			for (let i = 0; i < selectedSlots.length; i++) {
 				const slot = selectedSlots[i];
 				const startDateTime = new Date(slot.startTime);
 				const endDateTime = new Date(slot.endTime);
-				const bookingTotal = slot.price + (i === 0 ? extrasTotal : 0);
+				const useCombo =
+					selectedPlayerComboId != null && comboUsesLeft > 0;
 
-				const booking = await api.createBooking({
-					fieldId: slot.fieldId,
-					playerId: currentUser.player.id,
-					customerName: fullName,
-					customerPhone: phoneNumber,
-					startTime: startDateTime.toISOString(),
-					endTime: endDateTime.toISOString(),
-					totalPrice: bookingTotal,
-					note: i === 0 ? combinedNote : note.trim() || undefined,
-				});
-				setBookingId(booking.id);
-
-				await api.createPayment({
-					bookingId: booking.id,
-					amount: bookingTotal,
-					method: paymentMethod,
-				});
+				try {
+					const booking = await api.confirmCoinBooking({
+						fieldId: slot.fieldId,
+						playerId: currentUser.player.id,
+						customerName: fullName,
+						customerPhone: phoneNumber,
+						startTime: startDateTime.toISOString(),
+						endTime: endDateTime.toISOString(),
+						note: i === 0 ? combinedNote : note.trim() || undefined,
+						playerComboId: useCombo ? selectedPlayerComboId! : undefined,
+						extrasJson: i === 0 ? extrasJson : undefined,
+					});
+					if (useCombo) comboUsesLeft -= 1;
+					setBookingId(booking.id);
+				} catch (err: any) {
+					if (err?.response?.status === 402) {
+						const body = err.response.data;
+						setQuickTopUp({
+							missingCoin: body.missingCoin ?? 0,
+							holdId: body.holdId,
+						});
+						return;
+					}
+					throw err;
+				}
 			}
 
 			refreshBadges();
-
-			if (paymentMethod === 'BANK_TRANSFER') {
-				setShowBankTransfer(true);
-			} else {
-				setShowSuccess(true);
-			}
+			await refreshWallet(true);
+			setShowSuccess(true);
 		} catch (error) {
 			console.error('Booking failed:', error);
 			alert('Đặt sân thất bại. Vui lòng thử lại.');
@@ -646,7 +744,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 									<View style={styles.fieldTypePriceBlock}>
 										<Text style={styles.fieldTypePriceLabel}>Chỉ từ</Text>
 										<Text style={styles.fieldTypePriceValue}>
-											{formatPrice(summary.minPrice)}đ<Text style={styles.fieldTypePriceUnit}> / giờ</Text>
+											{formatVndAsCoin(summary.minPrice)}<Text style={styles.fieldTypePriceUnit}> / giờ</Text>
 										</Text>
 									</View>
 								</TouchableOpacity>
@@ -786,7 +884,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 														!slot.isAvailable && styles.timeSlotTextBooked,
 													]}
 												>
-													{slot.price / 1000}k
+													{vndToCoin(slot.price)}
 												</Text>
 											</TouchableOpacity>
 										);
@@ -833,7 +931,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 										<Text style={styles.selectedSlotTime}>
 											{formatSlotTime(slot.startTime)} - {formatSlotTime(slot.endTime)}
 										</Text>
-										<Text style={styles.selectedSlotPrice}>{formatPrice(slot.price)}đ</Text>
+										<Text style={styles.selectedSlotPrice}>{formatVndAsCoin(slot.price)}</Text>
 										<TouchableOpacity onPress={() => setSelectedSlots((prev) => prev.filter((_, i) => i !== index))}>
 											<Ionicons name='trash-outline' size={16} color={theme.colors.accent} />
 										</TouchableOpacity>
@@ -883,20 +981,27 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 								</Text>
 							</View>
 						</View>
-						<Text style={styles.summaryPrice}>{formatPrice(slot.price)}đ</Text>
+						<Text style={styles.summaryPrice}>{formatVndAsCoin(slot.price)}</Text>
 					</View>
 				))}
 				{getExtrasTotal() > 0 && (
 					<View style={styles.summaryItem}>
 						<Text style={styles.summaryDate}>Tiện ích thêm</Text>
-						<Text style={styles.summaryPrice}>{formatPrice(getExtrasTotal())}đ</Text>
+						<Text style={styles.summaryPrice}>{formatVndAsCoin(getExtrasTotal())}</Text>
 					</View>
 				)}
 				<View style={styles.summaryTotal}>
 					<Text style={styles.summaryTotalLabel}>
 						Tổng số giờ: <Text style={styles.summaryTotalValue}>{getTotalHours()} giờ</Text>
 					</Text>
-					<Text style={styles.summaryTotalPrice}>{formatPrice(getTotalPrice())}đ</Text>
+					<View style={styles.summaryTotalPriceWrap}>
+						{getPayableCoinTotal() < getTotalCoin() && (
+							<Text style={styles.summaryTotalPriceOriginal}>
+								{formatCoin(getTotalCoin())}
+							</Text>
+						)}
+						<Text style={styles.summaryTotalPrice}>{formatCoin(getPayableCoinTotal())}</Text>
+					</View>
 				</View>
 			</View>
 
@@ -912,7 +1017,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 							<View key={`eq-${item.name}`} style={styles.extraRow}>
 								<View style={styles.extraInfo}>
 									<Text style={styles.extraName}>{item.name}</Text>
-									<Text style={styles.extraPrice}>{formatPrice(item.price)}đ</Text>
+									<Text style={styles.extraPrice}>{formatVndAsCoin(item.price)}</Text>
 								</View>
 								<View style={styles.extraQtyControls}>
 									<TouchableOpacity
@@ -942,7 +1047,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 							<View key={`ct-${item.name}`} style={styles.extraRow}>
 								<View style={styles.extraInfo}>
 									<Text style={styles.extraName}>{item.name}</Text>
-									<Text style={styles.extraPrice}>{formatPrice(item.price)}đ</Text>
+									<Text style={styles.extraPrice}>{formatVndAsCoin(item.price)}</Text>
 								</View>
 								<View style={styles.extraQtyControls}>
 									<TouchableOpacity
@@ -1016,101 +1121,157 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 				</View>
 			</View>
 
-			{/* Payment Methods */}
-			<Text style={styles.sectionTitle}>Phương thức thanh toán</Text>
-			{(['CASH', 'MOMO', 'BANK_TRANSFER'] as PaymentMethod[]).map((method) => (
-				<TouchableOpacity
-					key={method}
-					style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected]}
-					onPress={() => setPaymentMethod(method)}
-				>
-					<View style={styles.paymentOptionLeft}>
-						<View
+			<Text style={styles.sectionTitle}>Thanh toán</Text>
+			<View style={styles.paymentCard}>
+				<View style={styles.paymentWalletRow}>
+					<View style={[styles.paymentIcon, { backgroundColor: '#16a34a' }]}>
+						<Ionicons name='wallet' size={20} color={theme.colors.white} />
+					</View>
+					<View style={styles.paymentWalletInfo}>
+						<Text style={styles.paymentWalletLabel}>Số dư ví</Text>
+						<Text style={styles.paymentWalletBalance}>
+							{walletBalance != null ? formatCoin(walletBalance) : '...'}
+						</Text>
+					</View>
+				</View>
+
+				{loadingEligibleCombos ? (
+					<ActivityIndicator
+						style={styles.paymentComboLoader}
+						color={theme.colors.primary}
+					/>
+				) : eligibleCombos.length > 0 ? (
+					<View style={styles.paymentComboSection}>
+						<Text style={styles.paymentComboHeading}>
+							Gói combo tại {field.venue?.name ?? 'cụm sân này'}
+						</Text>
+						{eligibleCombos.map((combo) => {
+							const selected = selectedPlayerComboId === combo.id;
+							const venueName =
+								combo.comboPackage?.venue?.name ?? field.venue?.name ?? 'Cụm sân';
+							return (
+								<TouchableOpacity
+									key={combo.id}
+									style={[
+										styles.paymentMethodOption,
+										selected && styles.paymentMethodOptionSelected,
+									]}
+									onPress={() => setSelectedPlayerComboId(combo.id)}
+									activeOpacity={0.85}
+								>
+									<View style={styles.paymentMethodLeft}>
+										<View
+											style={[
+												styles.paymentMethodIcon,
+												{ backgroundColor: '#7c3aed' },
+											]}
+										>
+											<Ionicons name='ticket' size={18} color={theme.colors.white} />
+										</View>
+										<View style={styles.paymentMethodText}>
+											<Text style={styles.paymentMethodVenue}>{venueName}</Text>
+											<Text style={styles.paymentMethodTitle}>
+												{combo.comboPackage?.name ?? 'Gói combo'}
+												{combo.comboPackage?.fieldType
+													? ` · ${fieldTypeLabel(combo.comboPackage.fieldType)}`
+													: ''}
+											</Text>
+											<Text style={styles.paymentMethodMeta}>
+												Còn {combo.matchesRemaining}/{combo.matchesTotal} lượt · HSD{' '}
+												{new Date(combo.expiresAt).toLocaleDateString('vi-VN')}
+											</Text>
+										</View>
+									</View>
+									<Ionicons
+										name={selected ? 'radio-button-on' : 'radio-button-off'}
+										size={22}
+										color={selected ? theme.colors.primary : theme.colors.foregroundMuted}
+									/>
+								</TouchableOpacity>
+							);
+						})}
+						<TouchableOpacity
 							style={[
-								styles.paymentIcon,
-								method === 'CASH' && { backgroundColor: '#4ade80' },
-								method === 'MOMO' && { backgroundColor: '#ec4899' },
-								method === 'BANK_TRANSFER' && { backgroundColor: '#3b82f6' },
+								styles.paymentMethodOption,
+								selectedPlayerComboId == null && styles.paymentMethodOptionSelected,
 							]}
+							onPress={() => setSelectedPlayerComboId(null)}
+							activeOpacity={0.85}
 						>
+							<View style={styles.paymentMethodLeft}>
+								<View
+									style={[styles.paymentMethodIcon, { backgroundColor: '#16a34a' }]}
+								>
+									<Ionicons name='cash' size={18} color={theme.colors.white} />
+								</View>
+								<View style={styles.paymentMethodText}>
+									<Text style={styles.paymentMethodTitle}>Thanh toán bằng coin</Text>
+									<Text style={styles.paymentMethodMeta}>
+										Trừ coin từ ví cho toàn bộ giờ đặt
+									</Text>
+								</View>
+							</View>
 							<Ionicons
-								name={method === 'CASH' ? 'cash' : method === 'MOMO' ? 'wallet' : 'card'}
-								size={20}
-								color={theme.colors.white}
+								name={
+									selectedPlayerComboId == null
+										? 'radio-button-on'
+										: 'radio-button-off'
+								}
+								size={22}
+								color={
+									selectedPlayerComboId == null
+										? theme.colors.primary
+										: theme.colors.foregroundMuted
+								}
 							/>
-						</View>
-						<View>
-							<Text style={styles.paymentLabel}>{PAYMENT_METHOD_LABELS[method]}</Text>
-							<Text style={styles.paymentDescription}>
-								{method === 'CASH' && 'Thanh toán tiền mặt khi đến sân'}
-								{method === 'MOMO' && 'Thanh toán qua ví điện tử MoMo'}
-								{method === 'BANK_TRANSFER' && 'Chuyển khoản qua tài khoản ngân hàng'}
+						</TouchableOpacity>
+					</View>
+				) : null}
+
+				<View style={styles.paymentBreakdown}>
+					<View style={styles.paymentBreakdownRow}>
+						<Text style={styles.paymentBreakdownLabel}>Tiền sân</Text>
+						<Text style={styles.paymentBreakdownValue}>
+							{getSelectedCombo() && getFieldCoinAfterCombo() === 0
+								? 'Dùng gói combo'
+								: formatCoin(getFieldCoinAfterCombo())}
+						</Text>
+					</View>
+					{getExtrasTotalVnd() > 0 && (
+						<View style={styles.paymentBreakdownRow}>
+							<Text style={styles.paymentBreakdownLabel}>Tiện ích thêm</Text>
+							<Text style={styles.paymentBreakdownValue}>
+								{formatCoin(vndToCoin(getExtrasTotalVnd()))}
 							</Text>
 						</View>
+					)}
+					<View style={[styles.paymentBreakdownRow, styles.paymentBreakdownTotalRow]}>
+						<Text style={styles.paymentBreakdownTotalLabel}>Tổng thanh toán</Text>
+						<Text style={styles.paymentBreakdownTotalValue}>
+							{formatCoin(getPayableCoinTotal())}
+						</Text>
 					</View>
-					<View style={[styles.radioOuter, paymentMethod === method && styles.radioOuterSelected]}>
-						{paymentMethod === method && <View style={styles.radioInner} />}
+				</View>
+
+				{walletBalance != null && walletBalance < getPayableCoinTotal() && (
+					<View style={styles.paymentInsufficient}>
+						<Ionicons name='alert-circle' size={18} color='#b45309' />
+						<Text style={styles.paymentInsufficientText}>
+							Thiếu {formatCoin(getPayableCoinTotal() - walletBalance)} coin
+						</Text>
 					</View>
-				</TouchableOpacity>
-			))}
+				)}
+
+				{walletBalance != null && walletBalance < getPayableCoinTotal() && (
+					<TouchableOpacity style={styles.topUpLink} onPress={handleOpenTopUp}>
+						<Ionicons name='add-circle' size={18} color={theme.colors.primary} />
+						<Text style={styles.topUpLinkText}>Nạp thêm coin</Text>
+					</TouchableOpacity>
+				)}
+			</View>
 
 			<View style={{ height: 100 }} />
 			</KeyboardAwareScrollView>
-	);
-
-	const renderBankTransfer = () => (
-		<View style={styles.bankTransferContainer}>
-			<View style={styles.stepHeader}>
-				<View style={styles.qrPlaceholder}>
-					<Ionicons name='phone-portrait-outline' size={48} color={theme.colors.primary} />
-					<Text style={styles.qrLabel}>QR Code</Text>
-				</View>
-			</View>
-
-			<View style={styles.bankInfo}>
-				<View style={styles.bankInfoRow}>
-					<Text style={styles.bankInfoLabel}>Số điện thoại</Text>
-					<View style={styles.bankInfoValue}>
-						<Text style={styles.bankInfoText}>0123456789</Text>
-						<TouchableOpacity>
-							<Ionicons name='copy-outline' size={20} color={theme.colors.primary} />
-						</TouchableOpacity>
-					</View>
-				</View>
-				<View style={styles.bankInfoRow}>
-					<Text style={styles.bankInfoLabel}>Tên tài khoản</Text>
-					<Text style={styles.bankInfoTextBold}>Sân Bóng Đá</Text>
-				</View>
-				<View style={styles.bankInfoRow}>
-					<Text style={styles.bankInfoLabel}>Nội dung chuyển khoản</Text>
-					<Text style={styles.bankInfoTextBold}>BOOKING{bookingId}</Text>
-				</View>
-				<View style={styles.amountBox}>
-					<Text style={styles.amountLabel}>Số tiền</Text>
-					<Text style={styles.amountValue}>{formatPrice(getTotalPrice())}đ</Text>
-				</View>
-			</View>
-
-			<View style={styles.warningBox}>
-				<Ionicons name='warning' size={20} color='#f59e0b' />
-				<Text style={styles.warningText}>Vui lòng chuyển khoản đúng nội dung để xác nhận đặt sân tự động</Text>
-			</View>
-
-			<TouchableOpacity style={styles.backPaymentLink} onPress={() => setShowBankTransfer(false)}>
-				<Ionicons name='arrow-back' size={16} color={theme.colors.primary} />
-				<Text style={styles.backPaymentText}>Chọn phương thức khác</Text>
-			</TouchableOpacity>
-
-			<TouchableOpacity
-				style={styles.confirmPaymentBtn}
-				onPress={() => {
-					setShowBankTransfer(false);
-					setShowSuccess(true);
-				}}
-			>
-				<Text style={styles.confirmPaymentBtnText}>Tôi đã chuyển khoản</Text>
-			</TouchableOpacity>
-		</View>
 	);
 
 	const renderSuccess = () => (
@@ -1227,8 +1388,6 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 						{/* Content */}
 						{showSuccess
 							? renderSuccess()
-							: showBankTransfer
-							? renderBankTransfer()
 							: currentStep === 'date'
 							? renderDateStep()
 							: currentStep === 'fieldType'
@@ -1238,7 +1397,7 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 							: renderConfirmStep()}
 
 						{/* Footer Buttons */}
-						{!showSuccess && !showBankTransfer && (
+						{!showSuccess && (
 							<View style={styles.footer}>
 								{currentStepIndex > 0 && (
 									<TouchableOpacity style={styles.backBtn} onPress={handleBack}>
@@ -1266,6 +1425,18 @@ export default function BookingModal({ visible, onClose, field, onBookingSuccess
 					</View>
 				</View>
 			</View>
+			{quickTopUp && (
+				<QuickTopUpSheet
+					visible
+					missingCoin={quickTopUp.missingCoin}
+					holdId={quickTopUp.holdId}
+					onClose={() => setQuickTopUp(null)}
+					onSuccess={() => {
+						setQuickTopUp(null);
+						handleSubmitBooking();
+					}}
+				/>
+			)}
 		</Modal>
 	);
 }
@@ -1811,6 +1982,15 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 		color: theme.colors.foreground,
 	},
+	summaryTotalPriceWrap: {
+		alignItems: 'flex-end',
+		gap: 2,
+	},
+	summaryTotalPriceOriginal: {
+		fontSize: 13,
+		color: theme.colors.foregroundMuted,
+		textDecorationLine: 'line-through',
+	},
 	summaryTotalPrice: {
 		fontSize: 20,
 		fontWeight: 'bold',
@@ -1845,25 +2025,148 @@ const styles = StyleSheet.create({
 		color: theme.colors.foreground,
 		paddingVertical: 8,
 	},
-	paymentOption: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
+	paymentCard: {
 		backgroundColor: theme.colors.white,
-		borderRadius: theme.borderRadius.md,
+		borderRadius: theme.borderRadius.lg,
 		padding: theme.spacing.md,
-		marginBottom: theme.spacing.sm,
-		borderWidth: 2,
-		borderColor: 'transparent',
+		marginBottom: theme.spacing.md,
+		borderWidth: 1,
+		borderColor: theme.colors.border,
 	},
-	paymentOptionSelected: {
-		borderColor: theme.colors.primary,
-		backgroundColor: theme.colors.primary + '10',
-	},
-	paymentOptionLeft: {
+	paymentWalletRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 12,
+		paddingBottom: theme.spacing.md,
+		borderBottomWidth: 1,
+		borderBottomColor: theme.colors.border,
+		marginBottom: theme.spacing.md,
+	},
+	paymentWalletInfo: {
+		flex: 1,
+	},
+	paymentWalletLabel: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+		marginBottom: 2,
+	},
+	paymentWalletBalance: {
+		fontSize: 20,
+		fontWeight: '800',
+		color: theme.colors.foreground,
+	},
+	paymentComboLoader: {
+		marginVertical: theme.spacing.sm,
+	},
+	paymentComboSection: {
+		gap: 8,
+		marginBottom: theme.spacing.md,
+	},
+	paymentComboHeading: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: theme.colors.foregroundMuted,
+		marginBottom: 4,
+	},
+	paymentMethodOption: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		backgroundColor: theme.colors.background,
+		borderRadius: theme.borderRadius.md,
+		padding: 12,
+		borderWidth: 2,
+		borderColor: 'transparent',
+	},
+	paymentMethodOptionSelected: {
+		borderColor: theme.colors.primary,
+		backgroundColor: theme.colors.primary + '10',
+	},
+	paymentMethodLeft: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+		flex: 1,
+		paddingRight: 8,
+	},
+	paymentMethodIcon: {
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	paymentMethodText: {
+		flex: 1,
+	},
+	paymentMethodVenue: {
+		fontSize: 11,
+		fontWeight: '700',
+		color: theme.colors.foregroundMuted,
+		textTransform: 'uppercase',
+		letterSpacing: 0.3,
+	},
+	paymentMethodTitle: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: theme.colors.foreground,
+		marginTop: 2,
+	},
+	paymentMethodMeta: {
+		fontSize: 12,
+		color: theme.colors.foregroundMuted,
+		marginTop: 2,
+	},
+	paymentBreakdown: {
+		backgroundColor: theme.colors.background,
+		borderRadius: theme.borderRadius.md,
+		padding: 12,
+		gap: 8,
+	},
+	paymentBreakdownRow: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+	},
+	paymentBreakdownLabel: {
+		fontSize: 13,
+		color: theme.colors.foregroundMuted,
+	},
+	paymentBreakdownValue: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: theme.colors.foreground,
+	},
+	paymentBreakdownTotalRow: {
+		marginTop: 4,
+		paddingTop: 10,
+		borderTopWidth: 1,
+		borderTopColor: theme.colors.border,
+	},
+	paymentBreakdownTotalLabel: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: theme.colors.foreground,
+	},
+	paymentBreakdownTotalValue: {
+		fontSize: 16,
+		fontWeight: '800',
+		color: theme.colors.primary,
+	},
+	paymentInsufficient: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+		marginTop: theme.spacing.md,
+		padding: 10,
+		borderRadius: theme.borderRadius.md,
+		backgroundColor: '#fef3c7',
+	},
+	paymentInsufficientText: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: '#b45309',
+		flex: 1,
 	},
 	paymentIcon: {
 		width: 40,
@@ -1872,14 +2175,20 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
-	paymentLabel: {
-		fontSize: 14,
-		fontWeight: '600',
-		color: theme.colors.foreground,
+	topUpLink: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		gap: 6,
+		marginTop: 10,
+		paddingVertical: 12,
+		borderRadius: 10,
+		backgroundColor: theme.colors.primary + '12',
 	},
-	paymentDescription: {
-		fontSize: 12,
-		color: theme.colors.foregroundMuted,
+	topUpLinkText: {
+		color: theme.colors.primary,
+		fontWeight: '600',
+		fontSize: 14,
 	},
 	footer: {
 		flexDirection: 'row',
