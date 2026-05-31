@@ -66,6 +66,7 @@ export default function NotificationsScreen() {
 				const typeMap: Record<string, Notification['type']> = {
 					BOOKING_CONFIRMED: 'booking',
 					BOOKING_CANCELLED: 'booking',
+					BOOKING_PENDING: 'booking',
 					BOOKING_REMINDER: 'reminder',
 					PAYMENT_SUCCESS: 'payment',
 					PAYMENT_PENDING: 'payment',

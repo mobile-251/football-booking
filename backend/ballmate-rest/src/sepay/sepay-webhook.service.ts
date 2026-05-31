@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SepayWebhookPayload } from './dto/sepay-webhook-payload.dto';
 import { SepayService } from './sepay.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class SepayWebhookService {
@@ -20,6 +21,7 @@ export class SepayWebhookService {
   constructor(
     private prisma: PrismaService,
     private sepayService: SepayService,
+    private notificationService: NotificationService,
   ) {}
 
   verifyRequest(authHeader?: string) {
@@ -68,6 +70,16 @@ export class SepayWebhookService {
       this.logger.log(
         `Walk-in booking ${payment.bookingId} auto-confirmed after payment`,
       );
+      try {
+        await this.notificationService.dispatchBookingConfirmed(
+          payment.bookingId,
+          { walkInBankPaid: true },
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Walk-in confirm notification failed: ${String(err)}`,
+        );
+      }
     }
   }
 

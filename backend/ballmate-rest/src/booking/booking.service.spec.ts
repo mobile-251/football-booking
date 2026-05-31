@@ -71,6 +71,8 @@ describe('BookingService', () => {
         // Create mock Notification service
         const mockNotificationService = {
             createBookingNotification: jest.fn().mockResolvedValue({}),
+            dispatchBookingCreated: jest.fn().mockResolvedValue(undefined),
+            dispatchBookingConfirmed: jest.fn().mockResolvedValue(undefined),
         };
 
         const module: TestingModule = await Test.createTestingModule({

@@ -140,21 +140,10 @@ export class BookingService {
       },
     });
 
-    if (booking.player?.user) {
-      try {
-        await this.notificationService.createBookingNotification(
-          booking.player.user.id,
-          'confirmed',
-          {
-            fieldName: booking.field.name,
-            date: start.toLocaleDateString('vi-VN'),
-            time: start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-            bookingId: booking.id,
-          },
-        );
-      } catch (e) {
-        console.error('Failed to send booking notification:', e);
-      }
+    try {
+      await this.notificationService.dispatchBookingCreated(booking.id);
+    } catch (e) {
+      console.error('Failed to send booking notification:', e);
     }
 
     return booking;
@@ -284,12 +273,20 @@ export class BookingService {
       );
     }
 
-    return this.prisma.booking.update({
+    const updated = await this.prisma.booking.update({
       where: { id },
       data: {
         status: BookingStatus.CONFIRMED,
       },
     });
+
+    try {
+      await this.notificationService.dispatchBookingConfirmed(id);
+    } catch (e) {
+      console.error('Failed to send confirmation notification:', e);
+    }
+
+    return updated;
   }
 
   async cancelBooking(id: number) {
