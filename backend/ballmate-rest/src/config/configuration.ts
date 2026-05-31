@@ -15,6 +15,36 @@ export default () => ({
     cors: {
         origins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
     },
+
+    sepay: {
+        merchantId:
+            process.env.MERCHANT_ID || process.env.SEPAY_MERCHANT_ID || '',
+        secretKey:
+            process.env.MERCHANT_SECRET_KEY ||
+            process.env.SEPAY_SECRET_KEY ||
+            '',
+        webhookApiKey:
+            process.env.SEPAY_WEBHOOK_API_KEY ||
+            process.env.SEPAY_WEBHOOK_SECRET ||
+            '',
+        accountNumber:
+            process.env.SEPAY_ACCOUNT_NUMBER || '',
+        bankName: process.env.SEPAY_BANK_NAME || 'MSB',
+        paymentCodePrefix:
+            process.env.SEPAY_PAYMENT_CODE_PREFIX || 'BM',
+        env: process.env.SEPAY_ENV || 'sandbox',
+        paymentTtlMinutes: parseInt(
+            process.env.SEPAY_PAYMENT_TTL_MINUTES ?? '5',
+            10,
+        ),
+        appPublicUrl: process.env.APP_PUBLIC_URL || 'http://localhost:3001',
+        userApiToken:
+            process.env.SEPAY_USER_API_TOKEN ||
+            process.env.SEPAY_API_TOKEN ||
+            '',
+        /** Mặc định tắt — đồng bộ CK qua poll User API (GET payment-status). */
+        enableWebhook: process.env.SEPAY_ENABLE_WEBHOOK === 'true',
+    },
 });
 
 // Type definitions for configuration
@@ -31,5 +61,18 @@ export interface AppConfiguration {
     };
     cors: {
         origins: string[];
+    };
+    sepay: {
+        merchantId: string;
+        secretKey: string;
+        webhookApiKey: string;
+        accountNumber: string;
+        bankName: string;
+        paymentCodePrefix: string;
+        env: string;
+        paymentTtlMinutes: number;
+        appPublicUrl: string;
+        userApiToken: string;
+        enableWebhook: boolean;
     };
 }

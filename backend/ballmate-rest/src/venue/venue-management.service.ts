@@ -150,10 +150,13 @@ export class VenueManagementService {
     if (dto.images !== undefined) data.images = dto.images;
     if (dto.amenities !== undefined) data.amenities = dto.amenities;
     if (dto.equipment !== undefined) {
-      data.equipment = dto.equipment as Prisma.InputJsonValue;
+      data.equipment = dto.equipment.map(({ name, price }) => ({ name, price }));
     }
     if (dto.canteenItems !== undefined) {
-      data.canteenItems = dto.canteenItems as Prisma.InputJsonValue;
+      data.canteenItems = dto.canteenItems.map(({ name, price }) => ({
+        name,
+        price,
+      }));
     }
     if (dto.policies !== undefined) {
       data.policies = dto.policies as Prisma.InputJsonValue;

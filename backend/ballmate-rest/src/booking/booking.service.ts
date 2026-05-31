@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CompleteBookingDto } from './dto/complete-booking.dto';
-import { BookingStatus, Prisma } from '@prisma/client';
+import { BookingStatus, PaymentMethod, PaymentStatus, Prisma } from '@prisma/client';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
@@ -140,20 +140,21 @@ export class BookingService {
       },
     });
 
-    // Send notification for new booking
-    try {
-      await this.notificationService.createBookingNotification(
-        booking.player.user.id,
-        'confirmed',
-        {
-          fieldName: booking.field.name,
-          date: start.toLocaleDateString('vi-VN'),
-          time: start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          bookingId: booking.id,
-        },
-      );
-    } catch (e) {
-      console.error('Failed to send booking notification:', e);
+    if (booking.player?.user) {
+      try {
+        await this.notificationService.createBookingNotification(
+          booking.player.user.id,
+          'confirmed',
+          {
+            fieldName: booking.field.name,
+            date: start.toLocaleDateString('vi-VN'),
+            time: start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            bookingId: booking.id,
+          },
+        );
+      } catch (e) {
+        console.error('Failed to send booking notification:', e);
+      }
     }
 
     return booking;
@@ -258,12 +259,28 @@ export class BookingService {
   }
 
   async confirmBooking(id: number) {
-    const booking = await this.findOne(id);
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: { payment: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID ${id} not found`);
+    }
 
     // Only allow confirming PENDING bookings
     if (booking.status !== BookingStatus.PENDING) {
       throw new BadRequestException(
         `Cannot confirm booking with status ${booking.status}. Only PENDING bookings can be confirmed.`,
+      );
+    }
+
+    if (
+      booking.payment?.method === PaymentMethod.BANK_TRANSFER &&
+      booking.payment.status !== PaymentStatus.PAID
+    ) {
+      throw new BadRequestException(
+        'Booking chuyển khoản phải được thanh toán trước khi duyệt',
       );
     }
 
@@ -311,20 +328,21 @@ export class BookingService {
       },
     });
 
-    // Send cancellation notification
-    try {
-      await this.notificationService.createBookingNotification(
-        booking.player.user.id,
-        'cancelled',
-        {
-          fieldName: booking.field.name,
-          date: booking.startTime.toLocaleDateString('vi-VN'),
-          time: booking.startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          bookingId: booking.id,
-        },
-      );
-    } catch (e) {
-      console.error('Failed to send cancellation notification:', e);
+    if (booking.player?.user) {
+      try {
+        await this.notificationService.createBookingNotification(
+          booking.player.user.id,
+          'cancelled',
+          {
+            fieldName: booking.field.name,
+            date: booking.startTime.toLocaleDateString('vi-VN'),
+            time: booking.startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            bookingId: booking.id,
+          },
+        );
+      } catch (e) {
+        console.error('Failed to send cancellation notification:', e);
+      }
     }
 
     return updatedBooking;

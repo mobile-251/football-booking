@@ -6,6 +6,7 @@ import type {
   VenueManagementData,
   UpdateVenueManagementPayload,
 } from "../../../api/venueManagementApi";
+import { normalizeToTimeInput } from "../../../utils/venueHours";
 
 export type EditSection =
   | "basic"
@@ -232,21 +233,26 @@ export default function VenueEditDialog({
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Giờ mở cửa (HH:mm)">
+            <Field label="Giờ mở cửa">
               <input
+                type="time"
                 className="input-field"
-                placeholder="06:00"
-                value={openTime}
+                step={3600}
+                value={normalizeToTimeInput(openTime)}
                 onChange={(e) => setOpenTime(e.target.value)}
               />
             </Field>
-            <Field label="Giờ đóng cửa (HH:mm)">
+            <Field label="Giờ đóng cửa">
               <input
+                type="time"
                 className="input-field"
-                placeholder="23:00"
-                value={closeTime}
+                step={3600}
+                value={normalizeToTimeInput(closeTime)}
                 onChange={(e) => setCloseTime(e.target.value)}
               />
+              <p className="m-0 mt-1 text-xs text-slate-500">
+                Chọn 00:00 nếu sân đóng lúc nửa đêm
+              </p>
             </Field>
           </div>
         </div>

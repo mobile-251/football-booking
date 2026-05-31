@@ -16,6 +16,7 @@ import { FavoriteModule } from './favorite/favorite.module';
 import { NotificationModule } from './notification/notification.module';
 import { MessageModule } from './message/message.module';
 import { VenueManagerModule } from './venue-manager/venue-manager.module';
+import { SepayModule } from './sepay/sepay.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -39,6 +40,7 @@ import configuration from './config/configuration';
     NotificationModule,
     MessageModule,
     VenueManagerModule,
+    SepayModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -20,6 +20,52 @@ export interface UpdateBookingDto {
     note?: string;
 }
 
+export interface CreateWalkInBookingDto {
+    fieldId: number;
+    date: string;
+    startTime: string;
+    endTime: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    note?: string;
+    paymentMethod?: 'CASH' | 'BANK_TRANSFER';
+}
+
+export interface WalkInBankTransferPayment {
+    method: string;
+    status: string;
+    amount: number;
+    sepayPaymentCode: string;
+    qrImageUrl: string;
+    expiresAt: string;
+}
+
+export interface WalkInBookingResponse {
+    booking: {
+        id: number;
+        bookingCode: string;
+        status: string;
+        totalPrice: number;
+        startTime: string;
+        endTime: string;
+    };
+    payment?: WalkInBankTransferPayment | null;
+}
+
+export interface BookingPaymentStatus {
+    bookingId: number;
+    bookingStatus: string;
+    paymentStatus: string;
+    paidAt?: string;
+    expired?: boolean;
+    qrImageUrl?: string;
+    sepayPaymentCode?: string;
+    amount?: number;
+    expiresAt?: string;
+    sepaySyncAvailable?: boolean;
+}
+
 const bookingApi = {
     create: (data: CreateBookingDto) => {
         return AxiosClient.post('/bookings', data);
@@ -44,7 +90,20 @@ const bookingApi = {
     },
     remove: (id: number) => {
         return AxiosClient.delete(`/bookings/${id}`);
-    }
+    },
+    createWalkIn: (venueId: number, data: CreateWalkInBookingDto) => {
+        return AxiosClient.post(`/venues/${venueId}/walk-in-bookings`, data) as Promise<WalkInBookingResponse>;
+    },
+    getPaymentStatus: (bookingId: number) => {
+        return AxiosClient.get(`/bookings/${bookingId}/payment-status`) as Promise<BookingPaymentStatus>;
+    },
+    markBankTransferPaid: (bookingId: number) => {
+        return AxiosClient.patch(`/bookings/${bookingId}/mark-bank-paid`) as Promise<{
+            bookingId: number;
+            paymentStatus: string;
+            alreadyPaid?: boolean;
+        }>;
+    },
 };
 
 export default bookingApi;
